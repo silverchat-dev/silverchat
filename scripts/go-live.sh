@@ -8,12 +8,15 @@ out="contracts/deployments/${OUT:-mainnet}.json"
 railway=$(command -v railway || echo "$HOME/.railway/bin/railway")
 get() { python3 -c "import json,sys; print(json.load(open('$out'))[sys.argv[1]])" "$1"; }
 project=$("$railway" status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+# deploy what is on GitHub, the same commit the rules link and hash point at
+git fetch -q origin main
+commit=$(git rev-parse origin/main)
 
 "$railway" variable set --service web --skip-deploys \
   "NEXT_PUBLIC_ASK=$(get ask)" "NEXT_PUBLIC_ALGORITHM=$(get algorithm)" "NEXT_PUBLIC_BUYBACK=$(get buyback)" \
-  "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$(git rev-parse main)"
+  "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$commit"
 
 tmp=$(mktemp -d)
-git archive main web | tar -x -C "$tmp"
-(cd "$tmp/web" && "$railway" up -p "$project" -e production -s web -d -m "main $(git rev-parse --short main)")
-echo "deploying main $(git rev-parse --short main); watch it with: $railway logs --service web"
+git archive "$commit" web | tar -x -C "$tmp"
+(cd "$tmp/web" && "$railway" up -p "$project" -e production -s web -d -m "main ${commit:0:7}")
+echo "deploying main ${commit:0:7}; watch it with: $railway logs --service web"

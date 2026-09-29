@@ -14,6 +14,7 @@ max_eth=${MAX_ETH:-0.01}
 addr() { cast wallet address --private-key "$(<"$dir/$1.key")"; }
 # the RPC URL carries an API key: keep it out of anything printed
 mask() { sed "s#${rpc}#<rpc>#g"; }
+exec 2> >(mask >&2)
 
 export OWNER=${SAFE:?set SAFE to the treasury Safe} TREASURY=$SAFE OUT=${OUT:-mainnet}
 POSTER=$(addr poster) PRICER=$(addr pricer) DEPLOYER=$(addr deployer)
@@ -51,7 +52,8 @@ if gas * cap > bal: sys.exit("the deployer can't cover the worst case")
 EOF
 [ "${SEND:-}" = 1 ] || { echo "simulated only; SEND=1 to deploy"; exit 0; }
 
-forge script Silverchat.s.sol:Deploy "${flags[@]}" --broadcast --slow 2>&1 | mask
+# the JSON is written while simulating, so a broadcast that fails partway must not leave predicted addresses behind
+forge script Silverchat.s.sol:Deploy "${flags[@]}" --broadcast --slow 2>&1 | mask || { rm -f "deployments/$OUT.json"; exit 1; }
 out="deployments/$OUT.json"
 for k in ask algorithm buyback; do
   a=$(python3 -c "import json; print(json.load(open('$out'))['$k'])")
