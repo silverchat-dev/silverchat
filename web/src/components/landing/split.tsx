@@ -10,7 +10,7 @@ import { costOf, SPLIT } from "@/lib/pricing";
 
 // what each share does, in the order of SPLIT; darker bands keep more
 const BANDS = [
-  { name: "Answerers", note: "Shared by the people who answered. Claimed within 90 days.", ink: 0.92 },
+  { name: "Answerers", note: "The most answerers can earn: an equal share per paid answer. The rest goes back to the asker.", ink: 0.92 },
   { name: "Treasury", note: "Kept by the treasury, a Safe on Ethereum.", ink: 0.68 },
   { name: "SC buyback", note: "Buys $SC on Stockereum and burns it, once SC is live.", ink: 0.44 },
   { name: "Burned", note: "Burned as ZC. Gone from the supply.", ink: 0.24 },
@@ -36,8 +36,8 @@ export function Split() {
           </h2>
         </div>
         <p className="max-w-xl text-lg leading-relaxed text-paper/75">
-          Every poll is paid in ZC and split the moment its result is fixed. Two fifths of each payment leave the supply for
-          good: one part burned as ZC, one part spent on SC and burned as SC.
+          Every poll is paid in ZC and split the moment its result is fixed. One fifth is burned as ZC. Another fifth buys
+          SC, and that SC is burned.
         </p>
       </div>
 
@@ -82,7 +82,7 @@ export function Split() {
         ) : ADDR.ask === ZERO ? (
           "Pricing opens at launch. A poll costs a fixed amount per person asked, paid in ZC at the live price."
         ) : (
-          " "
+          "\u00a0"
         )}
       </p>
     </section>

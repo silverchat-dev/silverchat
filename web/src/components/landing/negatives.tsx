@@ -30,13 +30,13 @@ export function Negatives() {
     let last = 0;
     let tick = 0;
     let scratch = { x: 0, until: 0 };
+    let h = 0; // one frame's height, measured on resize
 
     const step = (now: number) => {
       raf = requestAnimationFrame(step);
       const dt = Math.min((now - (last || now)) / 1000, 0.1);
       last = now;
       if (!held) clock += dt;
-      const h = r.firstElementChild!.getBoundingClientRect().height;
       // the claw: a quick pull with a soft start and stop, then the frame sits in the gate
       if (!held && clock >= (frame + 1) * PULL.every && pulledAt < 0) pulledAt = clock;
       let pull = 0;
@@ -76,6 +76,7 @@ export function Negatives() {
     const size = () => {
       const b = g.getBoundingClientRect();
       [c.width, c.height] = [Math.round(b.width), Math.round(b.height)];
+      h = (b.width * 332) / 456;
     };
     const run = () => {
       const go = on && document.visibilityState === "visible";

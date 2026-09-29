@@ -55,7 +55,7 @@ export function Archive() {
         <div className="space-y-4">
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-silver">The archive</p>
           <h2 id="archive-title" className="text-[clamp(2rem,4.2vw,3.5rem)] leading-[1.05]">
-            Every print keeps its negative.
+            Nothing gets thrown out.
           </h2>
         </div>
         <p className="max-w-xl text-lg leading-relaxed text-paper/75">
@@ -67,7 +67,7 @@ export function Archive() {
       {/* a contact sheet: the negatives laid on the film's own dark base, numbered along the edge */}
       <div className="mt-12 bg-film p-3 md:p-5">
         <p className="mb-3 flex justify-between font-mono text-[10px] tracking-[0.2em] text-silver/70">
-          <span>{real ? "SILVERCHAT · RECORDS" : "EXAMPLE · NOT REAL RECORDS"}</span>
+          <span className="text-silver">{real ? "SILVERCHAT · RECORDS" : "EXAMPLE · NOT REAL RECORDS"}</span>
           <span aria-hidden>▸ 1A</span>
         </p>
         <ol className="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
@@ -75,7 +75,6 @@ export function Archive() {
             const inner = (
               <div
                 className="@container aspect-[3/2] bg-[url(/plates/paper.webp)] bg-cover p-[7%] text-developer transition-[filter] duration-700 [filter:invert(1)_hue-rotate(180deg)_contrast(0.85)] group-hover:[filter:none] group-focus-visible:[filter:none] group-active:[filter:none]"
-                aria-label={`${f.question} ${f.options.map(([o, v]) => `${o} ${v}%`).join(", ")}`}
               >
                 <p className="font-mono text-[4.6cqw] text-developer/60">#{f.block.toLocaleString("en-US")}</p>
                 <p className="mt-[2cqw] line-clamp-2 text-[8.6cqw] leading-tight">{f.question}</p>
@@ -99,7 +98,7 @@ export function Archive() {
                     {inner}
                   </Link>
                 ) : (
-                  <div tabIndex={0} className="group block outline-none focus-visible:ring-1 focus-visible:ring-paper/60">
+                  <div className="group block">
                     {inner}
                   </div>
                 )}

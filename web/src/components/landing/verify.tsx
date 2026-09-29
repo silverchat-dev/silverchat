@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { ADDR, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
 import { short } from "@/lib/format";
@@ -15,7 +16,7 @@ export function Verify() {
         {short(a)}
       </a>
     );
-  const stamps: [string, React.ReactNode][] = [
+  const stamps: [string, ReactNode][] = [
     ["SilverAsk", address(ADDR.ask)],
     ["SilverAlgorithm", address(ADDR.algorithm)],
     ["SilverBuyback", address(ADDR.buyback)],

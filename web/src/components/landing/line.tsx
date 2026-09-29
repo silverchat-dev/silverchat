@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { useBlock } from "wagmi";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
@@ -58,7 +58,7 @@ const PRINTS: { title: string; body: string; foot: string; image: ReactNode }[] 
   {
     title: "Fix",
     body: "A minute after close, the result goes on Ethereum as a root over every signed answer. Then nobody, us included, can change it.",
-    foot: "not fixed in 7 days? the asker is refunded",
+    foot: "not fixed in 7 days? the asker takes it all back",
     image: (
       <svg viewBox="0 0 120 80" className="size-full">
         {/* blocks in a chain, the last one sealed */}
@@ -77,7 +77,7 @@ const PRINTS: { title: string; body: string; foot: string; image: ReactNode }[] 
   },
   {
     title: "Claim",
-    body: `${share(0)} of what the asker paid goes to the people who answered. Claim yours in one transaction, any time in the next 90 days.`,
+    body: `Up to ${share(0)} of what the asker paid, an equal share per paid answer. Claim yours in one transaction within 90 days.`,
     foot: "unclaimed shares are burned",
     image: (
       <svg viewBox="0 0 120 80" className="size-full">
@@ -133,6 +133,7 @@ const PRINTS: { title: string; body: string; foot: string; image: ReactNode }[] 
  * plane of the wall, and twists slowly. A draft moves along the line, each new block sends a gust down it, and a hand
  * brushing past or a tap nudges a print.
  */
+const CORD_TOP = 48; // px from the top of the line to where the cord meets the walls
 const CORD = { sag: 0.07, k: 178, damping: 1.2 }; // sag as a share of the line's width; spring and damping per mass
 const SWING = [
   { w: 2 * Math.PI * 1.3, damping: 1.1 }, // towards and away from you
@@ -142,6 +143,13 @@ const SWING = [
 
 const LIMIT = [12, 4, 9]; // degrees
 
+const WIDE = "(min-width: 1280px)";
+const wide = (cb: () => void) => {
+  const mq = matchMedia(WIDE);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
+
 export function Line() {
   const wrap = useRef<HTMLDivElement>(null);
   const cord = useRef<SVGPathElement>(null);
@@ -149,6 +157,8 @@ export function Line() {
   const kick = useRef<(i: number, a: [number, number, number], dip: number) => void>(() => {});
   const reduced = useReducedMotion();
   const block = useBlock({ watch: true }).data?.number;
+  // below 1280 px the line scrolls sideways
+  const scrolls = !useSyncExternalStore(wide, () => matchMedia(WIDE).matches, () => false);
 
   useEffect(() => {
     const el = wrap.current;
@@ -167,7 +177,7 @@ export function Line() {
     const measure = () => {
       width = el.scrollWidth;
       el.style.setProperty("--line-width", `${width}px`);
-      top = parseFloat(getComputedStyle(el).getPropertyValue("--cord-top")) || 48;
+      top = CORD_TOP;
       pegs = prints.current.map((p) => (p ? p.offsetLeft + p.offsetWidth / 2 : 0));
       // point loads on a light cord: the pegs sit on a parabola, the cord runs straight between them
       rest = pegs.map((x) => top + CORD.sag * width * 4 * (x / width) * (1 - x / width));
@@ -243,8 +253,9 @@ export function Line() {
       draw();
     };
 
-    const run = (on: boolean) => {
-      if (on && document.visibilityState === "visible" && !raf) {
+    const run = (onScreen: boolean) => {
+      const on = onScreen && document.visibilityState === "visible";
+      if (on && !raf) {
         last = 0;
         raf = requestAnimationFrame(frame);
       } else if (!on && raf) {
@@ -319,15 +330,16 @@ export function Line() {
 
       <div
         ref={wrap}
-        tabIndex={0}
+        tabIndex={scrolls ? 0 : -1}
         role="region"
-        aria-label="Five steps, scroll sideways"
-        className="relative mt-14 snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [--cord-top:48px] xl:snap-none xl:overflow-visible [&::-webkit-scrollbar]:hidden"
+        aria-label={scrolls ? "Five steps, scroll sideways" : "Five steps"}
+        className="relative mt-14 snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] xl:snap-none xl:overflow-visible [&::-webkit-scrollbar]:hidden"
       >
         <svg aria-hidden className="pointer-events-none absolute inset-y-0 left-0 h-full overflow-visible" style={{ width: "var(--line-width, 100%)" }}>
           <path ref={cord} fill="none" stroke="var(--color-silver)" strokeOpacity=".55" strokeWidth="1.5" />
         </svg>
-        <ol className="relative flex w-max gap-6 px-[12vw] pt-[48px] pb-10 [perspective:1400px] xl:w-full xl:justify-between xl:gap-0 xl:px-[6vw]">
+        <ol style={{ paddingTop: CORD_TOP }}
+          className="relative flex w-max gap-6 px-[12vw] pb-10 [perspective:1400px] xl:w-full xl:justify-between xl:gap-0 xl:px-[6vw]">
           {PRINTS.map((p, i) => (
             <li
               key={p.title}
@@ -340,12 +352,12 @@ export function Line() {
               className="relative w-[70vw] max-w-[15rem] shrink-0 origin-top snap-center will-change-transform xl:w-[17%] xl:max-w-[14.5rem]"
             >
               <Peg />
-              <article className="flex h-[25rem] flex-col bg-[url(/plates/paper.webp)] bg-cover p-3 pb-4 text-developer ">
+              <article className="flex min-h-[25rem] flex-col bg-[url(/plates/paper.webp)] bg-cover p-3 pb-4 text-developer ">
                 <div className="aspect-[3/2] bg-developer text-paper/90">{p.image}</div>
                 <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-developer/60">{String(i + 1).padStart(2, "0")}</p>
                 <h3 className="mt-1 text-2xl leading-tight">{p.title}</h3>
                 <p className="mt-2 text-[0.95rem] leading-snug text-developer/85">{p.body}</p>
-                <p className="mt-auto pt-3 font-mono text-[10px] text-developer/55">{p.foot}</p>
+                <p className="mt-auto pt-3 font-mono text-[10px] text-developer/65">{p.foot}</p>
               </article>
             </li>
           ))}
