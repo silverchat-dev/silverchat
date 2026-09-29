@@ -2,6 +2,7 @@
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BaseError, toHex, UserRejectedRequestError, type Hex } from "viem";
 import { useAccount, useSignTypedData, useSwitchChain } from "wagmi";
@@ -17,6 +18,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
   const { address, chainId } = useAccount();
   const { switchChain } = useSwitchChain();
   const { signTypedDataAsync } = useSignTypedData();
+  const router = useRouter();
 
   const [choices, setChoices] = useState<(number | null)[]>(() => content.questions.map(() => null));
   const [region, setRegion] = useState("");
@@ -57,6 +59,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
       if (!res.ok) throw new Error(body.error ?? "the answer was not saved");
       saveReceipt({ pollId, voter: address, choices: picked, salt, leaf: resultLeaf(BigInt(pollId), picked, salt) });
       await you.refetch();
+      router.refresh();
     } catch (e) {
       setError(
         e instanceof BaseError && e.walk((x) => x instanceof UserRejectedRequestError)
