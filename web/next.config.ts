@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "access-control-allow-origin", value: "*" },
           { key: "access-control-allow-methods", value: "GET, POST, OPTIONS" },
-          { key: "access-control-allow-headers", value: "content-type" },
+          { key: "access-control-allow-headers", value: "content-type, x-rewards-signature" },
         ],
       },
     ];
