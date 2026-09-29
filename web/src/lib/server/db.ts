@@ -136,10 +136,15 @@ export const db = {
     );
   },
 
-  async setFinalized(id: string, resultRoot: string, rewardRoot: string, rewardTotal: string) {
+  /** From the Finalized log: the chain's roots and tx win over whatever the finalizer saved before sending. */
+  async setFinalized(id: string, resultRoot: string, rewardRoot: string, rewardTotal: string, tx: string) {
     await init();
-    if (!pool) return void Object.assign(mem.polls.get(id) ?? {}, { status: "final", result_root: resultRoot, reward_root: rewardRoot, reward_total: rewardTotal });
-    await pool.query(`update polls set status = 'final', result_root = $2, reward_root = $3, reward_total = $4 where id = $1`, [id, resultRoot, rewardRoot, rewardTotal]);
+    const f = { status: "final" as const, result_root: resultRoot, reward_root: rewardRoot, reward_total: rewardTotal, finalize_tx: tx };
+    if (!pool) return void Object.assign(mem.polls.get(id) ?? {}, f);
+    await pool.query(
+      `update polls set status = 'final', result_root = $2, reward_root = $3, reward_total = $4, finalize_tx = $5 where id = $1`,
+      [id, resultRoot, rewardRoot, rewardTotal, tx],
+    );
   },
 
   /** Open polls past their close, not sent in the last 15 minutes. */

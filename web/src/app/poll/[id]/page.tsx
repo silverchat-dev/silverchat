@@ -8,7 +8,7 @@ import { Proof } from "@/components/proof";
 import { RefundButton } from "@/components/refund-button";
 import { people, span, tokens } from "@/lib/format";
 import { db } from "@/lib/server/db";
-import { chainTime } from "@/lib/server/eligibility";
+import { displayTime } from "@/lib/server/eligibility";
 import { serialize } from "@/lib/server/polls";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +20,6 @@ const load = cache(async (id: string) => {
   const row = await db.poll(id);
   return row ? { ...serialize(row), answers: await db.answerCount(id) } : null;
 });
-
-/** Chain time for display; a slow RPC must not break the page an asker lands on right after paying. */
-const displayTime = () => chainTime().catch(() => Math.floor(Date.now() / 1000));
 
 export async function generateMetadata({ params }: PageProps<"/poll/[id]">): Promise<Metadata> {
   const poll = await load((await params).id);
@@ -55,13 +52,16 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
               ))}
             </>
           ) : (
-            <h1 className="text-3xl leading-tight">The question for this poll was never published. Its hash is {poll.contentHash}.</h1>
+            <>
+              <h1 className="text-3xl leading-tight">The question for this poll was never published.</h1>
+              <p className="break-all font-mono text-xs text-silver">Its hash on Ethereum: {poll.contentHash}</p>
+            </>
           )}
           <p className="font-mono text-sm text-paper/80">
             {open
-              ? `${poll.answers.toLocaleString("en-US")} of ${people(poll.breadth)} paid places answered · closes in ${span(poll.closesAt - now)}`
+              ? `${poll.answers.toLocaleString("en-US")} of ${people(poll.breadth)} answered · closes in ${span(poll.closesAt - now)}`
               : poll.status === "final"
-                ? `Fixed on-chain · ${poll.answers.toLocaleString("en-US")} answers`
+                ? "Fixed on Ethereum"
                 : poll.status === "refunded"
                   ? "Refunded to the asker"
                   : `Closed · ${poll.answers.toLocaleString("en-US")} answers · developing`}
@@ -70,7 +70,7 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
 
         {content && open && <AnswerPanel pollId={poll.id} content={content} open />}
         {content && poll.status === "final" && poll.tally && <Print content={content} tally={poll.tally} />}
-        {developing && (
+        {developing && !refundable && (
           <p className="max-w-xl text-lg leading-relaxed text-paper/85">
             The poll is closed and the print is in the developer. The result is usually fixed on-chain within a few minutes.
           </p>

@@ -6,6 +6,7 @@
   --color-silver: #a7a9ac;
   --color-paper: #e9e4da;
   --color-safelight: #e0582c;
+  --color-film: #0e0d0c;
 
   --font-serif: var(--font-caslon), Georgia, serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
@@ -35,7 +36,7 @@ body {
 .film {
   --hole: color-mix(in srgb, var(--color-paper) 16%, transparent);
   position: relative;
-  background: #0e0d0c;
+  background: var(--color-film);
   padding: 30px 10px;
 }
 .film::before,

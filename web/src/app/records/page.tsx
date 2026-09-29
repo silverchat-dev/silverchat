@@ -37,15 +37,17 @@ export default async function RecordsPage() {
             const top = lead(content, p.tally);
             return (
               <li key={p.id} className="grid gap-5 py-6 md:grid-cols-[14rem_minmax(0,1fr)_14rem] md:items-center">
-                <Link href={`/poll/${p.id}`} className="film block">
-                  <span className="block bg-[#1d1b18] px-4 py-5 text-center">
-                    <span className="block text-4xl leading-none text-paper">{top ? `${top.share}%` : "·"}</span>
-                    <span className="mt-2 block truncate font-mono text-[11px] uppercase tracking-[0.14em] text-paper/60">{top?.option ?? "no answers"}</span>
+                <Link href={`/poll/${p.id}`} className="grid gap-5 md:col-span-2 md:grid-cols-[14rem_minmax(0,1fr)] md:items-center">
+                  <span className="film block">
+                    <span className="block bg-tray px-4 py-5 text-center">
+                      <span className="block text-4xl leading-none text-paper">{top ? `${top.share}%` : "·"}</span>
+                      <span className="mt-2 block truncate font-mono text-[11px] uppercase tracking-[0.14em] text-paper/60">{top?.option ?? "no answers"}</span>
+                    </span>
                   </span>
-                </Link>
-                <Link href={`/poll/${p.id}`} className="min-w-0 space-y-2 hover:text-paper">
-                  <span className="block font-mono text-xs uppercase tracking-[0.14em] text-silver">No. {p.id}</span>
-                  <span className="line-clamp-2 text-2xl leading-snug">{content?.questions[0].q ?? "Question not published"}</span>
+                  <span className="min-w-0 space-y-2">
+                    <span className="block font-mono text-xs uppercase tracking-[0.14em] text-silver">No. {p.id}</span>
+                    <span className="line-clamp-2 text-2xl leading-snug">{content?.questions[0].q ?? "Question not published"}</span>
+                  </span>
                 </Link>
                 <dl className="space-y-1 font-mono text-xs text-silver">
                   <div className="flex justify-between gap-3">
@@ -57,11 +59,19 @@ export default async function RecordsPage() {
                     <dd className="text-paper/85">{tokens(p.cost)} ZC</dd>
                   </div>
                   <div className="flex justify-between gap-3">
+                    <dt>Asked at</dt>
+                    <dd className="text-paper/85">block {Number(p.block).toLocaleString("en-US")}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
                     <dt>Root</dt>
                     <dd>
-                      <a href={`${EXPLORER}/tx/${p.finalize_tx}`} target="_blank" rel="noreferrer" className="text-paper/85 underline-offset-4 hover:underline">
-                        {p.result_root ? short(p.result_root) : "·"}
-                      </a>
+                      {p.finalize_tx?.startsWith("0x") ? (
+                        <a href={`${EXPLORER}/tx/${p.finalize_tx}`} target="_blank" rel="noreferrer" className="text-paper/85 underline-offset-4 hover:underline">
+                          {p.result_root ? short(p.result_root) : "·"}
+                        </a>
+                      ) : (
+                        <span className="text-paper/85">{p.result_root ? short(p.result_root) : "·"}</span>
+                      )}
                     </dd>
                   </div>
                 </dl>
@@ -70,7 +80,12 @@ export default async function RecordsPage() {
           })}
         </ol>
       ) : (
-        <p className="text-xl text-paper/80">No results are fixed yet. The first one appears here a minute after a poll closes.</p>
+        <div className="space-y-5">
+          <p className="text-xl text-paper/80">No results are fixed yet. The first one appears here a minute after a poll closes.</p>
+          <Link href="/ask" className="inline-block bg-paper px-5 py-2.5 font-mono text-sm text-developer">
+            Ask a question
+          </Link>
+        </div>
       )}
     </section>
   );

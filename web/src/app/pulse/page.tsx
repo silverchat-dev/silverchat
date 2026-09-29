@@ -36,7 +36,7 @@ export default async function PulsePage() {
                 </span>
                 <Link
                   href={`/poll/${p.id}`}
-                  className="flex h-full min-h-56 flex-col justify-between gap-6 bg-paper p-5 text-developer outline-offset-4 transition-[filter] duration-300 hover:brightness-[1.04]"
+                  className="flex h-full min-h-40 flex-col sm:min-h-56 justify-between gap-6 bg-paper p-5 text-developer outline-offset-4 transition-[filter] duration-300 hover:brightness-[1.04]"
                 >
                   <span className="line-clamp-4 text-xl leading-snug">{q ?? "Question not published"}</span>
                   <span className="space-y-2 font-mono text-xs">

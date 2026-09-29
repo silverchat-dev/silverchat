@@ -20,12 +20,13 @@ type Poll = {
   tx: string;
   status: string;
   resultRoot: string | null;
+  rewardRoot: string | null;
   finalizeTx: string | null;
   seedBlock: string | null;
   tally: Tally | null;
 };
 
-type Check = { label: string; ok: boolean | null; detail: string };
+type Check = { label: string; ok: boolean; detail: string };
 
 /**
  * Everything here is checked in this browser against the chain, not taken from our server: the question against the
@@ -57,23 +58,37 @@ export function Proof({ poll }: { poll: Poll }) {
 
       if (poll.status !== "final" || !poll.finalizeTx || !poll.tally) return out;
 
+      // only a Finalized log from SilverAsk itself, for this poll, counts
       const receipt = await client!.getTransactionReceipt({ hash: poll.finalizeTx as Hex });
-      const [fixed] = parseEventLogs({ abi: askAbi, logs: receipt.logs, eventName: "Finalized" });
+      const [fixed] = parseEventLogs({
+        abi: askAbi,
+        logs: receipt.logs.filter((l) => l.address.toLowerCase() === ADDR.ask.toLowerCase()),
+        eventName: "Finalized",
+        args: { id: BigInt(poll.id) },
+      });
       out.push({
         label: "Result root",
-        ok: !!fixed && fixed.args.resultRoot === poll.resultRoot,
-        detail: fixed ? `${short(fixed.args.resultRoot)} in the Finalized log` : "no Finalized log found",
+        ok: !!fixed && fixed.args.resultRoot === poll.resultRoot && fixed.args.rewardRoot === poll.rewardRoot,
+        detail: fixed ? `${short(fixed.args.resultRoot)} in the Finalized log of SilverAsk` : "no Finalized log for this poll",
       });
 
-      const { answers } = (await (await fetch(`/api/polls/${poll.id}/leaves`)).json()) as { answers: { choices: number[]; salt: Hex }[] };
-      const leaves = answers.map((a) => resultLeaf(BigInt(poll.id), a.choices, a.salt)).sort();
+      const res = await fetch(`/api/polls/${poll.id}/leaves`);
+      if (!res.ok) {
+        out.push({ label: "Recount", ok: false, detail: "could not load the published answers, try again in a minute" });
+        return out;
+      }
+      const { answers } = (await res.json()) as { answers: { choices: number[]; salt: Hex }[] };
+      const leaves = answers.map((a) => resultLeaf(BigInt(poll.id), a.choices, a.salt));
       const root = leaves.length ? StandardMerkleTree.of(leaves.map((l) => [l]), ["bytes32"]).root : `0x${"0".repeat(64)}`;
       const totals = poll.tally.totals.map((q) => q.map(() => 0));
       for (const a of answers) a.choices.forEach((c, i) => (totals[i][c] += 1));
+      const same = root === fixed?.args.resultRoot && JSON.stringify(totals) === JSON.stringify(poll.tally.totals);
       out.push({
         label: "Recount",
-        ok: root === fixed?.args.resultRoot && JSON.stringify(totals) === JSON.stringify(poll.tally.totals),
-        detail: `${answers.length.toLocaleString("en-US")} published answers give the same root and totals`,
+        ok: same,
+        detail: same
+          ? `${answers.length.toLocaleString("en-US")} published answers give the same root and totals`
+          : `${answers.length.toLocaleString("en-US")} published answers do not give the same root and totals`,
       });
 
       const mine = address ? loadReceipt(poll.id, address) : null;
@@ -118,25 +133,25 @@ export function Proof({ poll }: { poll: Poll }) {
         )}
       </ul>
       <dl className="space-y-2 border-t border-silver/25 pt-4 text-silver">
-        <Link k="Asked" href={`${EXPLORER}/tx/${poll.tx}`}>
+        <Row k="Asked" href={`${EXPLORER}/tx/${poll.tx}`}>
           block {Number(poll.block).toLocaleString("en-US")}
-        </Link>
+        </Row>
         {poll.finalizeTx && poll.status === "final" && (
-          <Link k="Fixed" href={`${EXPLORER}/tx/${poll.finalizeTx}`}>
+          <Row k="Fixed" href={`${EXPLORER}/tx/${poll.finalizeTx}`}>
             {short(poll.finalizeTx)}
-          </Link>
+          </Row>
         )}
         {poll.seedBlock && (
-          <Link k="Draw seed" href={`${EXPLORER}/block/${poll.seedBlock}`}>
+          <Row k="Draw seed" href={`${EXPLORER}/block/${poll.seedBlock}`}>
             block {Number(poll.seedBlock).toLocaleString("en-US")}
-          </Link>
+          </Row>
         )}
       </dl>
     </aside>
   );
 }
 
-function Link({ k, href, children }: { k: string; href: string; children: React.ReactNode }) {
+function Row({ k, href, children }: { k: string; href: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4">
       <dt>{k}</dt>

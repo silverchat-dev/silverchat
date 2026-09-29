@@ -53,7 +53,7 @@ async function run() {
           min_hold_sc: p.sc ? String(tokensFor(MIN_HOLD, p.sc)) : null,
         });
       } else if (log.eventName === "Finalized") {
-        await db.setFinalized(String(log.args.id), log.args.resultRoot!, log.args.rewardRoot!, String(log.args.rewardTotal));
+        await db.setFinalized(String(log.args.id), log.args.resultRoot!, log.args.rewardRoot!, String(log.args.rewardTotal), log.transactionHash);
       } else if (log.eventName === "Refunded") {
         await db.setRefunded(String(log.args.id));
       }
