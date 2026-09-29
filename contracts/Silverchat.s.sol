@@ -14,13 +14,22 @@ import {SilverBuyback} from "./SilverBuyback.sol";
  *   RULES_HASH RULES_SOURCE              keccak256 of web/src/lib/algorithm.ts and where to read it
  *   OUT                                  deployment name, written to deployments/<OUT>.json
  *   ZC BUYBACK_MAX BUYBACK_GAP           optional; mainnet ZC, 1M ZC and 1 hour by default
+ * Run it once without --broadcast and read the addresses it prints: TREASURY and BUYBACK can never change.
+ * The JSON is written during simulation, so check every address has code before trusting it.
  */
 contract Deploy is Script {
   address constant MAINNET_ZC = 0x4E67DB19044549fF420860834c91b45BaD298722;
 
   function run() external {
     IERC20 _zc = IERC20(vm.envOr("ZC", MAINNET_ZC));
+    require(address(_zc).code.length != 0, "no ZC on this chain");
     address _owner = vm.envAddress("OWNER");
+    console.log("zc      ", address(_zc));
+    console.log("owner   ", _owner);
+    console.log("treasury", vm.envAddress("TREASURY"));
+    console.log("poster  ", vm.envAddress("POSTER"));
+    console.log("pricer  ", vm.envAddress("PRICER"));
+    console.log("keeper  ", vm.envAddress("KEEPER"));
 
     vm.startBroadcast();
     SilverBuyback _buyback = new SilverBuyback(
