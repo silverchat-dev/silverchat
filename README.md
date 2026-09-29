@@ -6,7 +6,7 @@ The polling network from Vitalik Buterin's novel [Snowmoon](https://vitalik.eth.
 
 - **Ask** — pay $ZC to put a question to the network. Breadth sets how many holders it reaches (100 to 1M), priority how high it sits in the feed. The price is per person, in ZC at the live price.
 - **Answer** — wallets holding $20 of ZC or SC at the block the poll opened answer with a signature. No gas, one answer per wallet, optional region and age.
-- **Fix** — a minute after close the result is fixed on Ethereum as a root over every signed answer. Then the payment splits: 35% to the people who answered, 25% to the treasury, 20% buys $SC and burns it, 20% of the ZC is burned.
+- **Fix** — a minute after close the result is fixed on Ethereum as a root over every signed answer. Then the payment splits: up to 35% to the people who answered (an equal share per paid answer, the rest back to the asker), 25% to the treasury, 20% buys $SC and burns it, 20% of the ZC is burned.
 - **Claim** — answerers claim their share in one transaction within 90 days; what nobody claims is burned. A result not fixed within 7 days refunds the asker in full.
 - **Pulse** — the open polls in feed order, ranked by one public rules file whose hash sits in `SilverAlgorithm` behind a 20-day delay (ch. 27).
 
