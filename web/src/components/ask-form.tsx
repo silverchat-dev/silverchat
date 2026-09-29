@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BaseError, ContractFunctionRevertedError, erc20Abi, formatUnits, parseEventLogs, UserRejectedRequestError } from "viem";
-import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
 
 import { askAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
@@ -39,8 +39,8 @@ const blank = () => ({ q: "", options: ["", ""] });
 
 export function AskForm() {
   const router = useRouter();
-  const { address } = useAccount();
-  const chainId = useChainId();
+  // the connector's own chain: wagmi's useChainId stays on the configured chain even when the wallet is elsewhere
+  const { address, chainId } = useAccount();
   const { switchChain } = useSwitchChain();
   const client = usePublicClient();
   const { writeContractAsync } = useWriteContract();
@@ -100,30 +100,42 @@ export function AskForm() {
       const allowance = await client.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "allowance", args: [address, ADDR.ask] });
       if (allowance < exact) {
         setStep("approve");
-        const tx = await writeContractAsync({ address: ADDR.zc, abi: erc20Abi, functionName: "approve", args: [ADDR.ask, exact] });
-        await client.waitForTransactionReceipt({ hash: tx });
+        const tx = await writeContractAsync({ address: ADDR.zc, abi: erc20Abi, functionName: "approve", args: [ADDR.ask, exact], chainId: CHAIN_ID });
+        if ((await client.waitForTransactionReceipt({ hash: tx })).status !== "success") throw new Error("the approval reverted");
       }
 
+      // simulate first, so a price change or a bad input shows here instead of as a failed transaction
+      const { request } = await client.simulateContract({
+        account: address,
+        address: ADDR.ask,
+        abi: askAbi,
+        functionName: "ask",
+        args: [hash, breadth, priority, duration, exact],
+      });
       setStep("ask");
-      const tx = await writeContractAsync({ address: ADDR.ask, abi: askAbi, functionName: "ask", args: [hash, breadth, priority, duration, exact] });
+      const tx = await writeContractAsync({ ...request, chainId: CHAIN_ID });
       const receipt = await client.waitForTransactionReceipt({ hash: tx });
       if (receipt.status !== "success") throw new Error("the transaction reverted");
       const [asked] = parseEventLogs({ abi: askAbi, logs: receipt.logs, eventName: "Asked" });
-
-      // the indexer trails the chain by a few seconds
-      setStep("developing");
-      const id = String(asked.args.id);
-      for (let i = 0; i < 30; i++) {
-        if ((await fetch(`/api/polls/${id}`)).ok) break;
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-      router.push(`/poll/${id}`);
+      if (!asked) throw new Error("the transaction was replaced before it asked");
+      settle(String(asked.args.id));
     } catch (e) {
       setStep("idle");
       price.refetch();
       balance.refetch();
       setError(explain(e));
     }
+  }
+
+  /** The ZC is paid from here on: nothing may report a failure or let the form send again. */
+  async function settle(id: string) {
+    setStep("developing");
+    // the indexer trails the chain by a few seconds
+    for (let i = 0; i < 30; i++) {
+      if ((await fetch(`/api/polls/${id}`).catch(() => null))?.ok) break;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    router.push(`/poll/${id}`);
   }
 
   const busy = step !== "idle";
@@ -133,10 +145,7 @@ export function AskForm() {
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <form
         className="bg-paper px-5 py-7 text-developer sm:px-9 sm:py-9"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
+        onSubmit={(e) => e.preventDefault()}
       >
         <fieldset disabled={busy} className="space-y-9">
           {questions.map((q, i) => (
@@ -175,7 +184,7 @@ export function AskForm() {
                       className="min-w-0 flex-1 border-b border-developer/25 bg-transparent py-1 text-lg outline-none placeholder:text-developer/35 focus:border-developer"
                     />
                     {q.options.length > 2 && (
-                      <button type="button" aria-label="Remove this option" onClick={() => edit(i, (x) => x.options.splice(k, 1))} className="px-1 font-mono text-sm">
+                      <button type="button" aria-label="Remove this option" onClick={() => edit(i, (x) => x.options.splice(k, 1))} className="grid size-7 place-items-center font-mono text-sm">
                         ×
                       </button>
                     )}
@@ -224,12 +233,12 @@ export function AskForm() {
         </fieldset>
       </form>
 
-      <aside className="space-y-6 self-start font-mono text-sm lg:sticky lg:top-6">
+      <aside className="space-y-6 self-start bg-tray px-5 py-7 font-mono text-sm sm:px-7 lg:sticky lg:top-6">
         <p className="text-xs uppercase tracking-[0.14em] text-silver">Receipt</p>
         <dl className="space-y-2">
           <Row k="Reach">{people(breadth)} people</Row>
           <Row k="Priority">{PRIORITIES[priority].label}</Row>
-          <Row k="Price">{price.data ? `${tokens(price.data)} ZC a person` : "not open yet"}</Row>
+          <Row k="Price">{price.data === undefined ? "·" : price.data === 0n ? "not open yet" : `${tokens(price.data)} ZC a person`}</Row>
         </dl>
         <div className="border-t border-silver/25 pt-4">
           <p className="flex items-baseline justify-between">
@@ -264,11 +273,15 @@ export function AskForm() {
             disabled={busy || !price.data || short}
             className="w-full bg-paper py-3 text-developer hover:bg-paper/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {!price.data
-              ? "Asking opens soon"
-              : short
-                ? "Not enough ZC"
-                : { idle: "Ask the network", publishing: "Saving the question…", approve: "Approve ZC in your wallet…", ask: "Confirm the ask in your wallet…", developing: "Developing…" }[step]}
+            {price.data === undefined
+              ? price.isError
+                ? "Cannot read the price, try again"
+                : "Reading the price…"
+              : price.data === 0n
+                ? "Asking opens soon"
+                : short
+                  ? "Not enough ZC"
+                  : { idle: "Ask the network", publishing: "Saving the question…", approve: "Approve ZC in your wallet…", ask: "Confirm the ask in your wallet…", developing: "Developing…" }[step]}
           </button>
         )}
         {error && (
