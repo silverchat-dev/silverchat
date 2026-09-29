@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Exposure } from "./exposure";
 import { PrintCard } from "./print-card";
+import { TrayCanvas } from "./tray-canvas";
 
 /** The developer tray with the example print, and the exposure dial under it. */
 export function Darkroom() {
@@ -15,6 +16,7 @@ export function Darkroom() {
       <div className="@container relative w-full overflow-hidden" style={{ aspectRatio: "3 / 2" }}>
         <Image src="/plates/tray.webp" alt="" fill priority sizes="(min-width: 1024px) 48vw, 100vw" className="object-cover" />
         <PrintCard />
+        <TrayCanvas step={step} />
       </div>
       <Exposure step={step} onStep={setStep} />
     </div>
