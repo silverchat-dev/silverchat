@@ -30,3 +30,25 @@ body {
   outline: 1px solid var(--color-paper);
   outline-offset: 3px;
 }
+
+/* 35mm film around a frame: sprocket holes along the top and bottom edge */
+.film {
+  --hole: color-mix(in srgb, var(--color-paper) 16%, transparent);
+  position: relative;
+  background: #0e0d0c;
+  padding: 30px 10px;
+}
+.film::before,
+.film::after {
+  content: "";
+  position: absolute;
+  inset-inline: 6px;
+  height: 6px;
+  background: repeating-linear-gradient(90deg, transparent 0 7px, var(--hole) 7px 15px);
+}
+.film::before {
+  top: 5px;
+}
+.film::after {
+  bottom: 5px;
+}

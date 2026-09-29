@@ -9,7 +9,9 @@ import { Rewards } from "@/components/rewards";
 import { GITHUB_URL } from "@/lib/config";
 
 const NAV: { href: string; label: string; external?: boolean }[] = [
+  { href: "/pulse", label: "Pulse" },
   { href: "/ask", label: "Ask" },
+  { href: "/records", label: "Records" },
   { href: GITHUB_URL, label: "Docs", external: true },
 ];
 

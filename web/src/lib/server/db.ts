@@ -37,6 +37,7 @@ export type PollRow = {
   tally?: Tally | null;
   finalize_tx?: string | null;
   finalize_at?: number | null;
+  answers?: number;
 };
 
 // on globalThis so the background loops and the route handlers share one copy in dev
@@ -216,14 +217,17 @@ export const db = {
   async polls(limit: number, status?: PollRow["status"]): Promise<PollRow[]> {
     await init();
     if (!pool) {
+      const count = (id: string) => [...mem.answers.values()].filter((a) => a.poll_id === id).length;
       return [...mem.polls.values()]
         .filter((p) => !status || p.status === status)
         .sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)))
-        .slice(0, limit);
+        .slice(0, limit)
+        .map((p) => ({ ...p, answers: count(p.id) }));
     }
+    const cols = `p.*, (select count(*) from answers a where a.poll_id = p.id)::int as answers`;
     const r = status
-      ? await pool.query(`select * from polls where status = $1 order by id desc limit $2`, [status, limit])
-      : await pool.query(`select * from polls order by id desc limit $1`, [limit]);
+      ? await pool.query(`select ${cols} from polls p where status = $1 order by id desc limit $2`, [status, limit])
+      : await pool.query(`select ${cols} from polls p order by id desc limit $1`, [limit]);
     return r.rows.map(text);
   },
 

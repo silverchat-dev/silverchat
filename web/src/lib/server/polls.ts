@@ -18,6 +18,7 @@ export function serialize(row: PollRow) {
     block: row.block,
     tx: row.tx,
     status: row.status,
+    answers: row.answers,
     resultRoot: row.status === "final" ? row.result_root : null,
     rewardRoot: row.status === "final" ? row.reward_root : null,
     rewardTotal: row.status === "final" ? row.reward_total : null,
