@@ -1,0 +1,29 @@
+[profile.default]
+src = "."
+test = "."
+script = "."
+out = "out"
+libs = ["dependencies"]
+skip = ["dependencies/**"]
+solc = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+remappings = [
+    "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.4.0/",
+    "forge-std/=dependencies/forge-std-1.9.7/src/",
+]
+
+[fmt]
+tab_width = 2
+line_length = 120
+int_types = "long"
+quote_style = "double"
+
+[soldeer]
+remappings_generate = false
+recursive_deps = false
+
+[dependencies]
+forge-std = "1.9.7"
+"@openzeppelin-contracts" = "5.4.0"
