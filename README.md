@@ -1,6 +1,6 @@
 # silverchat ($SC)
 
-> "The more zipcoins you burn, the more people it polls." — *Snowmoon*, ch. 27
+> "The more zipcoins you burn, the more people it polls." (*Snowmoon*, ch. 27)
 
 The polling network from Vitalik Buterin's novel [Snowmoon](https://vitalik.eth.limo/snowmoon/html/), built on Ethereum. Not affiliated with the author.
 
