@@ -12,4 +12,6 @@ export function limited(key: string, max: number, windowMs = 60_000) {
   return recent.length > max;
 }
 
-export const clientIp = (req: Request) => req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
+/** The proxy appends the address it saw, so the last hop is the one a client cannot fake. */
+export const clientIp = (req: Request) =>
+  req.headers.get("x-real-ip") ?? req.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() ?? "local";

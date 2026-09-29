@@ -12,7 +12,7 @@ const CHUNK = 9_000n;
 const TAIL = 32n;
 const MIN_HOLD_USD = 20n * 10n ** 18n;
 
-const EVENTS = askAbi.filter((x) => x.type === "event");
+const EVENTS = askAbi.filter((x) => x.type === "event" && ["Asked", "Finalized", "Refunded"].includes(x.name));
 
 let inflight: Promise<void> | null = null;
 
@@ -24,6 +24,7 @@ export function indexTick() {
 
 async function run() {
   if (ADDR.ask === ZERO) return;
+  if (DEPLOY_BLOCK === 0n) throw new Error("NEXT_PUBLIC_DEPLOY_BLOCK is not set");
   const head = await publicClient.getBlockNumber();
   const saved = await db.get("indexer");
   let from = saved ? BigInt(saved) + 1n : DEPLOY_BLOCK;

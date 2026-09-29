@@ -7,7 +7,9 @@ import { Pool } from "pg";
  * Big numbers are kept as decimal strings.
  */
 const url = process.env.DATABASE_URL;
-const pool = url ? new Pool({ connectionString: url, max: 4, ssl: url.includes("railway.internal") ? undefined : { rejectUnauthorized: false } }) : null;
+// Railway's private network and a local database speak plain TCP; anything else goes over TLS
+const plain = url && /railway\.internal|localhost|127\.0\.0\.1/.test(url);
+const pool = url ? new Pool({ connectionString: url, max: 4, ssl: plain ? undefined : { rejectUnauthorized: false } }) : null;
 
 export type PollRow = {
   id: string;
@@ -77,7 +79,19 @@ export const db = {
     await init();
     if (!pool) {
       const old = mem.polls.get(row.id);
-      mem.polls.set(row.id, { status: "open", result_root: null, reward_root: null, reward_total: null, ...old, ...row, content: mem.drafts.get(row.hash) ?? null });
+      // the eligibility minimums are fixed the first time a given tx is seen
+      const same = old?.tx === row.tx;
+      mem.polls.set(row.id, {
+        status: "open",
+        result_root: null,
+        reward_root: null,
+        reward_total: null,
+        ...old,
+        ...row,
+        min_hold_zc: same ? old.min_hold_zc : row.min_hold_zc,
+        min_hold_sc: same ? old.min_hold_sc : row.min_hold_sc,
+        content: mem.drafts.get(row.hash) ?? null,
+      });
       return;
     }
     await pool.query(

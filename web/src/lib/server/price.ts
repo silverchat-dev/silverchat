@@ -40,20 +40,36 @@ async function median(token: Address, quote: Address) {
 
 async function ethUsd() {
   const [, answer, , updatedAt] = await publicClient.readContract({ address: ADDR.ethUsdFeed, abi: priceFeedAbi, functionName: "latestRoundData" });
-  if (answer <= 0n || Date.now() / 1000 - Number(updatedAt) > 3600) throw new Error("ETH/USD feed is stale");
+  // the feed updates at least hourly; allow two heartbeats before calling it stale
+  if (answer <= 0n || Date.now() / 1000 - Number(updatedAt) > 7200) throw new Error("ETH/USD feed is stale");
   return BigInt(answer) * 10n ** 10n;
 }
 
-let cached: { at: number; zc: bigint; sc: bigint | null } | null = null;
+type Prices = { at: number; zc: bigint; sc: bigint | null };
+let cached: Prices | null = null;
+let inflight: Promise<Prices> | null = null;
 
-/** USD per token, wad. SC is null until it has a pool. Cached for a minute. */
-export async function prices() {
-  if (cached && Date.now() - cached.at < 60_000) return cached;
+async function read(): Promise<Prices> {
   const [wethPerZc, usdPerEth] = await Promise.all([median(ADDR.zc, ADDR.weth), ethUsd()]);
   const zc = (wethPerZc * usdPerEth) / WAD;
   const sc = ADDR.sc === ZERO ? null : ((await median(ADDR.sc, ADDR.zc)) * zc) / WAD;
-  cached = { at: Date.now(), zc, sc };
-  return cached;
+  return { at: Date.now(), zc, sc };
+}
+
+/**
+ * USD per token, wad. SC is null until it has a pool. Cached for a minute; callers at the same moment share one read,
+ * and a failed refresh falls back to the last good reading for up to 15 minutes.
+ */
+export async function prices(): Promise<Prices> {
+  if (cached && Date.now() - cached.at < 60_000) return cached;
+  inflight ??= read()
+    .then((p) => (cached = p))
+    .catch((e) => {
+      if (cached && Date.now() - cached.at < 15 * 60_000) return cached;
+      throw e;
+    })
+    .finally(() => (inflight = null));
+  return inflight;
 }
 
 /** Tokens (wei) worth `usd` dollars at `usdPerToken` (wad). */

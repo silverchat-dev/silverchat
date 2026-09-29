@@ -23,5 +23,3 @@ export function serialize(row: PollRow) {
     rewardTotal: row.reward_total,
   };
 }
-
-export type PublicPoll = ReturnType<typeof serialize>;

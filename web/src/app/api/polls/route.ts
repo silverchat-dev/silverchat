@@ -9,7 +9,7 @@ const headers = { "cache-control": "no-store" };
 
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
-  const limit = Math.min(Math.max(Number(params.get("limit")) || 50, 1), 100);
+  const limit = Math.min(Math.max(Math.trunc(Number(params.get("limit"))) || 50, 1), 100);
   const status = params.get("status") as PollRow["status"] | null;
   if (status && status !== "open" && status !== "final" && status !== "refunded") {
     return Response.json({ error: "status must be open, final or refunded" }, { status: 400, headers });
