@@ -45,6 +45,10 @@ export async function finalizeTick() {
 }
 
 async function finalizeOne(poll: PollRow) {
+  // a slow first attempt is still in the mempool: sending again would only revert
+  if (poll.finalize_tx?.startsWith("0x") && (await publicClient.getTransaction({ hash: poll.finalize_tx as Hex }).catch(() => null))) return;
+  // take the row before reading answers: nothing can be added after this
+  if (!(await db.claimFinalizing(poll.id))) return;
   const seedBlock = await firstBlockAfter(poll.closes_at, BigInt(poll.block));
   const t = await trees(poll, seedBlock.hash as Hex);
   const questions = poll.content ? (JSON.parse(poll.content) as Content).questions : [];
@@ -57,7 +61,6 @@ async function finalizeOne(poll: PollRow) {
     reward_root: t.rewardRoot,
     reward_total: String(t.rewardTotal),
   };
-  // mark it first: a restart in the next 15 minutes will not send a second finalize
   await db.setFinalizing(poll.id, { ...record, finalize_tx: "sending" });
   const hash = await send(wallet!, {
     address: ADDR.ask,

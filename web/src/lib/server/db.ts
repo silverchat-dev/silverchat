@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Pool } from "pg";
+import type { Address } from "viem";
 
 import type { Tally } from "@/lib/algorithm";
 
@@ -39,7 +40,7 @@ export type PollRow = {
 };
 
 // on globalThis so the background loops and the route handlers share one copy in dev
-export type AnswerRow = { poll_id: string; voter: string; choices: number[]; region: string; age: string; salt: string; signature: string };
+export type AnswerRow = { poll_id: string; voter: Address; choices: number[]; region: string; age: string; salt: string; signature: string };
 
 const g = globalThis as typeof globalThis & {
   silverchatMem?: { drafts: Map<string, string>; polls: Map<string, PollRow>; answers: Map<string, AnswerRow>; kv: Map<string, string> };
@@ -66,6 +67,7 @@ function init() {
        create table if not exists answers (
          poll_id numeric not null, voter text not null, choices jsonb not null, region text not null, age text not null,
          salt text not null, signature text not null, created_at timestamptz not null default now(), primary key (poll_id, voter));
+       create index if not exists answers_voter on answers (voter);
        create table if not exists kv (key text primary key, value text not null);`,
     )
     .then(() => undefined);
@@ -153,6 +155,27 @@ export const db = {
     return r.rows.map(text);
   },
 
+  /**
+   * Take a due poll for finalizing, atomically. From here no answer can be added (see addAnswer), and a second worker
+   * gets false. Must happen before the answers are read.
+   */
+  async claimFinalizing(id: string) {
+    await init();
+    const now = Math.floor(Date.now() / 1000);
+    const stale = now - 15 * 60;
+    if (!pool) {
+      const p = mem.polls.get(id);
+      if (!p || p.status !== "open" || (p.finalize_at && p.finalize_at > stale)) return false;
+      p.finalize_at = now;
+      return true;
+    }
+    const r = await pool.query(
+      `update polls set finalize_at = $2 where id = $1 and status = 'open' and (finalize_at is null or finalize_at < $3)`,
+      [id, now, stale],
+    );
+    return r.rowCount === 1;
+  },
+
   /** Saved before the finalize transaction is sent, so a restart does not send it twice. */
   async setFinalizing(id: string, f: { seed: string; seed_block: string; tally: Tally; result_root: string; reward_root: string; reward_total: string; finalize_tx: string }) {
     await init();
@@ -164,11 +187,16 @@ export const db = {
     );
   },
 
-  /** Final polls from the last 90 days whose paid set may include `voter`. */
-  async finalSince(since: number): Promise<PollRow[]> {
+  /** Final polls from the last 90 days that `voter` answered. */
+  async answeredFinal(voter: string, since: number): Promise<PollRow[]> {
     await init();
-    if (!pool) return [...mem.polls.values()].filter((p) => p.status === "final" && (p.finalize_at ?? 0) >= since);
-    const r = await pool.query(`select * from polls where status = 'final' and finalize_at >= $1 order by id desc`, [since]);
+    if (!pool) {
+      return [...mem.polls.values()].filter((p) => p.status === "final" && (p.finalize_at ?? 0) >= since && mem.answers.has(`${p.id}:${voter}`));
+    }
+    const r = await pool.query(
+      `select p.* from polls p join answers a on a.poll_id = p.id where a.voter = $1 and p.status = 'final' and p.finalize_at >= $2 order by p.id desc`,
+      [voter, since],
+    );
     return r.rows.map(text);
   },
 

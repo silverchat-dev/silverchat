@@ -23,6 +23,7 @@ import { foundry } from "viem/chains";
 
 import { askAbi } from "../src/lib/abi";
 import { resultLeaf, tagsHash, types } from "../src/lib/answer";
+import { rewardsMessage, today } from "../src/lib/rewards";
 
 const RPC = "http://127.0.0.1:8545";
 const APP = process.env.APP_URL ?? "http://localhost:3100";
@@ -30,7 +31,7 @@ const env = Object.fromEntries(
   readFileSync(new URL("../.env.local", import.meta.url), "utf8")
     .split("\n")
     .filter((l) => l.includes("="))
-    .map((l) => l.split("=") as [string, string]),
+    .map((l) => l.split(/=(.*)/).slice(0, 2) as [string, string]),
 );
 const ASK = env.NEXT_PUBLIC_ASK as Address;
 const ZC = "0x4E67DB19044549fF420860834c91b45BaD298722" as Address;
@@ -113,7 +114,7 @@ check(JSON.stringify(final.tally.totals) === "[[2,1]]", "totals are 2 yes, 1 no"
 
 const leaves = await (await fetch(`${APP}/api/polls/${id}/leaves`)).json();
 const recount = StandardMerkleTree.of(
-  leaves.answers.map((a: { choices: number[]; salt: Hex }) => [resultLeaf(id, a.choices, a.salt)]).sort(),
+  leaves.answers.map((a: { choices: number[]; salt: Hex }) => [resultLeaf(id, a.choices, a.salt)]),
   ["bytes32"],
 );
 check(recount.root === final.resultRoot, "anyone can recompute the result root from the published leaves");
@@ -122,7 +123,11 @@ check(mine.included, "a voter can prove their answer is in the record");
 
 const before = await pub.readContract({ address: ZC, abi: erc20Abi, functionName: "balanceOf", args: [VOTERS[0].address] });
 type Claim = { id: string; amount: string; proof: Hex[] };
-const { claims } = (await (await fetch(`${APP}/api/claims/${VOTERS[0].address}`)).json()) as { claims: Claim[] };
+const day = today();
+const sig = await wallet(VOTERS[0]).signMessage({ message: rewardsMessage(VOTERS[0].address, day) });
+const claimsUrl = `${APP}/api/claims/${VOTERS[0].address}?day=${day}&sig=${sig}`;
+check((await fetch(`${APP}/api/claims/${VOTERS[0].address}?day=${day}&sig=0x00`)).status === 401, "rewards are private without the wallet's signature");
+const { claims } = (await (await fetch(claimsUrl)).json()) as { claims: Claim[] };
 check(claims.some((c) => c.id === String(id)), "the voter has a reward to claim from this poll");
 await pub.waitForTransactionReceipt({
   hash: await wallet(VOTERS[0]).writeContract({
@@ -135,6 +140,6 @@ await pub.waitForTransactionReceipt({
 const after = await pub.readContract({ address: ZC, abi: erc20Abi, functionName: "balanceOf", args: [VOTERS[0].address] });
 const sum = claims.reduce((s, c) => s + BigInt(c.amount), 0n);
 check(after - before === sum, `claimed ${sum} wei of ZC from ${claims.length} poll(s) through the on-chain proofs`);
-const left = (await (await fetch(`${APP}/api/claims/${VOTERS[0].address}`)).json()) as { claims: Claim[] };
+const left = (await (await fetch(claimsUrl)).json()) as { claims: Claim[] };
 check(left.claims.length === 0, "nothing is left to claim");
 console.log("all good");

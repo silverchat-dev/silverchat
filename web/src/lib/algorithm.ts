@@ -1,7 +1,7 @@
 /**
  * The rules Silverchat runs by. SilverAlgorithm stores the keccak256 of this file, and a new version only counts 20
- * days after its hash is published (Snowmoon, ch. 27). Everything here is pure: no config, no database, no network,
- * so anyone can run it against the public export and check the result.
+ * days after its hash is published (Snowmoon, ch. 27). Everything here is pure: no config, no database, no network.
+ * Anyone can rerun `tally` on a poll's published answers; the paid set needs the voters, which only the server holds.
  */
 import { encodePacked, keccak256, type Address, type Hex } from "viem";
 
