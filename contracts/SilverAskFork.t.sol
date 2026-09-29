@@ -6,7 +6,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {SilverAsk} from "./SilverAsk.sol";
 
-/// @notice Runs against mainnet $ZC: `ETH_RPC_URL=<rpc> forge test --match-contract SilverAsk`
+/// @notice Runs against mainnet $ZC at a pinned block; the RPC must serve history. `forge test --match-contract SilverAsk`
 contract SilverAskFork is Test {
   IERC20 constant ZC = IERC20(0x4E67DB19044549fF420860834c91b45BaD298722);
   // the Uniswap v4 PoolManager holds the ZC of every v4 pool, a handy faucet on a fork
@@ -28,7 +28,7 @@ contract SilverAskFork is Test {
   );
 
   function setUp() public {
-    vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://ethereum-rpc.publicnode.com")));
+    vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth.drpc.org")), 26_085_290);
     ask = new SilverAsk(ZC, treasury, buyback, owner, poster, pricer);
     vm.prank(pricer);
     ask.setPrice(3 ether + 7);
@@ -40,7 +40,7 @@ contract SilverAskFork is Test {
 
   function _ask(uint32 _breadth) internal returns (uint256 _id) {
     vm.prank(asker);
-    _id = ask.ask(CONTENT, _breadth, 1, 1 days, type(uint256).max);
+    _id = ask.ask(CONTENT, _breadth, 2, 1 days, type(uint256).max);
   }
 
   function _leaf(address _account, uint256 _amount) internal pure returns (bytes32) {
@@ -59,8 +59,8 @@ contract SilverAskFork is Test {
   function test_payment_is_held_then_split_at_finalize() public {
     uint256 _before = ZC.balanceOf(asker);
     uint256 _id = _ask(100);
-    uint256 _cost = ask.costOf(100, 1);
-    assertEq(_cost, (3 ether + 7) * 120);
+    uint256 _cost = ask.costOf(100, 2);
+    assertEq(_cost, (3 ether + 7) * 150); // not a multiple of 20, so the burn takes the rounding
     assertEq(_before - ZC.balanceOf(asker), _cost);
     assertEq(ZC.balanceOf(address(ask)), _cost);
 

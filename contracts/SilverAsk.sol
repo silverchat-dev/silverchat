@@ -27,8 +27,8 @@ contract SilverAsk is Ownable2Step {
 
   struct Poll {
     address asker;
-    uint64 closesAt;
-    uint64 finalizedAt;
+    uint32 closesAt;
+    uint32 finalizedAt;
     Status status;
     uint256 cost;
     uint256 remaining;
@@ -63,7 +63,7 @@ contract SilverAsk is Ownable2Step {
     bytes32 indexed contentHash,
     uint256 breadth,
     uint8 priority,
-    uint64 closesAt,
+    uint32 closesAt,
     uint256 cost
   );
   event Finalized(uint256 indexed id, bytes32 resultRoot, bytes32 rewardRoot, uint256 rewardTotal, uint256 returned);
@@ -92,6 +92,7 @@ contract SilverAsk is Ownable2Step {
   error AlreadyClaimed();
   error BadProof();
   error LengthMismatch();
+  error NothingToSweep();
 
   constructor(IERC20 _zc, address _treasury, address _buyback, address _owner, address _poster, address _pricer)
     Ownable(_owner)
@@ -130,7 +131,7 @@ contract SilverAsk is Ownable2Step {
     if (_cost > _maxCost) revert PriceMoved(_cost);
 
     _id = ++count;
-    uint64 _closesAt = uint64(block.timestamp + _duration);
+    uint32 _closesAt = uint32(block.timestamp + _duration);
     Poll storage _poll = polls[_id];
     _poll.asker = msg.sender;
     _poll.closesAt = _closesAt;
@@ -161,7 +162,7 @@ contract SilverAsk is Ownable2Step {
     uint256 _returned = _pool - _rewardTotal;
 
     _poll.status = Status.Finalized;
-    _poll.finalizedAt = uint64(block.timestamp);
+    _poll.finalizedAt = uint32(block.timestamp);
     _poll.remaining = _rewardTotal;
     _poll.rewardRoot = _rewardRoot;
 
@@ -203,6 +204,7 @@ contract SilverAsk is Ownable2Step {
     if (_poll.status != Status.Finalized) revert NotFinalized();
     if (block.timestamp <= _poll.finalizedAt + CLAIM_WINDOW) revert TooEarly();
     uint256 _amount = _poll.remaining;
+    if (_amount == 0) revert NothingToSweep();
     _poll.remaining = 0;
     ZC.safeTransfer(BURN, _amount);
     emit Swept(_id, _amount);
