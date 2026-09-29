@@ -7,6 +7,7 @@ import { keccak256 } from "viem";
 const RULES_HASH = keccak256(readFileSync(new URL("src/lib/algorithm.ts", import.meta.url)));
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   allowedDevOrigins: ["127.0.0.1"],
   env: {
     NEXT_PUBLIC_RULES_HASH: RULES_HASH,
