@@ -21,5 +21,9 @@ export function serialize(row: PollRow) {
     resultRoot: row.result_root,
     rewardRoot: row.reward_root,
     rewardTotal: row.reward_total,
+    // totals are published only once the result is fixed
+    tally: row.status === "final" ? (row.tally ?? null) : null,
+    seedBlock: row.seed_block ?? null,
+    finalizeTx: row.status === "final" ? (row.finalize_tx ?? null) : null,
   };
 }

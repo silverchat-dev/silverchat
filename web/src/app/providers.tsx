@@ -17,6 +17,8 @@ const fork = defineChain({
   name: "mainnet fork",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: [PUBLIC_RPC_URL] } },
+  // a fork of mainnet has mainnet's contracts, multicall included
+  contracts: mainnet.contracts,
 });
 const chain = CHAIN_ID === 1 ? mainnet : fork;
 

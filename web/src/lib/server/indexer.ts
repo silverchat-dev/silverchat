@@ -1,5 +1,6 @@
 import "server-only";
 
+import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { askAbi } from "@/lib/abi";
 import { ADDR, DEPLOY_BLOCK, ZERO } from "@/lib/config";
 
@@ -10,7 +11,7 @@ import { prices, tokensFor } from "./price";
 const CHUNK = 9_000n;
 // every tick looks back this far again, so a reorg that reorders asks heals itself
 const TAIL = 32n;
-const MIN_HOLD_USD = 20n * 10n ** 18n;
+const MIN_HOLD = BigInt(MIN_HOLD_USD) * 10n ** 18n;
 
 const EVENTS = askAbi.filter((x) => x.type === "event" && ["Asked", "Finalized", "Refunded"].includes(x.name));
 
@@ -48,8 +49,8 @@ async function run() {
           block: String(log.blockNumber),
           tx: log.transactionHash,
           log_index: log.logIndex,
-          min_hold_zc: String(tokensFor(MIN_HOLD_USD, p.zc)),
-          min_hold_sc: p.sc ? String(tokensFor(MIN_HOLD_USD, p.sc)) : null,
+          min_hold_zc: String(tokensFor(MIN_HOLD, p.zc)),
+          min_hold_sc: p.sc ? String(tokensFor(MIN_HOLD, p.sc)) : null,
         });
       } else if (log.eventName === "Finalized") {
         await db.setFinalized(String(log.args.id), log.args.resultRoot!, log.args.rewardRoot!, String(log.args.rewardTotal));
