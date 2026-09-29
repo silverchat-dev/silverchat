@@ -7,6 +7,7 @@ import { useState } from "react";
 import { BaseError, toHex, UserRejectedRequestError, type Hex } from "viem";
 import { useAccount, useSignTypedData, useSwitchChain } from "wagmi";
 
+import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { AGES, domain, loadReceipt, REGIONS, resultLeaf, saveReceipt, tagsHash, types } from "@/lib/answer";
 import { CHAIN_ID } from "@/lib/config";
 import type { Content } from "@/lib/content";
@@ -83,7 +84,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
 
       {!address ? (
         <div className="mt-5 space-y-4">
-          <p className="text-lg">Connect a wallet that held $20 of ZC or SC when this poll opened.</p>
+          <p className="text-lg">Connect a wallet that held ${MIN_HOLD_USD} of ZC or SC when this poll opened.</p>
           <ConnectButton label="Connect a wallet" />
         </div>
       ) : chainId !== CHAIN_ID ? (
@@ -107,7 +108,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
           </button>
         </p>
       ) : you.data && !you.data.eligible ? (
-        <p className="mt-5 text-lg">This wallet held less than $20 of ZC or SC when the poll opened, so it cannot answer this one.</p>
+        <p className="mt-5 text-lg">This wallet held less than ${MIN_HOLD_USD} of ZC or SC when the poll opened, so it cannot answer this one.</p>
       ) : (
         <form
           className="mt-6 space-y-8"

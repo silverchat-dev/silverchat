@@ -211,7 +211,7 @@ export const db = {
     // only while the poll is still open in the database, so nothing slips in after the finalizer has read the answers
     const r = await pool.query(
       `insert into answers (poll_id, voter, choices, region, age, salt, signature)
-       select $1, $2, $3, $4, $5, $6, $7 where exists (select 1 from polls where id = $1 and status = 'open')
+       select $1, $2, $3, $4, $5, $6, $7 where exists (select 1 from polls where id = $1 and status = 'open' and finalize_at is null)
        on conflict do nothing`,
       [a.poll_id, a.voter, JSON.stringify(a.choices), a.region, a.age, a.salt, a.signature],
     );

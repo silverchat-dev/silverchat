@@ -1,5 +1,6 @@
 import { isAddress, isHex, type Address, type Hex } from "viem";
 
+import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { AGES, domain, REGIONS, tagsHash, types } from "@/lib/answer";
 import type { Content } from "@/lib/content";
 import { publicClient } from "@/lib/server/chain";
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
     return fail("could not check the signature right now, try again", 503);
   }
   if (!valid) return fail("the signature does not match", 401);
-  if (!(await isEligible(poll, voter))) return fail("this wallet held less than $20 of ZC or SC when the poll opened", 403);
+  if (!(await isEligible(poll, voter))) return fail(`this wallet held less than $${MIN_HOLD_USD} of ZC or SC when the poll opened`, 403);
 
   const added = await db.addAnswer({ poll_id: b.pollId, voter, choices, region, age, salt: b.salt, signature: b.signature });
   if (!added) return fail("this wallet already answered", 409);
