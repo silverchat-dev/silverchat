@@ -155,8 +155,11 @@ export const db = {
       mem.answers.set(k, a);
       return true;
     }
+    // only while the poll is still open in the database, so nothing slips in after the finalizer has read the answers
     const r = await pool.query(
-      `insert into answers (poll_id, voter, choices, region, age, salt, signature) values ($1, $2, $3, $4, $5, $6, $7) on conflict do nothing`,
+      `insert into answers (poll_id, voter, choices, region, age, salt, signature)
+       select $1, $2, $3, $4, $5, $6, $7 where exists (select 1 from polls where id = $1 and status = 'open')
+       on conflict do nothing`,
       [a.poll_id, a.voter, JSON.stringify(a.choices), a.region, a.age, a.salt, a.signature],
     );
     return r.rowCount === 1;
@@ -167,13 +170,6 @@ export const db = {
     if (!pool) return [...mem.answers.values()].filter((a) => a.poll_id === pollId).length;
     const r = await pool.query(`select count(*)::int as n from answers where poll_id = $1`, [pollId]);
     return r.rows[0].n as number;
-  },
-
-  async answered(pollId: string, voter: string) {
-    await init();
-    if (!pool) return mem.answers.has(`${pollId}:${voter}`);
-    const r = await pool.query(`select 1 from answers where poll_id = $1 and voter = $2`, [pollId, voter]);
-    return r.rowCount === 1;
   },
 
   async answers(pollId: string): Promise<AnswerRow[]> {

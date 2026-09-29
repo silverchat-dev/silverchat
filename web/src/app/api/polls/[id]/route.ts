@@ -3,6 +3,7 @@ import { isAddress, type Address } from "viem";
 import { db } from "@/lib/server/db";
 import { isEligible } from "@/lib/server/eligibility";
 import { serialize } from "@/lib/server/polls";
+import { clientIp, limited } from "@/lib/server/rate";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +15,11 @@ export async function GET(req: Request, { params }: RouteContext<"/api/polls/[id
   if (!row) return Response.json({ error: "not found" }, { status: 404, headers });
 
   const body = { ...serialize(row), answers: await db.answerCount(id) };
-  // ?address= tells a wallet whether it can answer; while open that is all anyone learns, never the totals
+  // ?address= says whether a wallet may answer an open poll. It never says whether it did: that would out the voter.
   const address = new URL(req.url).searchParams.get("address");
-  if (address && isAddress(address)) {
-    const voter = address.toLowerCase() as Address;
-    return Response.json({ ...body, you: { eligible: await isEligible(row, voter), answered: await db.answered(id, voter) } }, { headers });
+  if (address && isAddress(address) && row.status === "open") {
+    if (limited(`you:${clientIp(req)}`, 60)) return Response.json({ error: "too many requests" }, { status: 429, headers });
+    return Response.json({ ...body, you: { eligible: await isEligible(row, address.toLowerCase() as Address) } }, { headers });
   }
   return Response.json(body, { headers });
 }

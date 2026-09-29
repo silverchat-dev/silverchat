@@ -38,16 +38,19 @@ export async function POST(req: Request) {
 
   const voter = b.voter.toLowerCase() as Address;
   // verifyTypedData also accepts smart-account signatures (ERC-1271), so a Safe holding ZC can answer
-  const valid = await publicClient
-    .verifyTypedData({
+  let valid: boolean;
+  try {
+    valid = await publicClient.verifyTypedData({
       address: voter,
       domain: domain(),
       types,
       primaryType: "Answer",
       message: { pollId: BigInt(b.pollId), choices, tagsHash: tagsHash(region, age), salt: b.salt as Hex },
       signature: b.signature as Hex,
-    })
-    .catch(() => false);
+    });
+  } catch {
+    return fail("could not check the signature right now, try again", 503);
+  }
   if (!valid) return fail("the signature does not match", 401);
   if (!(await isEligible(poll, voter))) return fail("this wallet held less than $20 of ZC or SC when the poll opened", 403);
 

@@ -11,7 +11,7 @@ import { AGES, domain, loadReceipt, REGIONS, resultLeaf, saveReceipt, tagsHash, 
 import { CHAIN_ID } from "@/lib/config";
 import type { Content } from "@/lib/content";
 
-type You = { eligible: boolean; answered: boolean };
+type You = { eligible: boolean };
 
 export function AnswerPanel({ pollId, content, open }: { pollId: string; content: Content; open: boolean }) {
   // the connector's own chain, not the configured one
@@ -25,16 +25,18 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
   const [age, setAge] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
 
   const you = useQuery({
     queryKey: ["you", pollId, address],
-    enabled: !!address,
+    enabled: open && !!address,
     queryFn: async (): Promise<You> => (await (await fetch(`/api/polls/${pollId}?address=${address}`)).json()).you,
   });
 
   if (!open) return null;
 
   const receipt = address ? loadReceipt(pollId, address) : null;
+  const answered = done || !!receipt;
   const ready = choices.every((c) => c !== null);
 
   async function submit() {
@@ -56,9 +58,11 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
         body: JSON.stringify({ pollId, voter: address, choices: picked, region, age, salt, signature }),
       });
       const body = await res.json().catch(() => ({}));
+      // answered earlier from another browser: this one has no receipt, but the answer stands
+      if (res.status === 409 && String(body.error).includes("already")) return setDone(true);
       if (!res.ok) throw new Error(body.error ?? "the answer was not saved");
       saveReceipt({ pollId, voter: address, choices: picked, salt, leaf: resultLeaf(BigInt(pollId), picked, salt) });
-      await you.refetch();
+      setDone(true);
       router.refresh();
     } catch (e) {
       setError(
@@ -86,7 +90,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
         <button type="button" onClick={() => switchChain({ chainId: CHAIN_ID })} className="mt-5 bg-developer px-5 py-3 font-mono text-sm text-paper">
           Switch to Ethereum
         </button>
-      ) : you.data?.answered ? (
+      ) : answered ? (
         <div className="mt-5 space-y-3">
           <p className="text-lg">You answered. The totals appear when the result is fixed.</p>
           {receipt && (
@@ -95,6 +99,13 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
             </p>
           )}
         </div>
+      ) : you.isError ? (
+        <p className="mt-5 text-lg">
+          Cannot check this wallet right now.{" "}
+          <button type="button" onClick={() => you.refetch()} className="underline underline-offset-4">
+            Try again
+          </button>
+        </p>
       ) : you.data && !you.data.eligible ? (
         <p className="mt-5 text-lg">This wallet held less than $20 of ZC or SC when the poll opened, so it cannot answer this one.</p>
       ) : (
@@ -108,7 +119,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
           <fieldset disabled={busy || !you.data} className="space-y-8">
             {content.questions.map((q, i) => (
               <fieldset key={i} className="space-y-3">
-                <legend className="mb-3 text-2xl leading-snug">{q.q}</legend>
+                <legend className={content.questions.length === 1 ? "sr-only" : "mb-3 text-2xl leading-snug"}>{q.q}</legend>
                 {q.options.map((o, k) => (
                   <label key={k} className="flex cursor-pointer items-center gap-3 border-b border-developer/15 py-2 text-lg">
                     <input
@@ -129,7 +140,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
 
             <div className="grid gap-4 border-t border-developer/25 pt-6 sm:grid-cols-2">
               <p className="font-mono text-xs leading-relaxed text-developer/70 sm:col-span-2">
-                Optional. These let the result be split by group. A group shows only when it has 20 answers or more.
+                Optional. These let the result be split by group. A breakdown appears only when every group in it has 20 answers or more.
               </p>
               <Select label="Region" value={region} onChange={setRegion} options={REGIONS} />
               <Select label="Age" value={age} onChange={setAge} options={AGES} />
@@ -141,8 +152,9 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
               {busy ? "Sign in your wallet…" : ready ? "Sign my answer" : "Pick an answer for every question"}
             </button>
             <p className="font-mono text-xs leading-relaxed text-developer/70">
-              Signing is free and sends no transaction. Your choice is never published. The team that runs this server can see
-              it. If you claim a reward later, the chain shows that you answered, but not what.
+              Signing is free and sends no transaction. Your choice goes into the public record without your address, so nobody
+              reading it can tell which one is yours. The team that runs this server can. If you claim a reward, the chain shows
+              that you answered, not what.
             </p>
             {error && (
               <p role="alert" className="font-mono text-xs text-developer">
