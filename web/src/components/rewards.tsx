@@ -43,7 +43,8 @@ export function Rewards() {
     queryKey: ["claims", address, sig],
     enabled: !!address && !!sig,
     refetchInterval: 120_000,
-    queryFn: async (): Promise<Claim[]> => (await (await fetch(`/api/claims/${address}?day=${day}&sig=${sig}`)).json()).claims ?? [],
+    queryFn: async (): Promise<Claim[]> =>
+      (await (await fetch(`/api/claims/${address}?day=${day}`, { headers: { "x-rewards-signature": sig! } })).json()).claims ?? [],
   });
 
   if (!address || chainId !== CHAIN_ID || !answered) return null;

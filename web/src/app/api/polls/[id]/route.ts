@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: RouteContext<"/api/polls/[id
   // ?address= says whether a wallet may answer an open poll. It never says whether it did: that would out the voter.
   const address = new URL(req.url).searchParams.get("address");
   if (address && isAddress(address) && row.status === "open") {
-    if (limited(`you:${clientIp(req)}`, 60)) return Response.json({ error: "too many requests" }, { status: 429, headers });
+    if (limited(`you:${clientIp(req)}`, 10)) return Response.json({ error: "too many requests" }, { status: 429, headers });
     return Response.json({ ...body, you: { eligible: await isEligible(row, address.toLowerCase() as Address) } }, { headers });
   }
   return Response.json(body, { headers });

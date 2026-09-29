@@ -16,8 +16,9 @@ addr() { cast wallet address --private-key "$(<"$dir/$1.key")"; }
 mask() { sed "s#${rpc}#<rpc>#g"; }
 
 export OWNER=${SAFE:?set SAFE to the treasury Safe} TREASURY=$SAFE OUT=${OUT:-mainnet}
-POSTER=$(addr poster) PRICER=$(addr pricer) KEEPER=$POSTER DEPLOYER=$(addr deployer)
-export POSTER PRICER KEEPER
+POSTER=$(addr poster) PRICER=$(addr pricer) DEPLOYER=$(addr deployer)
+# the buyback keeper is the Safe until a key of its own is set: a stolen hot key must not be able to trade
+export POSTER PRICER KEEPER=$SAFE
 [ "$(cast chain-id --rpc-url "$rpc")" = 1 ] || { echo "the RPC is not mainnet" >&2; exit 1; }
 [ "$(cast code "$SAFE" --rpc-url "$rpc")" != 0x ] || { echo "no contract at $SAFE" >&2; exit 1; }
 [ -z "$(git status --porcelain ../web/src/lib/algorithm.ts)" ] || { echo "commit the rules file first" >&2; exit 1; }

@@ -15,7 +15,8 @@ const DAY = 86_400_000;
 
 /**
  * Rewards an address can still claim, with proofs. Only the wallet itself may ask: which polls it was paid in says
- * which polls it answered, so the request carries a signature of `rewardsMessage` for today or yesterday.
+ * which polls it answered, so the request carries a signature of `rewardsMessage` for today or yesterday, in the
+ * `x-rewards-signature` header.
  */
 export async function GET(req: Request, { params }: RouteContext<"/api/claims/[address]">) {
   const headers = { "cache-control": "no-store" };
@@ -23,7 +24,8 @@ export async function GET(req: Request, { params }: RouteContext<"/api/claims/[a
   const { address } = await params;
   const q = new URL(req.url).searchParams;
   const day = q.get("day") ?? "";
-  const sig = q.get("sig") ?? "";
+  // the signature comes in a header, so it doesn't end up in anyone's access logs
+  const sig = req.headers.get("x-rewards-signature") ?? "";
   if (!isAddress(address)) return Response.json({ error: "bad address" }, { status: 400, headers });
   const fresh = [0, 1].some((back) => new Date(Date.now() - back * DAY).toISOString().slice(0, 10) === day);
   if (!fresh || !isHex(sig)) return Response.json({ error: "sign the rewards message first" }, { status: 401, headers });

@@ -2,7 +2,7 @@ import "server-only";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { askAbi } from "@/lib/abi";
-import { ADDR, DEPLOY_BLOCK, ZERO } from "@/lib/config";
+import { ADDR, CHAIN_ID, DEPLOY_BLOCK, ZERO } from "@/lib/config";
 
 import { publicClient } from "./chain";
 import { db } from "./db";
@@ -26,7 +26,9 @@ export function indexTick() {
 async function run() {
   if (ADDR.ask === ZERO) return;
   if (DEPLOY_BLOCK === 0n) throw new Error("NEXT_PUBLIC_DEPLOY_BLOCK is not set");
-  const head = await publicClient.getBlockNumber();
+  // on mainnet, two blocks behind the tip, so a short reorg can't leave a result here that the chain dropped (a local
+  // fork only makes blocks when it is sent something)
+  const head = (await publicClient.getBlockNumber()) - (CHAIN_ID === 1 ? 2n : 0n);
   const saved = await db.get("indexer");
   let from = saved ? BigInt(saved) + 1n : DEPLOY_BLOCK;
   if (from > head - TAIL) from = head - TAIL;
@@ -53,7 +55,13 @@ async function run() {
           min_hold_sc: p.sc ? String(tokensFor(MIN_HOLD, p.sc)) : null,
         });
       } else if (log.eventName === "Finalized") {
-        await db.setFinalized(String(log.args.id), log.args.resultRoot!, log.args.rewardRoot!, String(log.args.rewardTotal), log.transactionHash);
+        const id = String(log.args.id);
+        // our finalizer writes its roots before it sends; anything else fixed on-chain means the poster key is not ours alone
+        const row = await db.poll(id);
+        if (row && (row.result_root !== log.args.resultRoot || row.reward_root !== log.args.rewardRoot)) {
+          console.error(`[indexer] ALERT poll ${id} was fixed with roots this server did not compute (tx ${log.transactionHash}); rotate the poster key`);
+        }
+        await db.setFinalized(id, log.args.resultRoot!, log.args.rewardRoot!, String(log.args.rewardTotal), log.transactionHash);
       } else if (log.eventName === "Refunded") {
         await db.setRefunded(String(log.args.id));
       }

@@ -15,7 +15,7 @@ const fail = (error: string, status = 400) => Response.json({ error }, { status,
 
 export async function POST(req: Request) {
   if (limited(`answer:${clientIp(req)}`, 30)) return fail("too many requests", 429);
-  if (Number(req.headers.get("content-length") ?? 0) > 4096) return fail("too large", 413);
+  if (Number(req.headers.get("content-length") ?? Infinity) > 4096) return fail("too large", 413);
 
   const b = await req.json().catch(() => null);
   if (!b || typeof b.pollId !== "string" || !/^\d{1,20}$/.test(b.pollId)) return fail("bad poll id");

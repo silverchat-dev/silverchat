@@ -47,7 +47,8 @@ scripts/railway-secrets.sh                   # hot keys and RPC to the Railway s
 scripts/go-live.sh                           # contract addresses to Railway, deploy main
 ```
 
-When $SC launches, the Safe calls `SilverBuyback.setSc(sc, venue)` once.
+When $SC launches, the Safe calls `SilverBuyback.setSc(sc, venue)` once. The Safe is also the buyback keeper until it
+names a key of its own (`setKeeper`); keep `maxBuy` small if that key is hot.
 
 ## Trust and risks
 
