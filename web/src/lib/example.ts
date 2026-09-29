@@ -14,4 +14,6 @@ export const EXAMPLE_NEGATIVES = [
   { block: 26_071_900, question: "Decentralization winning?", yes: 67 },
   { block: 26_071_899, question: "ZC past 1,000 holders?", yes: 41 },
   { block: 26_071_898, question: "Trust a jury drawn at random?", yes: 46 },
+  { block: 26_071_897, question: "Audits before new features?", yes: 72 },
+  { block: 26_071_896, question: "Is 20 days enough for new rules?", yes: 58 },
 ];
