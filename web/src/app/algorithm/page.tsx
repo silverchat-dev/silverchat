@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { ANSWERERS_BPS, FEED, GROUP_MIN, MIN_HOLD_USD } from "@/lib/algorithm";
 import { algorithmAbi } from "@/lib/abi";
-import { ADDR, CHAPTER_URL, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
+import { ADDR, chapter, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
 import { short, span } from "@/lib/format";
 import { publicClient } from "@/lib/server/chain";
 import { chainTime } from "@/lib/server/eligibility";
@@ -34,7 +34,7 @@ export default async function AlgorithmPage() {
         <h1 className="text-5xl leading-tight">The rules</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
           In Snowmoon, Silverchat could not quietly change how it ranks and counts. A new algorithm hash{" "}
-          <a href={CHAPTER_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+          <a href={chapter(27)} target="_blank" rel="noreferrer" className="underline underline-offset-4">
             &quot;would come with a twenty-day delay&quot;
           </a>
           . Here the rules are one file, its hash sits on Ethereum, and a new version counts only 20 days after it is
@@ -50,7 +50,7 @@ export default async function AlgorithmPage() {
           note={
             chain
               ? matches
-                ? "the same file: what runs is what was published"
+                ? "this build was made from the published file"
                 : "different: this build does not run the published rules"
               : "SilverAlgorithm.current()"
           }
@@ -95,7 +95,7 @@ export default async function AlgorithmPage() {
       </div>
 
       <div className="space-y-6">
-        <h2 className="text-3xl">What else is fixed in the file</h2>
+        <h2 className="text-3xl">What else is fixed</h2>
         <dl className="divide-y divide-silver/20 border-y border-silver/20">
           {[
             ["Who can answer", `a wallet that held $${MIN_HOLD_USD} of ZC or SC at the block the poll was asked`],

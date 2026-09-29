@@ -1,6 +1,6 @@
 import "server-only";
 
-import { erc20Abi, type Address } from "viem";
+import { erc20Abi, type Address, type Hex } from "viem";
 
 import { ADDR, ZERO } from "@/lib/config";
 
@@ -31,14 +31,19 @@ export async function isEligible(poll: PollRow, voter: Address) {
   return ok;
 }
 
-let clock: { at: number; ts: number } | null = null;
+let clock: { at: number; block: { number: bigint; hash: Hex; timestamp: bigint } } | null = null;
+
+/** The latest block, read at most once per slot for the whole server. */
+export async function latestBlock() {
+  if (clock && Date.now() - clock.at < 12_000) return clock.block;
+  const b = await publicClient.getBlock();
+  clock = { at: Date.now(), block: { number: b.number, hash: b.hash as Hex, timestamp: b.timestamp } };
+  return clock.block;
+}
 
 /** The latest block's timestamp: polls open and close by chain time, not by this server's clock. */
 export async function chainTime() {
-  if (clock && Date.now() - clock.at < 12_000) return clock.ts;
-  const block = await publicClient.getBlock();
-  clock = { at: Date.now(), ts: Number(block.timestamp) };
-  return clock.ts;
+  return Number((await latestBlock()).timestamp);
 }
 
 /** Chain time for display; a slow RPC must not break a page. */

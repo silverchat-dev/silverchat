@@ -82,7 +82,7 @@ export function rank<T extends Rankable>(polls: T[], blockHash: Hex): T[] {
   const topReach = Math.max(...unused) || 1;
 
   const score = polls.map((p, i) => {
-    const luck = Number(BigInt(keccak256(encodePacked(["bytes32", "uint256"], [blockHash, BigInt(p.id)]))) >> 200n) / 2 ** 56;
+    const luck = Number(BigInt(keccak256(encodePacked(["bytes32", "uint256"], [blockHash, BigInt(p.id)]))) >> 203n) / 2 ** 53;
     return (
       FEED.reach * (unused[i] / topReach) +
       FEED.recency * (maxB === minB ? 1 : (blocks[i] - minB) / (maxB - minB)) +

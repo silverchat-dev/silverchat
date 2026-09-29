@@ -2,11 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
-import { ADDR, BOOK_URL, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
+import { ADDR, BOOK_URL, chapter, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
 
 export const metadata: Metadata = { title: "Docs · silverchat" };
-
-const chapter = (n: number) => `${BOOK_URL}chapter-${n}.html`;
 
 const SECTIONS = [
   ["how", "How it works"],
@@ -87,7 +85,22 @@ export default function DocsPage() {
             Every feature comes from a chapter. Where we add something, like paying the people who answer, or where we are
             not there yet, the table says so.
           </p>
-          <div className="overflow-x-auto">
+          <div className="space-y-6 sm:hidden">
+            {[...BOOK, ["Ours", "Not in the book.", [], "Paying the people who answer, the $SC token, and the split of each payment."] as (typeof BOOK)[number]].map(([k, book, chapters, here]) => (
+              <dl key={k} className="space-y-2 border-t border-silver/20 pt-4">
+                <dt className="text-xl">{k}</dt>
+                <dd className="text-paper/80">
+                  <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-silver">In Snowmoon {chapters.map((c) => `ch. ${c}`).join(", ")}</span>
+                  {book}
+                </dd>
+                <dd className="text-paper/80">
+                  <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-silver">Here</span>
+                  {here}
+                </dd>
+              </dl>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[40rem] border-collapse text-left">
               <thead className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
                 <tr className="border-b border-silver/30">
@@ -186,7 +199,7 @@ export default function DocsPage() {
               "The pricer key sets the ZC price per person. You never pay more than the cost you sign.",
               "The rules hash proves what was published and when. It does not prove our server runs it; rerunning the feed does.",
               `One wallet, one answer, with a $${MIN_HOLD_USD} minimum: a sample of the network, not of everyone.`,
-              "The owner of the contracts is a multisig. The buyback keeper picks amounts within fixed limits.",
+              "The contracts are owned by a multisig from launch. The buyback keeper picks amounts within limits the owner sets.",
               "The contracts are not audited. The tokens are volatile. Don't trust this page. Verify it.",
             ].map((t) => (
               <li key={t} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3">

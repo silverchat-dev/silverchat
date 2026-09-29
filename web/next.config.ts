@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 import { keccak256 } from "viem";
 
 // The rules the app runs by, hashed at build time. SilverAlgorithm holds the published hash; /algorithm shows both.
-const RULES_HASH = keccak256(readFileSync("src/lib/algorithm.ts"));
+const RULES_HASH = keccak256(readFileSync(new URL("src/lib/algorithm.ts", import.meta.url)));
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
@@ -14,7 +14,16 @@ const nextConfig: NextConfig = {
   },
   // the data is public on purpose: other clients may read it (Snowmoon, ch. 3)
   async headers() {
-    return [{ source: "/api/:path*", headers: [{ key: "access-control-allow-origin", value: "*" }] }];
+    return [
+      {
+        source: "/api/:path*",
+        headers: [
+          { key: "access-control-allow-origin", value: "*" },
+          { key: "access-control-allow-methods", value: "GET, POST, OPTIONS" },
+          { key: "access-control-allow-headers", value: "content-type" },
+        ],
+      },
+    ];
   },
 };
 

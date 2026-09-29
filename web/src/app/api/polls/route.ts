@@ -17,6 +17,7 @@ export async function GET(req: Request) {
   }
   // open polls come in feed order, with the block that seeded it, so anyone can rerun the ranking
   if (status === "open") {
+    if (limited(`feed:${clientIp(req)}`, 120)) return Response.json({ error: "too many requests" }, { status: 429, headers });
     const feed = await liveFeed(limit);
     return Response.json({ polls: feed.polls.map(serialize), rankedWith: feed.block }, { headers });
   }
