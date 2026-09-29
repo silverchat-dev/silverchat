@@ -29,15 +29,18 @@ export function Header() {
                 {n.label}
               </a>
             ) : (
-              <Link key={n.label} href={n.href} className={path.startsWith(n.href) ? "text-paper" : "text-paper/80 hover:text-paper"}>
+              <Link
+                key={n.label}
+                href={n.href}
+                aria-current={path === n.href || path.startsWith(n.href + "/") ? "page" : undefined}
+                className="text-paper/80 hover:text-paper aria-[current=page]:text-paper"
+              >
                 {n.label}
               </Link>
             ),
           )}
         </nav>
-        <div className="hidden md:block">
-          <BlockClock />
-        </div>
+        <BlockClock />
         {home ? (
           <Link href="/ask" className="bg-safelight px-5 py-2.5 font-mono text-sm text-developer hover:brightness-110">
             Launch app

@@ -16,13 +16,15 @@ export function BlockClock() {
     return () => clearInterval(id);
   }, []);
 
-  if (!block || !now) return <span className="font-mono text-xs tracking-wider text-silver">BLOCK ··· </span>;
+  if (!block || !now) return <span className="font-mono text-xs tracking-wider text-silver">···</span>;
 
   // Blocks land on 12s slots, so count down to the next slot even if the last poll is a bit stale.
   const next = SLOT - (Math.max(0, now - Number(block.timestamp)) % SLOT);
   return (
     <span className="font-mono text-xs tracking-wider tabular-nums text-paper/85" title="Ethereum mainnet">
-      BLOCK {block.number.toLocaleString("en-US")} · next in {String(next).padStart(2, "0")}s
+      <span className="hidden md:inline">BLOCK </span>
+      {block.number.toLocaleString("en-US")} · <span className="hidden md:inline">next in </span>
+      {String(next).padStart(2, "0")}s
     </span>
   );
 }

@@ -4,7 +4,7 @@ const link = "text-silver underline-offset-4 hover:text-paper hover:underline";
 
 export function Footer() {
   return (
-    <footer className="border-t border-line">
+    <footer className="border-t border-silver/25">
       <div className="flex flex-col gap-6 px-5 py-8 font-mono text-xs leading-relaxed text-silver/80 sm:px-8 md:flex-row md:justify-between">
         <p className="max-w-xl">
           Open source at{" "}
