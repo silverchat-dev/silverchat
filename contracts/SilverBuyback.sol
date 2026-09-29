@@ -94,9 +94,10 @@ contract SilverBuyback is Ownable2Step {
     _venue.buy(_zcIn, _minScOut);
     ZC.forceApprove(address(_venue), 0);
     uint256 _held = sc.balanceOf(address(this));
-    if (_held - _before < _minScOut) revert TooLittle();
+    uint256 _out = _held - _before;
+    if (_out < _minScOut) revert TooLittle();
 
     sc.safeTransfer(BURN, _held);
-    emit Bought(_zcIn, _held - _before, _held);
+    emit Bought(_zcIn, _out, _held);
   }
 }

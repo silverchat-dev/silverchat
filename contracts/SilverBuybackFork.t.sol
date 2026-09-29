@@ -71,7 +71,7 @@ contract SilverBuybackFork is Test {
     buyback.buyback(1000 ether + 1, 1, block.timestamp);
     vm.expectRevert(SilverBuyback.Expired.selector);
     buyback.buyback(100 ether, 1, block.timestamp - 1);
-    vm.expectRevert(); // the router refuses when the output is short of minOut
+    vm.expectRevert(abi.encodeWithSignature("Slippage()")); // the router refuses when the output is short of minOut
     buyback.buyback(100 ether, type(uint128).max, block.timestamp);
 
     buyback.buyback(100 ether, 1, block.timestamp);

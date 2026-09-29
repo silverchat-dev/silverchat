@@ -21,8 +21,10 @@ contract SilverAlgorithm is Ownable2Step {
   event Cancelled(bytes32 indexed hash);
 
   error NothingPending();
+  error EmptyHash();
 
   constructor(address _owner, bytes32 _initial, string memory _source) Ownable(_owner) {
+    if (_initial == bytes32(0)) revert EmptyHash();
     active = _initial;
     emit Proposed(_initial, uint64(block.timestamp), _source);
   }
@@ -43,6 +45,7 @@ contract SilverAlgorithm is Ownable2Step {
    * @param _source Where to read the rules, e.g. the file at a fixed commit
    */
   function propose(bytes32 _hash, string calldata _source) external onlyOwner {
+    if (_hash == bytes32(0)) revert EmptyHash();
     active = current();
     next = _hash;
     nextAt = uint64(block.timestamp + DELAY);
