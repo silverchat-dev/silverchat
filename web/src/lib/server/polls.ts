@@ -2,14 +2,16 @@ import "server-only";
 
 import type { Content } from "@/lib/content";
 
-import type { PollRow } from "./db";
+import { isHidden, type PollRow } from "./db";
 
 /** The public shape of a poll. Totals appear only once the result is fixed. */
 export function serialize(row: PollRow) {
+  const hidden = isHidden(row.id);
   return {
     id: row.id,
     contentHash: row.hash,
-    content: row.content ? (JSON.parse(row.content) as Content) : null,
+    content: row.content && !hidden ? (JSON.parse(row.content) as Content) : null,
+    hidden,
     asker: row.asker,
     breadth: row.breadth,
     priority: row.priority,

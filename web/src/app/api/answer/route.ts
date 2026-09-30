@@ -4,7 +4,7 @@ import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { AGES, domain, REGIONS, tagsHash, types } from "@/lib/answer";
 import type { Content } from "@/lib/content";
 import { publicClient } from "@/lib/server/chain";
-import { db } from "@/lib/server/db";
+import { db, isHidden } from "@/lib/server/db";
 import { chainTime, isEligible } from "@/lib/server/eligibility";
 import { clientIp, limited } from "@/lib/server/rate";
 
@@ -27,6 +27,7 @@ export async function POST(req: Request) {
 
   const poll = await db.poll(b.pollId);
   if (!poll) return fail("no such poll", 404);
+  if (isHidden(poll.id)) return fail("this poll was removed", 410);
   if (poll.status !== "open" || poll.closes_at <= (await chainTime())) return fail("this poll is closed", 409);
   if (!poll.content) return fail("this poll has no published question");
 

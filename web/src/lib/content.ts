@@ -1,5 +1,7 @@
 import { keccak256, stringToBytes, type Hex } from "viem";
 
+import { refused } from "./moderation";
+
 /**
  * Poll content, shared by the browser and the server. Its hash goes on-chain in `ask()`, so the text form is fixed:
  * built by hand in this key order, strings trimmed, nothing else. Bump `v` before changing any of it.
@@ -39,6 +41,8 @@ export function parseContent(input: unknown): Content | string {
     }
     out.questions.push({ q: q.trim(), options: clean });
   }
+  const word = refused(out);
+  if (word) return `Silverchat does not publish questions with "${word}" in them`;
   return out;
 }
 
