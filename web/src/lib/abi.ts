@@ -22,6 +22,13 @@ export const algorithmAbi = parseAbi([
   "function pending() view returns (bytes32 hash, uint64 activeAt)",
 ]);
 
+// Stockereum's router: buys a launch token with ETH through its WETH pool, and quotes the same path without ETH
+export const routerAbi = parseAbi([
+  "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
+  "function buyWethPairWithEth(PoolKey key, uint256 minOut, bytes hookData) payable returns (uint256 amountOut)",
+  "function quoteBuyWithEth(PoolKey key, address quote, uint256 ethIn) view returns (uint256 quoteIn, uint256 tokensOut)",
+]);
+
 export const poolManagerAbi = parseAbi(["function extsload(bytes32 slot) view returns (bytes32)"]);
 
 export const priceFeedAbi = parseAbi([

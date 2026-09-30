@@ -12,7 +12,7 @@ import { AGES, domain, loadReceipt, REGIONS, resultLeaf, saveReceipt, tagsHash, 
 import { CHAIN_ID } from "@/lib/config";
 import type { Content } from "@/lib/content";
 
-import { Buy } from "./buy";
+import { BuyHold } from "./buy";
 
 type You = { eligible: boolean };
 
@@ -30,6 +30,11 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  const zcUsd = useQuery({
+    queryKey: ["zcUsd"],
+    queryFn: async () => Number((await (await fetch("/api/health")).json()).zcUsd) || null,
+    refetchInterval: 60_000,
+  });
   const you = useQuery({
     queryKey: ["you", pollId, address],
     enabled: open && !!address,
@@ -116,7 +121,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
             Hold ${MIN_HOLD_USD} of ZC or SC and you can answer every poll asked after that. Get a little more than ${MIN_HOLD_USD}:
             prices move, and the check uses the price when each poll opens.
           </p>
-          <Buy />
+          <BuyHold usd={MIN_HOLD_USD + 2} zcUsd={zcUsd.data ?? null} />
         </div>
       ) : (
         <form

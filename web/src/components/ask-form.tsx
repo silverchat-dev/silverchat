@@ -5,17 +5,18 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BaseError, ContractFunctionRevertedError, erc20Abi, formatUnits, parseEventLogs, UserRejectedRequestError } from "viem";
-import { useAccount, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
+import { BaseError, ContractFunctionRevertedError, encodeFunctionData, erc20Abi, formatEther, formatUnits, parseEventLogs, UserRejectedRequestError, type Address, type Hex } from "viem";
+import { useAccount, useCapabilities, useConfig, usePublicClient, useReadContract, useSendCalls, useSwitchChain, useWriteContract } from "wagmi";
+import { waitForCallsStatus } from "wagmi/actions";
 
-import { askAbi } from "@/lib/abi";
+import { askAbi, routerAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { canonical, contentHash, LIMITS, parseContent } from "@/lib/content";
 import { people, tokens, usd } from "@/lib/format";
 import { refused } from "@/lib/moderation";
 import { BREADTHS, costOf as priceOf, PRIORITIES, SPLIT } from "@/lib/pricing";
 
-import { BUY_ZC } from "./buy";
+import { buy, ethFor, POOL_KEY, STOCKEREUM_ZC, useEthFor, withBuffer } from "./buy";
 
 const DURATIONS = [
   { label: "1 hour", s: 3600 },
@@ -26,7 +27,7 @@ const DURATIONS = [
   { label: "30 days", s: 30 * 86_400 },
 ];
 
-type Step = "idle" | "publishing" | "approve" | "ask" | "developing";
+type Step = "idle" | "publishing" | "buy" | "batch" | "approve" | "ask" | "developing";
 
 const blank = () => ({ q: "", options: ["", ""] });
 
@@ -37,6 +38,11 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
   const { switchChain } = useSwitchChain();
   const client = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { sendCallsAsync } = useSendCalls();
+  const config = useConfig();
+  // one confirmation for buy, approve and ask, only where the wallet already batches atomically (no upgrade prompts)
+  const caps = useCapabilities({ query: { enabled: !!address } });
+  const atomic = caps.data?.[CHAIN_ID]?.atomic?.status === "supported";
 
   const [questions, setQuestions] = useState([blank()]);
   const [breadth, setBreadth] = useState(BREADTHS.includes(initialBreadth) ? initialBreadth : 100);
@@ -60,6 +66,8 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
   });
 
   const costOf = (p: bigint) => priceOf(p, breadth, priority);
+  const shortBy = price.data && balance.data !== undefined && balance.data < priceOf(price.data, breadth, priority) ? priceOf(price.data, breadth, priority) - balance.data : null;
+  const eth = useEthFor(shortBy);
   // say it while they type, not after they connect a wallet
   const word = refused({ v: 1, questions });
   const cost = price.data ? costOf(price.data) : null;
@@ -82,6 +90,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
     if (!client || !address) return;
     const text = canonical(content);
     const hash = contentHash(text);
+    let bought = false;
 
     try {
       setStep("publishing");
@@ -91,7 +100,40 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
 
       const now = await client.readContract({ address: ADDR.ask, abi: askAbi, functionName: "pricePerPerson" });
       const exact = costOf(now);
-      const allowance = await client.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "allowance", args: [address, ADDR.ask] });
+      const [have, allowance] = await Promise.all([
+        client.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "balanceOf", args: [address] }),
+        client.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "allowance", args: [address, ADDR.ask] }),
+      ]);
+      // short of ZC: buy the rest through Stockereum. minOut is exactly what's missing, so the buy reverts rather than fall short
+      const need = have < exact ? exact - have : 0n;
+      if (need > 0n) {
+        const value = await ethFor(client, withBuffer(need));
+        const buyCall = encodeFunctionData({ abi: routerAbi, functionName: "buyWethPairWithEth", args: [POOL_KEY, need, "0x"] });
+        if (atomic) {
+          setStep("batch");
+          const calls: { to: Address; data: Hex; value?: bigint }[] = [{ to: ADDR.stockereumRouter, value, data: buyCall }];
+          if (allowance < exact) calls.push({ to: ADDR.zc, data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [ADDR.ask, exact] }) });
+          calls.push({ to: ADDR.ask, data: encodeFunctionData({ abi: askAbi, functionName: "ask", args: [hash, breadth, priority, duration, exact] }) });
+          const fromBlock = await client.getBlockNumber();
+          const { id } = await sendCallsAsync({ chainId: CHAIN_ID, forceAtomic: true, calls });
+          const done = await waitForCallsStatus(config, { id, timeout: 900_000 }).catch(() => null);
+          // wallets report batches in different shapes, so the chain decides: this wallet's ask of this question since the batch
+          const find = async () =>
+            (await client.getContractEvents({ address: ADDR.ask, abi: askAbi, eventName: "Asked", args: { asker: address, contentHash: hash }, fromBlock }))[0];
+          let asked = await find();
+          for (let i = 0; !asked && done?.status === "success" && i < 10; i++) {
+            await new Promise((r) => setTimeout(r, 3000));
+            asked = await find();
+          }
+          // all or nothing: once the ask is on chain the ZC is paid
+          if (asked) return settle(String(asked.args.id));
+          throw new Error(done ? "the wallet's batch did not go through, so nothing was bought" : "the wallet did not report back; check its activity before trying again");
+        }
+        setStep("buy");
+        await buy(client, address, need, value, writeContractAsync);
+        bought = true;
+        balance.refetch();
+      }
       if (allowance < exact) {
         setStep("approve");
         const tx = await writeContractAsync({ address: ADDR.zc, abi: erc20Abi, functionName: "approve", args: [ADDR.ask, exact], chainId: CHAIN_ID });
@@ -117,7 +159,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
       setStep("idle");
       price.refetch();
       balance.refetch();
-      setError(explain(e));
+      setError(explain(e) + (bought ? " The ZC you bought is in your wallet." : ""));
     }
   }
 
@@ -273,24 +315,49 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
           <button
             type="button"
             onClick={submit}
-            disabled={busy || !price.data || short || !!word}
+            disabled={busy || !price.data || !!word || (short && !(eth.eth && eth.enough))}
             className="w-full bg-paper py-3 text-developer hover:bg-paper/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {price.data === undefined
-              ? price.isError
-                ? "Cannot read the price, try again"
-                : "Reading the price…"
-              : price.data === 0n
-                ? "Asking is paused"
-                : short
-                  ? "Not enough ZC"
-                  : { idle: "Ask the network", publishing: "Saving the question…", approve: "Approve ZC in your wallet…", ask: "Confirm the ask in your wallet…", developing: "Developing…" }[step]}
+            {busy
+              ? {
+                  idle: "",
+                  publishing: "Saving the question…",
+                  buy: "Confirm the ZC buy in your wallet…",
+                  batch: "Confirm in your wallet…",
+                  approve: "Approve ZC in your wallet…",
+                  ask: "Confirm the ask in your wallet…",
+                  developing: "Developing…",
+                }[step]
+              : price.data === undefined
+                ? price.isError
+                  ? "Cannot read the price, try again"
+                  : "Reading the price…"
+                : price.data === 0n
+                  ? "Asking is paused"
+                  : short && shortBy !== null
+                    ? eth.eth
+                      ? `Buy ${tokens(shortBy, 0)} ZC and ask`
+                      : eth.error
+                        ? "Not enough ZC"
+                        : "Getting a price…"
+                    : "Ask the network"}
           </button>
         )}
-        {short && (
-          <a href={BUY_ZC} target="_blank" rel="noreferrer" className="block text-center text-xs text-paper underline underline-offset-4">
-            Buy ZC on Uniswap
-          </a>
+        {short && !busy && (
+          <p className="text-xs leading-relaxed text-silver">
+            {eth.error ? (
+              <>
+                Can&apos;t get a price right now.{" "}
+                <a href={STOCKEREUM_ZC} target="_blank" rel="noreferrer" className="text-paper underline underline-offset-4">
+                  Buy ZC on Stockereum
+                </a>
+              </>
+            ) : eth.eth && eth.have !== undefined && !eth.enough ? (
+              `You need about ${Number(formatEther(eth.eth)).toPrecision(2)} ETH plus gas; this wallet has ${Number(formatEther(eth.have)).toPrecision(2)} ETH.`
+            ) : eth.eth ? (
+              `About ${Number(formatEther(eth.eth)).toPrecision(2)} ETH, bought through Stockereum with its 1% fee and a 3% buffer; extra ZC stays with you. ${atomic ? "One confirmation." : "Three confirmations: buy, approve, ask."}`
+            ) : null}
+          </p>
         )}
         {error && (
           <p role="alert" className="text-xs leading-relaxed text-paper">
