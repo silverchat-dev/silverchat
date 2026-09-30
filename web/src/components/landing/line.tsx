@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef } from "react";
 import { useBlock } from "wagmi";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
@@ -61,11 +61,6 @@ const SWING = [
 const LIMIT = [12, 4, 9]; // degrees
 
 const WIDE = "(min-width: 1280px)";
-const wide = (cb: () => void) => {
-  const mq = matchMedia(WIDE);
-  mq.addEventListener("change", cb);
-  return () => mq.removeEventListener("change", cb);
-};
 
 export function Line() {
   const wrap = useRef<HTMLDivElement>(null);
@@ -74,8 +69,6 @@ export function Line() {
   const kick = useRef<(i: number, a: [number, number, number], dip: number) => void>(() => {});
   const reduced = useReducedMotion();
   const block = useBlock({ watch: true }).data?.number;
-  // below 1280 px the line scrolls sideways
-  const scrolls = !useSyncExternalStore(wide, () => matchMedia(WIDE).matches, () => false);
 
   useEffect(() => {
     const el = wrap.current;
@@ -96,8 +89,10 @@ export function Line() {
       el.style.setProperty("--line-width", `${width}px`);
       top = CORD_TOP;
       pegs = prints.current.map((p) => (p ? p.offsetLeft + p.offsetWidth / 2 : 0));
-      // point loads on a light cord: the pegs sit on a parabola, the cord runs straight between them
-      rest = pegs.map((x) => top + CORD.sag * width * 4 * (x / width) * (1 - x / width));
+      // point loads on a light cord: the pegs sit on a parabola, the cord runs straight between them. Below 1280 px the
+      // prints wrap into rows without the cord, so they hang level
+      const cordOn = matchMedia(WIDE).matches;
+      rest = pegs.map((x) => top + (cordOn ? CORD.sag * width * 4 * (x / width) * (1 - x / width) : 0));
     };
 
     const draw = () => {
@@ -246,16 +241,15 @@ export function Line() {
 
       <div
         ref={wrap}
-        tabIndex={scrolls ? 0 : -1}
         role="region"
-        aria-label={scrolls ? "Five steps, scroll sideways" : "Five steps"}
-        className="relative mt-14 snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] xl:snap-none xl:overflow-visible [&::-webkit-scrollbar]:hidden"
+        aria-label="Five steps"
+        className="relative mx-auto mt-14 max-w-[100rem]"
       >
-        <svg aria-hidden className="pointer-events-none absolute inset-y-0 left-0 h-full overflow-visible" style={{ width: "var(--line-width, 100%)" }}>
+        <svg aria-hidden className="pointer-events-none absolute inset-y-0 left-0 hidden h-full overflow-visible xl:block" style={{ width: "var(--line-width, 100%)" }}>
           <path ref={cord} fill="none" stroke="var(--color-silver)" strokeOpacity=".55" strokeWidth="1.5" />
         </svg>
         <ol style={{ paddingTop: CORD_TOP }}
-          className="relative flex w-max gap-6 px-[12vw] pb-10 [perspective:1400px] xl:w-full xl:justify-between xl:gap-0 xl:px-[6vw]">
+          className="relative flex flex-wrap justify-center gap-x-6 gap-y-16 px-5 pb-10 [perspective:1400px] sm:px-8 xl:flex-nowrap xl:justify-between xl:gap-0 xl:px-[min(6vw,6rem)]">
           {PRINTS.map((p, i) => (
             <li
               key={p.title}
@@ -265,10 +259,10 @@ export function Line() {
               onPointerMove={brush(i)}
               onPointerLeave={() => (last.current = null)}
               onPointerDown={tap(i)}
-              className="relative w-[70vw] max-w-[15rem] shrink-0 origin-top snap-center will-change-transform xl:w-[17%] xl:max-w-[14.5rem]"
+              className="relative w-[min(18rem,100%)] shrink-0 origin-top will-change-transform sm:w-[15rem] xl:w-[17%] xl:max-w-[14.5rem] 2xl:max-w-[16rem]"
             >
               <Peg />
-              <article className="flex min-h-[25rem] flex-col bg-[url(/plates/paper.webp)] bg-cover p-3 pb-4 text-developer ">
+              <article className="flex h-full min-h-[25rem] flex-col bg-[url(/plates/paper.webp)] bg-cover p-3 pb-4 text-developer">
                 <div className="relative aspect-[3/2] overflow-hidden bg-developer">
                   <Image src={`/plates/prints/${p.photo}.webp`} alt="" fill sizes="240px" className="object-cover" />
                 </div>
