@@ -16,8 +16,8 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: "silverchat: ask the network",
   description: "The polling network from Snowmoon, ch. 27. Pay $ZC to ask a question. Holders answer and earn. The result goes on-chain.",
-  openGraph: { type: "website", siteName: "silverchat", url: SITE, images: ["/brand/logo-400.jpg"] },
-  twitter: { card: "summary" },
+  openGraph: { type: "website", siteName: "silverchat" },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
