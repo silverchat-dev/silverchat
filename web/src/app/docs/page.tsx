@@ -4,6 +4,7 @@ import Link from "next/link";
 import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { ADDR, BOOK_URL, chapter, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
 import { REFUSED } from "@/lib/moderation";
+import { USD_PER_PERSON } from "@/lib/server/price";
 
 export const metadata: Metadata = { title: "Docs · silverchat" };
 
@@ -64,7 +65,7 @@ export default function DocsPage() {
         <Section id="how" title="How it works">
           <ol className="space-y-6">
             {[
-              ["Ask", "Write a question, choose how many people it asks and how high it shows, and pay in $ZC. It costs $1 for each person asked, in ZC at the live price; High priority costs 1.2x and Top 1.5x. The contract holds the payment."],
+              ["Ask", `Write a question, choose how many people it asks and how high it shows, and pay in $ZC. It costs $${USD_PER_PERSON} for each person asked, in ZC at the live price; High priority costs 1.2x and Top 1.5x. The contract holds the payment.`],
               ["Answer", `Wallets that held $${MIN_HOLD_USD} of ZC or SC when the poll opened answer by signing. Signing is free. One answer per wallet.`],
               ["Fix", "A few minutes after the poll closes, the result is fixed on Ethereum as a root over every answer. Then the contract pays out: 85% to the people who answered, 5% to the treasury, 10% burned. The part of that 85% nobody earned goes back to the asker."],
               ["Claim", "Answerers claim their share in one transaction. What nobody claims within 90 days is burned."],
@@ -165,7 +166,7 @@ export default function DocsPage() {
                 <dt className="text-silver">{k}</dt>
                 <dd className="break-all">
                   {v === ZERO ? (
-                    <span className="text-silver">not launched yet, on Stockereum with ZC</span>
+                    <span className="text-silver">{k === "$SC" ? "not launched yet, on Stockereum with ZC" : "not deployed"}</span>
                   ) : (
                     <a href={`${EXPLORER}/address/${v}`} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline">
                       {v}
