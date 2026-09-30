@@ -102,9 +102,8 @@ export function TrayCanvas({ step }: { step: number }) {
   // a new exposure is a new print, once the dial has settled
   useEffect(() => {
     const id = setTimeout(() => {
+      letGoNow.current();
       tray.current?.setExposure(step);
-      holding.current = false;
-      setHeld(false);
     }, 250);
     return () => clearTimeout(id);
   }, [step]);

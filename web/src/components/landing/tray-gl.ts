@@ -22,11 +22,7 @@ const PRINT_H = PRINT_W * (977 / 1134);
 const PRINT_ANGLE = (1.2 * Math.PI) / 180;
 const CORNERS = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 // the print nearly fills the tray: down in it, it can only turn this far before its corners meet the side walls
-const FITS = (() => {
-  let a = 0;
-  while (PRINT_W * Math.sin(a) + PRINT_H * Math.cos(a) < WALLS.y1 - WALLS.y0 - 0.04) a += 0.001;
-  return a;
-})();
+const FITS = Math.atan2(PRINT_W, PRINT_H) - Math.acos((WALLS.y1 - WALLS.y0 - 0.04) / Math.hypot(PRINT_W, PRINT_H));
 // the lamp, above and to the upper left
 const LAMP = new THREE.Vector3(-0.35, 0.45, 1).normalize();
 // exposure is the breadth dial: more light, a denser print that also comes up sooner; past 10K a little fog in the whites
@@ -176,7 +172,8 @@ vec3 print() {
 
 const PRINT_UNDER = `${PRINT}
 void main() {
-  if (vZ > uSurface) discard;
+  // a little past the surface, so the refracted edge never shows the tray through a gap; the part above covers it
+  if (vZ > uSurface + 0.02) discard;
   color = vec4(print(), 1.0);
 }`;
 
@@ -190,10 +187,9 @@ void main() {
   vec3 col = print() * clamp(dot(n, uLamp) / uLamp.z, 0.75, 1.05);
   // wet paper out of the developer: darker, with a thin film of liquid that glints while it drains
   vec3 hv = normalize(uLamp + vec3(0.0, 0.0, 1.0));
-  col *= 1.0 - 0.12 * uWet;
   col += pow(max(dot(n, hv), 0.0), 400.0) * 0.16 * uWet;
-  // where it comes out of the liquid, a bright meniscus
-  col += 0.35 * (1.0 - smoothstep(0.0, 0.008, vZ - uSurface));
+  // where it comes out of the liquid, a bright meniscus, the same width on screen however steep the sheet
+  col += 0.35 * (1.0 - smoothstep(0.0, 2.5 * fwidth(vZ), vZ - uSurface));
   color = vec4(col, 1.0);
 }`;
 
@@ -416,17 +412,17 @@ export async function mountTray(canvas: HTMLCanvasElement, opts: { card: HTMLEle
       const w0 = f * SHEET.followWater + (1 - f) * SHEET.followAir;
       // the hand is on the plane z = 0 under the pointer; the held point stays under the pointer at its own height
       const k = (D - s.z) / D;
-      // the hand only takes the sheet as far as it can go: down in the liquid, to the walls (a hair inside the stop
-      // below, so the two never fight); held up over the rim, to the edge of the view
+      // the hand only takes the sheet as far as the walls let it (a hair inside the stop below, so the two never fight);
+      // where it can't fit either way, it sits in the middle
       let [x0, x1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity];
       for (const [ex, ey] of CORNERS) {
         const [lx, ly] = [(ex * PRINT_W) / 2 - s.hx, (ey * PRINT_H) / 2 - s.hy];
         [x0, x1] = [Math.min(x0, cs * lx - sn * ly), Math.max(x1, cs * lx - sn * ly)];
         [y0, y1] = [Math.min(y0, sn * lx + cs * ly), Math.max(y1, sn * lx + cs * ly)];
       }
-      const [bx0, bx1, by0, by1] = s.z < 0.1 ? [WALLS.x0 + 0.03, WALLS.x1 - 0.03, WALLS.y0 + 0.03, WALLS.y1 - 0.03] : [-1.46 * k, 1.46 * k, -0.96 * k, 0.96 * k];
-      const tx = Math.min(Math.max(s.px * k, bx0 - x0), bx1 - x1);
-      const ty = Math.min(Math.max(s.py * k, by0 - y0), by1 - y1);
+      const within = (v: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(Math.max(v, lo), hi));
+      const tx = within(s.px * k, WALLS.x0 + 0.03 - x0, WALLS.x1 - 0.03 - x1);
+      const ty = within(s.py * k, WALLS.y0 + 0.03 - y0, WALLS.y1 - 0.03 - y1);
       let gx = s.x + cs * s.hx - sn * s.hy;
       let gy = s.y + sn * s.hx + cs * s.hy;
       s.gvx += (w0 * w0 * (tx - gx) - 2 * w0 * s.gvx) * h;
@@ -464,9 +460,9 @@ export async function mountTray(canvas: HTMLCanvasElement, opts: { card: HTMLEle
     s.vz += (w * w * (target - s.z) - 2 * SHEET.liftDamping * w * s.vz) * h;
     s.z += s.vz * h;
 
-    // the walls stop it while it is down in the liquid; held up it clears the rim (a hand won't let it swing round
-    // much), and dropped over it or turned too far, they push it back in and straight as it comes down
-    const turn = s.z > 0.1 ? 0.5 : FITS;
+    // the walls stop it while it is down in the liquid; held up it clears the rim and may turn a little more, and as it
+    // comes down they ease it back in and straight
+    const turn = s.z > 0.1 ? 0.14 : FITS;
     if (Math.abs(s.a) > turn) {
       const edge = Math.sign(s.a) * turn;
       s.a = edge + (s.a - edge) * Math.exp(-h * 12);
@@ -487,8 +483,9 @@ export async function mountTray(canvas: HTMLCanvasElement, opts: { card: HTMLEle
     // (still coming straight and too big for the gap: sit it in the middle until it fits)
     const dx = lx > hx ? (lx + hx) / 2 : lx > 0 ? lx : hx < 0 ? hx : 0;
     const dy = ly > hy ? (ly + hy) / 2 : ly > 0 ? ly : hy < 0 ? hy : 0;
-    if (dx) [s.x, s.vx, s.gvx] = [s.x + dx, 0, 0];
-    if (dy) [s.y, s.vy, s.gvy] = [s.y + dy, 0, 0];
+    const ease = 1 - Math.exp(-h * 12);
+    if (dx) [s.x, s.vx, s.gvx] = [s.x + dx * ease, 0, 0];
+    if (dy) [s.y, s.vy, s.gvy] = [s.y + dy * ease, 0, 0];
   };
 
   // bend the sheet down from the held point, place it, and fill positions and normals
