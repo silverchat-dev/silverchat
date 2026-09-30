@@ -6,13 +6,12 @@ import { usePathname } from "next/navigation";
 
 import { BlockClock } from "@/components/block-clock";
 import { Rewards } from "@/components/rewards";
-import { GITHUB_URL } from "@/lib/config";
 
-const NAV: { href: string; label: string; external?: boolean }[] = [
+const NAV = [
   { href: "/pulse", label: "Pulse" },
   { href: "/ask", label: "Ask" },
   { href: "/records", label: "Records" },
-  { href: GITHUB_URL, label: "Docs", external: true },
+  { href: "/docs", label: "Docs" },
 ];
 
 export function Header() {
@@ -29,22 +28,16 @@ export function Header() {
           </Link>
         )}
         <nav className="order-last flex w-full flex-wrap gap-x-7 gap-y-1 text-[13px] uppercase tracking-[0.12em] sm:order-none sm:w-auto sm:flex-1">
-          {NAV.map((n) =>
-            n.external ? (
-              <a key={n.label} href={n.href} target="_blank" rel="noreferrer" className="text-paper/80 hover:text-paper">
-                {n.label}
-              </a>
-            ) : (
-              <Link
-                key={n.label}
-                href={n.href}
-                aria-current={path === n.href || path.startsWith(n.href + "/") ? "page" : undefined}
-                className="text-paper/80 hover:text-paper aria-[current=page]:text-paper"
-              >
-                {n.label}
-              </Link>
-            ),
-          )}
+          {NAV.map((n) => (
+            <Link
+              key={n.label}
+              href={n.href}
+              aria-current={path === n.href || path.startsWith(n.href + "/") ? "page" : undefined}
+              className="text-paper/80 hover:text-paper aria-[current=page]:text-paper"
+            >
+              {n.label}
+            </Link>
+          ))}
         </nav>
         <div className="ml-auto flex items-center gap-5">
           <BlockClock />

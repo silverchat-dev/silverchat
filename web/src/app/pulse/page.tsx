@@ -3,24 +3,24 @@ import Link from "next/link";
 
 import { people, span, tokens } from "@/lib/format";
 import type { Content } from "@/lib/content";
-import { db } from "@/lib/server/db";
-import { chainTime } from "@/lib/server/eligibility";
+import { liveFeed } from "@/lib/server/feed";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Pulse · silverchat" };
 
-const displayTime = () => chainTime().catch(() => Math.floor(Date.now() / 1000));
-
 export default async function PulsePage() {
-  const now = await displayTime();
-  const live = (await db.polls(60, "open")).filter((p) => p.closes_at > now);
+  const { polls: live, now } = await liveFeed(60);
 
   return (
     <section className="space-y-10 px-5 py-10 sm:px-8 md:py-14">
       <header className="mx-auto max-w-6xl space-y-4">
         <h1 className="text-5xl leading-tight">Pulse</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
-          Every question open right now, laid out like a contact sheet. Pick a frame to answer it.
+          Every question open right now, laid out like a contact sheet, in the order the{" "}
+          <Link href="/algorithm" className="underline underline-offset-4">
+            published rules
+          </Link>{" "}
+          give. Pick a frame to answer it.
         </p>
       </header>
 

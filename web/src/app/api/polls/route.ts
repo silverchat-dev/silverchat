@@ -1,5 +1,6 @@
 import { canonical, contentHash, parseContent } from "@/lib/content";
 import { db, type PollRow } from "@/lib/server/db";
+import { liveFeed } from "@/lib/server/feed";
 import { serialize } from "@/lib/server/polls";
 import { clientIp, limited } from "@/lib/server/rate";
 
@@ -13,6 +14,12 @@ export async function GET(req: Request) {
   const status = params.get("status") as PollRow["status"] | null;
   if (status && status !== "open" && status !== "final" && status !== "refunded") {
     return Response.json({ error: "status must be open, final or refunded" }, { status: 400, headers });
+  }
+  // open polls come in feed order, with the block that seeded it, so anyone can rerun the ranking
+  if (status === "open") {
+    if (limited(`feed:${clientIp(req)}`, 120)) return Response.json({ error: "too many requests" }, { status: 429, headers });
+    const feed = await liveFeed(limit);
+    return Response.json({ polls: feed.polls.map(serialize), rankedWith: feed.block }, { headers });
   }
   const rows = await db.polls(limit, status ?? undefined);
   return Response.json({ polls: rows.map(serialize) }, { headers });

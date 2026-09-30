@@ -63,3 +63,35 @@ export function tally(questions: { options: string[] }[], answers: Counted[]) {
 }
 
 export type Tally = ReturnType<typeof tally>;
+
+/** How the feed orders open polls. Weights add up to 1; each part is scaled to 0..1 across the polls being ranked. */
+export const FEED = { reach: 0.45, recency: 0.35, priority: 0.15, chance: 0.05 };
+
+export type Rankable = { id: string; cost: string; breadth: number; answers: number; priority: number; block: string };
+
+/**
+ * Open polls, best first. `reach` is the paid reach nobody has used yet (cost times the share of places still open),
+ * so a poll that still needs answers rises and answering your own poll from many wallets only sinks it. `chance`
+ * comes from the block hash the ranking used, so anyone can rerun it and get the same order. Ties go to the lower id.
+ */
+export function rank<T extends Rankable>(polls: T[], blockHash: Hex): T[] {
+  if (polls.length < 2) return polls;
+  const unused = polls.map((p) => Number(BigInt(p.cost) / 10n ** 12n) * Math.max(0, 1 - p.answers / p.breadth));
+  const blocks = polls.map((p) => Number(p.block));
+  const [minB, maxB] = [Math.min(...blocks), Math.max(...blocks)];
+  const topReach = Math.max(...unused) || 1;
+
+  const score = polls.map((p, i) => {
+    const luck = Number(BigInt(keccak256(encodePacked(["bytes32", "uint256"], [blockHash, BigInt(p.id)]))) >> 203n) / 2 ** 53;
+    return (
+      FEED.reach * (unused[i] / topReach) +
+      FEED.recency * (maxB === minB ? 1 : (blocks[i] - minB) / (maxB - minB)) +
+      FEED.priority * (p.priority / 2) +
+      FEED.chance * luck
+    );
+  });
+  return polls
+    .map((p, i) => ({ p, s: score[i] }))
+    .sort((a, b) => b.s - a.s || Number(BigInt(a.p.id) - BigInt(b.p.id)))
+    .map((x) => x.p);
+}

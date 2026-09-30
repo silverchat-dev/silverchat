@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { ADDR, BOOK_URL, EXPLORER, GITHUB_URL, ZIPCOIN_URL } from "@/lib/config";
 import { short } from "@/lib/format";
 
@@ -23,11 +25,16 @@ export function Footer() {
           , a novel by Vitalik Buterin. We are not affiliated with him. The contracts are unaudited and the tokens are volatile.
           Don&apos;t trust this page. Verify it.
         </p>
-        <p className="shrink-0">
+        <p className="flex shrink-0 flex-col gap-2 md:items-end">
+          <Link className={link} href="/algorithm">
+            The rules
+          </Link>
+          <span>
           $ZC{" "}
           <a className={link} href={`${EXPLORER}/token/${ADDR.zc}`} target="_blank" rel="noreferrer">
             {short(ADDR.zc)}
           </a>
+          </span>
         </p>
       </div>
     </footer>
