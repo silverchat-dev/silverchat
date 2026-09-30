@@ -35,12 +35,12 @@ export async function printCard({ kicker, question, options, foot }: { kicker: s
           }}
         >
           <div style={{ fontFamily: "mono", fontSize: 18, letterSpacing: 3, opacity: 0.65, textTransform: "uppercase" }}>{kicker}</div>
-          <div style={{ fontFamily: "serif", fontSize: question.length > 70 ? 40 : 50, lineHeight: 1.12, marginTop: 20 }}>{question}</div>
+          <div style={{ fontFamily: "serif", fontSize: question.length > 120 ? 32 : question.length > 70 ? 40 : 50, lineHeight: 1.12, marginTop: 20 }}>{question}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 30 }}>
-            {(options ?? []).slice(0, 3).map(([label, share], i) => (
+            {(options ?? []).slice(0, 4).map(([label, share], i) => (
               <div key={label} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "mono", fontSize: 20, textTransform: "uppercase" }}>
-                  <span>{label.slice(0, 36)}</span>
+                  <span>{label.length > 36 ? `${label.slice(0, 35)}…` : label}</span>
                   <span>{share}%</span>
                 </div>
                 <div style={{ display: "flex", height: 14, background: "rgba(20,19,18,0.12)" }}>
@@ -49,6 +49,9 @@ export async function printCard({ kicker, question, options, foot }: { kicker: s
               </div>
             ))}
           </div>
+          {options && options.length > 4 && (
+            <div style={{ fontFamily: "mono", fontSize: 18, opacity: 0.6, marginTop: 10 }}>+ {options.length - 4} more</div>
+          )}
           <div style={{ fontFamily: "mono", fontSize: 18, opacity: 0.75, marginTop: "auto", paddingTop: 26 }}>{foot}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", flex: 1, color: PAPER, gap: 18 }}>

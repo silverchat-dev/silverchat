@@ -6,10 +6,12 @@ import { db } from "@/lib/server/db";
 export const size = OG;
 export const contentType = "image/png";
 export const alt = "A poll on Silverchat, as a print";
+// crawlers and chat apps fetch this a lot; a minute old is fine
+export const revalidate = 60;
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const poll = await db.poll(id);
+  const poll = /^\d{1,20}$/.test(id) ? await db.poll(id) : null;
   const q = poll?.content ? (JSON.parse(poll.content) as Content).questions[0] : null;
   if (!poll || !q) return printCard({ kicker: "Silverchat", question: "A question for the network.", options: null, foot: "silverchat.cash" });
 
