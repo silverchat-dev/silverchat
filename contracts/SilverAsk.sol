@@ -9,8 +9,8 @@ import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProo
 /**
  * @title SilverAsk
  * @notice Pay zipcoins to ask the network a question. The more you pay, the more people it polls (Snowmoon, ch. 27).
- * @dev The payment is held until the poster fixes the result. Then 25% goes to the treasury, 20% to the SC buyback,
- *      20% is burned and 35% pays the answerers. The part of that 35% nobody earned goes back to the asker.
+ * @dev The payment is held until the poster fixes the result. Then 85% pays the answerers, 5% goes to the treasury and
+ *      10% is burned. The part of that 85% nobody earned goes back to the asker.
  *      If the result is never fixed, the asker takes the whole payment back 7 days after the poll closes.
  *      Trust: the poster decides who is paid from the answerers' share of a poll, and nothing else.
  *      ZC is a plain ERC20 (its trade tax lives in the pool hook), so transfers move exact amounts.
@@ -36,9 +36,8 @@ contract SilverAsk is Ownable2Step {
   }
 
   address public constant BURN = 0x000000000000000000000000000000000000dEaD;
-  uint256 public constant ANSWERERS_BPS = 3500;
-  uint256 public constant TREASURY_BPS = 2500;
-  uint256 public constant BUYBACK_BPS = 2000;
+  uint256 public constant ANSWERERS_BPS = 8500;
+  uint256 public constant TREASURY_BPS = 500;
   uint256 public constant MIN_DURATION = 1 hours;
   uint256 public constant MAX_DURATION = 30 days;
   uint256 public constant REFUND_AFTER = 7 days;
@@ -46,7 +45,6 @@ contract SilverAsk is Ownable2Step {
 
   IERC20 public immutable ZC;
   address public immutable TREASURY;
-  address public immutable BUYBACK;
 
   address public poster;
   address public pricer;
@@ -94,24 +92,19 @@ contract SilverAsk is Ownable2Step {
   error LengthMismatch();
   error NothingToSweep();
 
-  constructor(IERC20 _zc, address _treasury, address _buyback, address _owner, address _poster, address _pricer)
-    Ownable(_owner)
-  {
-    if (address(_zc) == address(0) || _treasury == address(0) || _buyback == address(0)) revert ZeroAddress();
+  constructor(IERC20 _zc, address _treasury, address _owner, address _poster, address _pricer) Ownable(_owner) {
+    if (address(_zc) == address(0) || _treasury == address(0)) revert ZeroAddress();
     ZC = _zc;
     TREASURY = _treasury;
-    BUYBACK = _buyback;
     poster = _poster;
     pricer = _pricer;
     emit PosterSet(_poster);
     emit PricerSet(_pricer);
   }
 
-  /// @notice What a poll costs right now. Breadth is 100, 1k, 10k, 100k or 1M people; priority 0, 1 or 2.
+  /// @notice What a poll costs right now. Breadth is 10, 100, 1k or 10k people; priority 0, 1 or 2.
   function costOf(uint256 _breadth, uint8 _priority) public view returns (uint256) {
-    if (_breadth != 100 && _breadth != 1000 && _breadth != 10_000 && _breadth != 100_000 && _breadth != 1_000_000) {
-      revert BadBreadth();
-    }
+    if (_breadth != 10 && _breadth != 100 && _breadth != 1000 && _breadth != 10_000) revert BadBreadth();
     if (_priority > 2) revert BadPriority();
     if (pricePerPerson == 0) revert PriceUnset();
     uint256 _mult = _priority == 0 ? 10_000 : _priority == 1 ? 12_000 : 15_000;
@@ -146,7 +139,7 @@ contract SilverAsk is Ownable2Step {
    * @notice Fix the result and pay out the split
    * @param _resultRoot Merkle root of every counted answer, published so anyone can recount
    * @param _rewardRoot Merkle root of (account, amount) for the paid answers, zero when nobody is paid
-   * @param _rewardTotal Sum of the reward leaves, at most 35% of the cost
+   * @param _rewardTotal Sum of the reward leaves, at most 85% of the cost
    */
   function finalize(uint256 _id, bytes32 _resultRoot, bytes32 _rewardRoot, uint256 _rewardTotal) external {
     if (msg.sender != poster) revert NotPoster();
@@ -158,7 +151,6 @@ contract SilverAsk is Ownable2Step {
     uint256 _pool = (_cost * ANSWERERS_BPS) / 10_000;
     if (_rewardTotal > _pool || (_rewardRoot == bytes32(0) && _rewardTotal != 0)) revert RewardTooLarge();
     uint256 _treasury = (_cost * TREASURY_BPS) / 10_000;
-    uint256 _buyback = (_cost * BUYBACK_BPS) / 10_000;
     uint256 _returned = _pool - _rewardTotal;
 
     _poll.status = Status.Finalized;
@@ -167,9 +159,8 @@ contract SilverAsk is Ownable2Step {
     _poll.rewardRoot = _rewardRoot;
 
     ZC.safeTransfer(TREASURY, _treasury);
-    ZC.safeTransfer(BUYBACK, _buyback);
     // the burn takes whatever rounding leaves over
-    ZC.safeTransfer(BURN, _cost - _pool - _treasury - _buyback);
+    ZC.safeTransfer(BURN, _cost - _pool - _treasury);
     if (_returned != 0) ZC.safeTransfer(_poll.asker, _returned);
     emit Finalized(_id, _resultRoot, _rewardRoot, _rewardTotal, _returned);
   }

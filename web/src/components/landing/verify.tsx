@@ -19,7 +19,6 @@ export function Verify() {
   const stamps: [string, ReactNode][] = [
     ["SilverAsk", address(ADDR.ask)],
     ["SilverAlgorithm", address(ADDR.algorithm)],
-    ["SilverBuyback", address(ADDR.buyback)],
     ["$ZC", address(ADDR.zc)],
     [
       "Rules hash",

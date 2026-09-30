@@ -6,15 +6,14 @@ import {Script, console} from "forge-std/Script.sol";
 
 import {SilverAlgorithm} from "./SilverAlgorithm.sol";
 import {SilverAsk} from "./SilverAsk.sol";
-import {SilverBuyback} from "./SilverBuyback.sol";
 
 /**
  * @notice Deploys the Silverchat contracts. The deployer keeps no role: every role goes to the addresses in the env.
- *   OWNER TREASURY POSTER PRICER KEEPER  role addresses (OWNER should be a multisig on mainnet)
+ *   OWNER TREASURY POSTER PRICER         role addresses (OWNER should be a multisig on mainnet)
  *   RULES_HASH RULES_SOURCE              keccak256 of web/src/lib/algorithm.ts and where to read it
  *   OUT                                  deployment name, written to deployments/<OUT>.json
- *   ZC BUYBACK_MAX BUYBACK_GAP           optional; mainnet ZC, 1M ZC and 1 hour by default
- * Run it once without --broadcast and read the addresses it prints: TREASURY and BUYBACK can never change.
+ *   ZC                                   optional; mainnet ZC by default
+ * Run it once without --broadcast and read the addresses it prints: TREASURY can never change.
  * The JSON is written during simulation, so check every address has code before trusting it.
  */
 contract Deploy is Script {
@@ -29,20 +28,11 @@ contract Deploy is Script {
     console.log("treasury", vm.envAddress("TREASURY"));
     console.log("poster  ", vm.envAddress("POSTER"));
     console.log("pricer  ", vm.envAddress("PRICER"));
-    console.log("keeper  ", vm.envAddress("KEEPER"));
 
     vm.startBroadcast();
-    SilverBuyback _buyback = new SilverBuyback(
-      _zc,
-      _owner,
-      vm.envAddress("KEEPER"),
-      vm.envOr("BUYBACK_MAX", uint256(1_000_000 ether)),
-      vm.envOr("BUYBACK_GAP", uint256(1 hours))
-    );
     SilverAlgorithm _algorithm = new SilverAlgorithm(_owner, vm.envBytes32("RULES_HASH"), vm.envString("RULES_SOURCE"));
-    SilverAsk _ask = new SilverAsk(
-      _zc, vm.envAddress("TREASURY"), address(_buyback), _owner, vm.envAddress("POSTER"), vm.envAddress("PRICER")
-    );
+    SilverAsk _ask =
+      new SilverAsk(_zc, vm.envAddress("TREASURY"), _owner, vm.envAddress("POSTER"), vm.envAddress("PRICER"));
     vm.stopBroadcast();
 
     string memory _o = "deployment";
@@ -50,7 +40,6 @@ contract Deploy is Script {
     vm.serializeAddress(_o, "zc", address(_zc));
     vm.serializeAddress(_o, "ask", address(_ask));
     vm.serializeAddress(_o, "algorithm", address(_algorithm));
-    vm.serializeAddress(_o, "buyback", address(_buyback));
     string memory _json = vm.serializeUint(_o, "deployBlock", block.number);
     string memory _file = string.concat("./deployments/", vm.envString("OUT"), ".json");
     vm.writeJson(_json, _file);

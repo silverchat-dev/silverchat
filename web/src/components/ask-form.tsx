@@ -26,7 +26,7 @@ type Step = "idle" | "publishing" | "approve" | "ask" | "developing";
 
 const blank = () => ({ q: "", options: ["", ""] });
 
-export function AskForm({ initialBreadth = 10_000 }: { initialBreadth?: number }) {
+export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
   const router = useRouter();
   // the connector's own chain: wagmi's useChainId stays on the configured chain even when the wallet is elsewhere
   const { address, chainId } = useAccount();
@@ -35,7 +35,7 @@ export function AskForm({ initialBreadth = 10_000 }: { initialBreadth?: number }
   const { writeContractAsync } = useWriteContract();
 
   const [questions, setQuestions] = useState([blank()]);
-  const [breadth, setBreadth] = useState(BREADTHS.includes(initialBreadth) ? initialBreadth : 10_000);
+  const [breadth, setBreadth] = useState(BREADTHS.includes(initialBreadth) ? initialBreadth : 100);
   const [priority, setPriority] = useState(0);
   const [duration, setDuration] = useState(86_400);
   const [step, setStep] = useState<Step>("idle");
