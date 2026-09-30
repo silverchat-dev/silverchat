@@ -7,7 +7,8 @@ import { prices, USD_PER_PERSON } from "@/lib/server/price";
 export const dynamic = "force-dynamic";
 
 // the two server wallets' ETH, read at most every 5 minutes: this route is hit on every visit to /ask and /demo
-const LOW = 2n * 10n ** 16n;
+// a finalize costs about five times a price push, so the poster needs more headroom
+const LOW = { poster: 2n * 10n ** 16n, pricer: 5n * 10n ** 15n };
 let wallets: { at: number; poster: bigint | null; pricer: bigint | null } = { at: 0, poster: null, pricer: null };
 async function balances() {
   if (Date.now() - wallets.at > 5 * 60_000) {
@@ -33,8 +34,8 @@ export async function GET() {
     cursor !== null &&
     head - BigInt(cursor) < 30n &&
     late === 0 &&
-    (w.poster === null || w.poster >= LOW) &&
-    (w.pricer === null || w.pricer >= LOW);
+    (w.poster === null || w.poster >= LOW.poster) &&
+    (w.pricer === null || w.pricer >= LOW.pricer);
   return Response.json(
     {
       ok,
