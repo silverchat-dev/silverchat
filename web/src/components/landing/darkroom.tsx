@@ -9,7 +9,7 @@ import { TrayCanvas } from "./tray-canvas";
 
 /** The developer tray with the example print, and the exposure dial under it. */
 export function Darkroom() {
-  const [step, setStep] = useState(2);
+  const [step, setStep] = useState(1);
 
   return (
     <div className="space-y-4">

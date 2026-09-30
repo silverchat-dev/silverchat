@@ -25,13 +25,13 @@ const CORNERS = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 const FITS = Math.atan2(PRINT_W, PRINT_H) - Math.acos((WALLS.y1 - WALLS.y0 - 0.04) / Math.hypot(PRINT_W, PRINT_H));
 // the lamp, above and to the upper left
 const LAMP = new THREE.Vector3(-0.35, 0.45, 1).normalize();
-// exposure is the breadth dial: more light, a denser print that also comes up sooner; past 10K a little fog in the whites
+// exposure is the breadth dial (10 to 10K people): more light, a denser print that also comes up sooner; at the top a
+// little fog in the whites
 const EXPOSURE = [
-  { dmax: 0.45, speed: 0.6, fog: 0 },
-  { dmax: 0.72, speed: 0.8, fog: 0 },
+  { dmax: 0.6, speed: 0.7, fog: 0 },
   { dmax: 1, speed: 1, fog: 0 },
-  { dmax: 1, speed: 1.4, fog: 0.03 },
-  { dmax: 1, speed: 1.9, fog: 0.06 },
+  { dmax: 1, speed: 1.4, fog: 0.02 },
+  { dmax: 1, speed: 1.9, fog: 0.05 },
 ];
 
 const SUBSTEP = 1 / 180;
@@ -287,7 +287,7 @@ export async function mountTray(canvas: HTMLCanvasElement, opts: { card: HTMLEle
   const tilt = new THREE.Vector3();
   const shiftCap = new THREE.Vector2();
   let step = opts.step;
-  const exposure = EXPOSURE[step] ?? EXPOSURE[2];
+  const exposure = EXPOSURE[step] ?? EXPOSURE[1];
   const sincePaint = (performance.now() - (performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? 0)) / 1000;
   const raw = (vertexShader: string, fragmentShader: string, uniforms: Record<string, THREE.IUniform>, extra: THREE.ShaderMaterialParameters = {}) =>
     new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader, fragmentShader, uniforms, depthTest: false, depthWrite: false, ...extra });
@@ -678,7 +678,7 @@ export async function mountTray(canvas: HTMLCanvasElement, opts: { card: HTMLEle
     setExposure(i) {
       if (i === step) return;
       step = i;
-      const x = EXPOSURE[i] ?? EXPOSURE[2];
+      const x = EXPOSURE[i] ?? EXPOSURE[1];
       develop.uDmax.value = x.dmax;
       develop.uSpeed.value = x.speed;
       develop.uFog.value = x.fog;

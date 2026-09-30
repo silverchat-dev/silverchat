@@ -8,7 +8,7 @@ out="contracts/deployments/${OUT:-mainnet}.json"
 railway=$(command -v railway || echo "$HOME/.railway/bin/railway")
 get() { python3 -c "import json,sys; print(json.load(open('$out'))[sys.argv[1]])" "$1"; }
 rpc=$(<"$HOME/.config/silverchat/rpc")
-for k in ask algorithm buyback; do
+for k in ask algorithm; do
   [ "$(cast code "$(get $k)" --rpc-url "$rpc" 2>/dev/null)" != 0x ] || { echo "no contract at $k $(get $k); deploy first" >&2; exit 1; }
 done
 project=$("$railway" status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
@@ -17,7 +17,7 @@ git fetch -q origin main
 commit=$(git rev-parse origin/main)
 
 "$railway" variable set --service web --skip-deploys \
-  "NEXT_PUBLIC_ASK=$(get ask)" "NEXT_PUBLIC_ALGORITHM=$(get algorithm)" "NEXT_PUBLIC_BUYBACK=$(get buyback)" \
+  "NEXT_PUBLIC_ASK=$(get ask)" "NEXT_PUBLIC_ALGORITHM=$(get algorithm)" \
   "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$commit"
 
 tmp=$(mktemp -d)

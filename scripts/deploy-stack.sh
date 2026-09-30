@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploys SilverBuyback, SilverAlgorithm and SilverAsk to Ethereum from the deployer key in ~/.config/silverchat, with
+# Deploys SilverAlgorithm and SilverAsk to Ethereum from the deployer key in ~/.config/silverchat, with
 # the Safe as owner and treasury from the first block (the deployer keeps no role). It simulates first, prices gas from
 # the last blocks, refuses to spend more than MAX_ETH, then sends one transaction at a time and checks every address.
 #
@@ -18,8 +18,7 @@ exec 2> >(mask >&2)
 
 export OWNER=${SAFE:?set SAFE to the treasury Safe} TREASURY=$SAFE OUT=${OUT:-mainnet}
 POSTER=$(addr poster) PRICER=$(addr pricer) DEPLOYER=$(addr deployer)
-# the buyback keeper is the Safe until a key of its own is set: a stolen hot key must not be able to trade
-export POSTER PRICER KEEPER=$SAFE
+export POSTER PRICER
 [ "$(cast chain-id --rpc-url "$rpc")" = 1 ] || { echo "the RPC is not mainnet" >&2; exit 1; }
 [ "$(cast code "$SAFE" --rpc-url "$rpc")" != 0x ] || { echo "no contract at $SAFE" >&2; exit 1; }
 [ -z "$(git status --porcelain ../web/src/lib/algorithm.ts)" ] || { echo "commit the rules file first" >&2; exit 1; }
@@ -39,7 +38,7 @@ flags=(--rpc-url "$rpc" --private-key "$(<"$dir/deployer.key")" --with-gas-price
 
 sim=$(forge script Silverchat.s.sol:Deploy "${flags[@]}" 2>&1 | mask) || { tail -20 <<<"$sim" >&2; exit 1; }
 gas=$(sed -n 's/.*Estimated total gas used for script: \([0-9]*\).*/\1/p' <<<"$sim")
-echo "$sim" | grep -E "^\s+(zc|owner|treasury|poster|pricer|keeper) " || true
+echo "$sim" | grep -E "^\s+(zc|owner|treasury|poster|pricer) " || true
 python3 - "$gas" "$base" "$tip" "$cap" "$max_eth" "$(cast balance "$DEPLOYER" --rpc-url "$rpc")" <<'EOF'
 import sys
 gas, base, tip, cap, limit, bal = (int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5]), int(sys.argv[6]))
@@ -56,7 +55,7 @@ EOF
 # the JSON is written while simulating, so a broadcast that fails partway must not leave predicted addresses behind
 forge script Silverchat.s.sol:Deploy "${flags[@]}" --broadcast --slow 2>&1 | mask || { rm -f "deployments/$OUT.json"; exit 1; }
 out="deployments/$OUT.json"
-for k in ask algorithm buyback; do
+for k in ask algorithm; do
   a=$(python3 -c "import json; print(json.load(open('$out'))['$k'])")
   [ "$(cast code "$a" --rpc-url "$rpc")" != 0x ] || { echo "no code at $k $a" >&2; exit 1; }
   echo "$k $a"

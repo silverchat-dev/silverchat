@@ -15,7 +15,6 @@ contract SilverAskFork is Test {
 
   SilverAsk ask;
   address treasury = makeAddr("treasury");
-  address buyback = makeAddr("buyback");
   address owner = makeAddr("owner");
   address poster = makeAddr("poster");
   address pricer = makeAddr("pricer");
@@ -29,7 +28,7 @@ contract SilverAskFork is Test {
 
   function setUp() public {
     vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth.drpc.org")), 26_085_290);
-    ask = new SilverAsk(ZC, treasury, buyback, owner, poster, pricer);
+    ask = new SilverAsk(ZC, treasury, owner, poster, pricer);
     vm.prank(pricer);
     ask.setPrice(3 ether + 7);
     vm.prank(POOL_MANAGER);
@@ -64,7 +63,7 @@ contract SilverAskFork is Test {
     assertEq(_before - ZC.balanceOf(asker), _cost);
     assertEq(ZC.balanceOf(address(ask)), _cost);
 
-    uint256 _pool = (_cost * 3500) / 10_000;
+    uint256 _pool = (_cost * 8500) / 10_000;
     uint256 _paid = (_pool / 100) * 2; // two answerers out of a breadth of 100
     bytes32 _root = _pair(_leaf(alice, _paid / 2), _leaf(bob, _paid / 2));
     uint256 _burnBefore = ZC.balanceOf(BURN);
@@ -73,9 +72,8 @@ contract SilverAskFork is Test {
     vm.prank(poster);
     ask.finalize(_id, keccak256("results"), _root, _paid);
 
-    assertEq(ZC.balanceOf(treasury), (_cost * 2500) / 10_000);
-    assertEq(ZC.balanceOf(buyback), (_cost * 2000) / 10_000);
-    assertEq(ZC.balanceOf(BURN) - _burnBefore, _cost - _pool - (_cost * 2500) / 10_000 - (_cost * 2000) / 10_000);
+    assertEq(ZC.balanceOf(treasury), (_cost * 500) / 10_000);
+    assertEq(ZC.balanceOf(BURN) - _burnBefore, _cost - _pool - (_cost * 500) / 10_000);
     assertEq(ZC.balanceOf(asker), _before - _cost + _pool - _paid);
     assertEq(ZC.balanceOf(address(ask)), _paid);
 
@@ -83,6 +81,25 @@ contract SilverAskFork is Test {
     assertEq(ZC.balanceOf(alice), _paid / 2);
     vm.expectRevert(SilverAsk.AlreadyClaimed.selector);
     ask.claim(_id, alice, _paid / 2, _proof(_leaf(bob, _paid / 2)));
+  }
+
+  function test_ten_people_split_to_the_wei() public {
+    uint256 _id = _ask(10);
+    uint256 _cost = ask.costOf(10, 2);
+    uint256 _each = (_cost * 8500) / 10_000 / 10; // one paid place of ten
+    uint256 _burnBefore = ZC.balanceOf(BURN);
+    uint256 _askerBefore = ZC.balanceOf(asker);
+
+    vm.warp(vm.getBlockTimestamp() + 1 days + 1);
+    vm.prank(poster);
+    ask.finalize(_id, bytes32(0), _leaf(alice, _each), _each);
+
+    ask.claim(_id, alice, _each, new bytes32[](0));
+    uint256 _returned = (_cost * 8500) / 10_000 - _each;
+    assertEq(ZC.balanceOf(alice), _each);
+    assertEq(ZC.balanceOf(asker) - _askerBefore, _returned);
+    assertEq(ZC.balanceOf(treasury) + (ZC.balanceOf(BURN) - _burnBefore) + _each + _returned, _cost);
+    assertEq(ZC.balanceOf(address(ask)), 0);
   }
 
   function test_claims_cannot_exceed_reward_total() public {
@@ -105,7 +122,7 @@ contract SilverAskFork is Test {
 
   function test_claim_many() public {
     uint256 _a = _ask(100);
-    uint256 _b = _ask(1000);
+    uint256 _b = _ask(10_000);
     vm.warp(vm.getBlockTimestamp() + 1 days + 1);
     vm.startPrank(poster);
     ask.finalize(_a, bytes32(0), _pair(_leaf(alice, 1 ether), _leaf(bob, 1 ether)), 2 ether);
@@ -161,6 +178,8 @@ contract SilverAskFork is Test {
     vm.startPrank(asker);
     vm.expectRevert(SilverAsk.BadBreadth.selector);
     ask.ask(CONTENT, 500, 0, 1 days, type(uint256).max);
+    vm.expectRevert(SilverAsk.BadBreadth.selector);
+    ask.ask(CONTENT, 100_000, 0, 1 days, type(uint256).max);
     vm.expectRevert(SilverAsk.BadPriority.selector);
     ask.ask(CONTENT, 100, 3, 1 days, type(uint256).max);
     vm.expectRevert(SilverAsk.BadDuration.selector);

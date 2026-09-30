@@ -15,7 +15,7 @@ const PRINTS: { title: string; photo: string; body: string; foot: string }[] = [
   {
     title: "Ask",
     photo: "ask",
-    body: "Write a question and pay in $ZC. Choose how many holders it reaches, from 100 to a million, and how high it sits in the feed.",
+    body: "Write a question and pay in $ZC. Choose how many holders it reaches, from 10 to 10,000, and how high it sits in the feed.",
     foot: "priced per person, in ZC",
   },
   {

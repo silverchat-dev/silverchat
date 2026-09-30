@@ -12,7 +12,7 @@ export const MIN_HOLD_USD = 20;
 export const GROUP_MIN = 20;
 
 /** Share of a poll's cost that pays the answerers, in basis points. The rest is fixed in SilverAsk. */
-export const ANSWERERS_BPS = 3500n;
+export const ANSWERERS_BPS = 8500n;
 
 /**
  * Who is paid when more people answer than the poll paid for: every answer counts in the totals, and the paid places

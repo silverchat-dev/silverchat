@@ -28,7 +28,6 @@ export default function DocsPage() {
   const contracts: [string, string][] = [
     ["SilverAsk", ADDR.ask],
     ["SilverAlgorithm", ADDR.algorithm],
-    ["SilverBuyback", ADDR.buyback],
     ["$ZC", ADDR.zc],
     ["$SC", ADDR.sc],
   ];
@@ -65,7 +64,7 @@ export default function DocsPage() {
             {[
               ["Ask", "Write a question, choose how many people it asks and how high it shows, and pay in $ZC. The contract holds the payment."],
               ["Answer", `Wallets that held $${MIN_HOLD_USD} of ZC or SC when the poll opened answer by signing. Signing is free. One answer per wallet.`],
-              ["Fix", "A minute after the poll closes, the result is fixed on Ethereum as a root over every answer. Then the contract pays out: 25% to the treasury, 20% to buy $SC and burn it, 20% burned as ZC, 35% to the people who answered. The part of that 35% nobody earned goes back to the asker."],
+              ["Fix", "A minute after the poll closes, the result is fixed on Ethereum as a root over every answer. Then the contract pays out: 85% to the people who answered, 5% to the treasury, 10% burned. The part of that 85% nobody earned goes back to the asker."],
               ["Claim", "Answerers claim their share in one transaction. What nobody claims within 90 days is burned."],
               ["Refund", "If a result is not fixed within 7 days after close, the asker takes the whole payment back."],
             ].map(([k, v], i) => (
@@ -195,11 +194,11 @@ export default function DocsPage() {
               "On Ethereum: the payment, the fixed split, the refund, both roots of every result, the claims and the rules hash.",
               "Run by us: storing questions, checking who may answer, collecting answers, counting them, the list of paid answerers, and the feed order.",
               "Our server sees every answer with the wallet that signed it. The public record has the choices without addresses. Region and age are what people say, not checked.",
-              "The poster key fixes results. It decides who is paid from the answerers' 35% of a poll, and nothing else. You can recount any result and check your own answer.",
+              "The poster key fixes results. It decides who is paid from the answerers' 85% of a poll, and nothing else. You can recount any result and check your own answer.",
               "The pricer key sets the ZC price per person. You never pay more than the cost you sign.",
               "The rules hash proves what was published and when. It does not prove our server runs it; rerunning the feed does.",
               `One wallet, one answer, with a $${MIN_HOLD_USD} minimum: a sample of the network, not of everyone.`,
-              "The contracts are owned by a multisig from launch. The buyback keeper picks amounts within limits the owner sets.",
+              "The contracts are owned by a Safe from launch.",
               "The contracts are not audited. The tokens are volatile. Don't trust this page. Verify it.",
             ].map((t) => (
               <li key={t} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3">
