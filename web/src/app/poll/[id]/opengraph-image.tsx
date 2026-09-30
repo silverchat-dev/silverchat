@@ -12,7 +12,7 @@ export const revalidate = 60;
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const poll = /^\d{1,20}$/.test(id) ? await db.poll(id) : null;
-  const q = poll?.content && !isHidden(id) ? (JSON.parse(poll.content) as Content).questions[0] : null;
+  const q = poll?.content && !isHidden(poll.id) ? (JSON.parse(poll.content) as Content).questions[0] : null;
   if (!poll || !q) return printCard({ kicker: "Silverchat", question: "A question for the network.", options: null, foot: "silverchat.cash" });
 
   const answered = poll.tally?.answers ?? 0;

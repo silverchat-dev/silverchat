@@ -24,6 +24,7 @@ type Poll = {
   finalizeTx: string | null;
   seedBlock: string | null;
   tally: Tally | null;
+  hidden?: boolean;
 };
 
 type Check = { label: string; ok: boolean; detail: string };
@@ -50,11 +51,14 @@ export function Proof({ poll }: { poll: Poll }) {
         toBlock: BigInt(poll.block),
       });
       const onChain = asked[0]?.args.contentHash;
-      out.push({
-        label: "Question",
-        ok: !!onChain && !!poll.content && contentHash(canonical(poll.content)) === onChain,
-        detail: onChain ? `hash ${short(onChain)} in the Asked log` : "no Asked log found",
-      });
+      // a removed poll's question is withheld here, so there is nothing to hash
+      if (!poll.hidden) {
+        out.push({
+          label: "Question",
+          ok: !!onChain && !!poll.content && contentHash(canonical(poll.content)) === onChain,
+          detail: onChain ? `hash ${short(onChain)} in the Asked log` : "no Asked log found",
+        });
+      }
 
       if (poll.status !== "final" || !poll.finalizeTx || !poll.tally) return out;
 
