@@ -14,6 +14,10 @@ const url = process.env.DATABASE_URL;
 const plain = url && /railway\.internal|localhost|127\.0\.0\.1/.test(url);
 const pool = url ? new Pool({ connectionString: url, max: 4, ssl: plain ? undefined : { rejectUnauthorized: false } }) : null;
 
+/** Polls taken off the site by id, comma-separated. They stay on-chain and are fixed and paid like any other. */
+const HIDDEN = (process.env.HIDDEN_POLLS ?? "").split(",").map((s) => s.trim()).filter((s) => /^\d{1,20}$/.test(s));
+export const isHidden = (id: string) => HIDDEN.includes(id);
+
 export type PollRow = {
   id: string;
   hash: string;
@@ -225,15 +229,17 @@ export const db = {
     if (!pool) {
       const count = (id: string) => [...mem.answers.values()].filter((a) => a.poll_id === id).length;
       return [...mem.polls.values()]
-        .filter((p) => !status || p.status === status)
+        .filter((p) => (!status || p.status === status) && !isHidden(p.id))
         .sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)))
         .slice(0, limit)
         .map((p) => ({ ...p, answers: count(p.id) }));
     }
     const cols = `p.*, (select count(*) from answers a where a.poll_id = p.id)::int as answers`;
-    const r = status
-      ? await pool.query(`select ${cols} from polls p where status = $1 order by id desc limit $2`, [status, limit])
-      : await pool.query(`select ${cols} from polls p order by id desc limit $1`, [limit]);
+    const r = await pool.query(`select ${cols} from polls p where ($1::text is null or status = $1) and id <> all($2::numeric[]) order by id desc limit $3`, [
+      status ?? null,
+      HIDDEN,
+      limit,
+    ]);
     return r.rows.map(text);
   },
 

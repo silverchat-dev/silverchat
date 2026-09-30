@@ -1,7 +1,7 @@
 import type { Content } from "@/lib/content";
 import { people, tokens } from "@/lib/format";
 import { OG, printCard } from "@/lib/og/print";
-import { db } from "@/lib/server/db";
+import { db, isHidden } from "@/lib/server/db";
 
 export const size = OG;
 export const contentType = "image/png";
@@ -12,7 +12,7 @@ export const revalidate = 60;
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const poll = /^\d{1,20}$/.test(id) ? await db.poll(id) : null;
-  const q = poll?.content ? (JSON.parse(poll.content) as Content).questions[0] : null;
+  const q = poll?.content && !isHidden(id) ? (JSON.parse(poll.content) as Content).questions[0] : null;
   if (!poll || !q) return printCard({ kicker: "Silverchat", question: "A question for the network.", options: null, foot: "silverchat.cash" });
 
   const answered = poll.tally?.answers ?? 0;

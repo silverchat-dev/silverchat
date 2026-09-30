@@ -2,6 +2,7 @@
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BaseError, ContractFunctionRevertedError, erc20Abi, formatUnits, parseEventLogs, UserRejectedRequestError } from "viem";
@@ -11,6 +12,7 @@ import { askAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { canonical, contentHash, LIMITS, parseContent } from "@/lib/content";
 import { people, tokens, usd } from "@/lib/format";
+import { refused } from "@/lib/moderation";
 import { BREADTHS, costOf as priceOf, PRIORITIES, SPLIT } from "@/lib/pricing";
 
 const DURATIONS = [
@@ -56,6 +58,8 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
   });
 
   const costOf = (p: bigint) => priceOf(p, breadth, priority);
+  // say it while they type, not after they connect a wallet
+  const word = refused({ v: 1, questions });
   const cost = price.data ? costOf(price.data) : null;
   const costUsd = cost !== null && zcUsd.data ? Number(formatUnits(cost, 18)) * zcUsd.data : null;
 
@@ -249,6 +253,14 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
           earn comes back to you. If the result is never fixed, you take all of it back 7 days after the poll closes.
         </p>
 
+        {word && (
+          <p role="status" className="text-xs leading-relaxed text-paper">
+            Silverchat does not publish questions with &quot;{word}&quot; in them.{" "}
+            <Link href="/docs#questions" className="underline underline-offset-4">
+              The rules for questions
+            </Link>
+          </p>
+        )}
         {!address ? (
           <ConnectButton label="Connect a wallet" />
         ) : chainId !== CHAIN_ID ? (
@@ -259,7 +271,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
           <button
             type="button"
             onClick={submit}
-            disabled={busy || !price.data || short}
+            disabled={busy || !price.data || short || !!word}
             className="w-full bg-paper py-3 text-developer hover:bg-paper/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {price.data === undefined

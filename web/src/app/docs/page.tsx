@@ -3,11 +3,13 @@ import Link from "next/link";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { ADDR, BOOK_URL, chapter, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
+import { REFUSED } from "@/lib/moderation";
 
 export const metadata: Metadata = { title: "Docs · silverchat" };
 
 const SECTIONS = [
   ["how", "How it works"],
+  ["questions", "Questions"],
   ["book", "From the book"],
   ["contracts", "Contracts"],
   ["api", "API"],
@@ -77,6 +79,26 @@ export default function DocsPage() {
               </li>
             ))}
           </ol>
+        </Section>
+
+        <Section id="questions" title="Questions">
+          <p className="text-lg leading-relaxed text-paper/80">
+            Anyone who pays can ask, but Silverchat does not publish questions made to smear a project. If a question or
+            one of its options has a word from this list, it is refused before you pay. Spelling tricks count too: sc4m and
+            s c a m both read as scam.
+          </p>
+          <ul className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-sm text-silver">
+            {REFUSED.map((w) => (
+              <li key={w} className="whitespace-nowrap">
+                {w}
+              </li>
+            ))}
+          </ul>
+          <p className="text-lg leading-relaxed text-paper/80">
+            When a question gets past the list, we can take the poll off the site. It stops taking answers and its question
+            no longer shows here, but it stays on Ethereum and is fixed like any other poll. Everyone who answered before it
+            was removed is paid, and the asker gets back the part nobody earned.
+          </p>
         </Section>
 
         <Section id="book" title="From the book">
@@ -192,7 +214,7 @@ export default function DocsPage() {
           <ul className="space-y-4 text-lg leading-relaxed text-paper/85">
             {[
               "On Ethereum: the payment, the fixed split, the refund, both roots of every result, the claims and the rules hash.",
-              "Run by us: storing questions, checking who may answer, collecting answers, counting them, the list of paid answerers, and the feed order.",
+              "Run by us: storing questions and choosing which ones show, checking who may answer, collecting answers, counting them, the list of paid answerers, and the feed order.",
               "Our server sees every answer with the wallet that signed it. The public record has the choices without addresses. Region and age are what people say, not checked.",
               "The poster key fixes results. It decides who is paid from the answerers' 85% of a poll, and nothing else. You can recount any result and check your own answer.",
               "The pricer key sets the ZC price per person. You never pay more than the cost you sign.",

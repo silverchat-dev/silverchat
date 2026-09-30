@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
@@ -50,6 +51,14 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
                   {q.q}
                 </h2>
               ))}
+            </>
+          ) : poll.hidden ? (
+            <>
+              <h1 className="text-3xl leading-tight">This poll was removed from Silverchat.</h1>
+              <p className="max-w-xl text-lg leading-relaxed text-paper/85">
+                Its question broke the <Link href="/docs#questions" className="underline underline-offset-4">rules for questions</Link>. It stays on
+                Ethereum, and anyone who answered it before it was removed is still paid.
+              </p>
             </>
           ) : (
             <>
