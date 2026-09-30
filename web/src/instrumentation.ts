@@ -16,11 +16,13 @@ export async function register() {
           const msg = e instanceof Error ? e.message.split("\n")[0] : String(e);
           console.error(`[${name}]${++failures >= 3 ? ` failing ${failures}x:` : ""}`, msg);
         })
-        .finally(() => setTimeout(run, everyMs));
+        // while it keeps failing, wait longer each time, up to 5 minutes, so a rate-limited RPC gets room
+        .finally(() => setTimeout(run, failures >= 3 ? Math.min(everyMs * 2 ** (failures - 2), 300_000) : everyMs));
     setTimeout(run, 3000);
   };
 
-  loop("indexer", indexTick, 12_000);
-  loop("pricer", priceTick, 60_000);
+  // 3 blocks a tick, well inside one 10-block log request
+  loop("indexer", indexTick, 36_000);
+  loop("pricer", priceTick, 120_000);
   loop("finalizer", finalizeTick, 30_000);
 }

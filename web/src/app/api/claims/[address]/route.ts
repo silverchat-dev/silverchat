@@ -5,7 +5,7 @@ import { ADDR } from "@/lib/config";
 import { rewardsMessage } from "@/lib/rewards";
 import { publicClient } from "@/lib/server/chain";
 import { db } from "@/lib/server/db";
-import { clientIp, limited } from "@/lib/server/rate";
+import { busy, clientIp, limited } from "@/lib/server/rate";
 import { finalTrees } from "@/lib/server/trees";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,7 @@ const DAY = 86_400_000;
 export async function GET(req: Request, { params }: RouteContext<"/api/claims/[address]">) {
   const headers = { "cache-control": "no-store" };
   if (limited(`claims:${clientIp(req)}`, 30)) return Response.json({ error: "too many requests" }, { status: 429, headers });
+  if (busy()) return Response.json({ error: "busy right now, try again in a minute" }, { status: 503, headers });
   const { address } = await params;
   const q = new URL(req.url).searchParams;
   const day = q.get("day") ?? "";

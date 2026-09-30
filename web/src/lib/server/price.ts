@@ -55,7 +55,7 @@ let inflight: Promise<Prices> | null = null;
 async function read(): Promise<Prices> {
   const [wethPerZc, usdPerEth] = await Promise.all([median(ADDR.zc, ADDR.weth), ethUsd()]);
   const zc = (wethPerZc * usdPerEth) / WAD;
-  const sc = ADDR.sc === ZERO ? null : ((await median(ADDR.sc, ADDR.zc)) * zc) / WAD;
+  const sc = ADDR.sc === ZERO ? null : await median(ADDR.sc, ADDR.zc).then((x) => (x * zc) / WAD, () => null);
   return { at: Date.now(), zc, sc };
 }
 

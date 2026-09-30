@@ -16,7 +16,9 @@ export async function GET(req: Request) {
   if (!/^\d{1,20}$/.test(id) || !isHex(leaf) || leaf.length !== 66) return Response.json({ error: "bad request" }, { status: 400, headers });
   const poll = await db.poll(id);
   if (!poll || poll.status !== "final" || !poll.seed) return Response.json({ error: "not a fixed poll" }, { status: 404, headers });
-  const { result } = await finalTrees(poll);
+  const trees = await finalTrees(poll).catch(() => null);
+  if (!trees) return Response.json({ error: "could not rebuild this result right now" }, { status: 503, headers });
+  const { result } = trees;
   try {
     return Response.json({ included: true, resultRoot: poll.result_root, proof: result!.getProof([leaf]) }, { headers });
   } catch {

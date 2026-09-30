@@ -7,13 +7,13 @@ import { askAbi } from "@/lib/abi";
 import { ADDR, ZERO } from "@/lib/config";
 import type { Content } from "@/lib/content";
 
-import { publicClient, send, walletFor } from "./chain";
+import { poster as wallet, publicClient, send } from "./chain";
 import { db, type PollRow } from "./db";
 import { chainTime } from "./eligibility";
 import { trees } from "./trees";
 
-const wallet = walletFor(process.env.POSTER_PRIVATE_KEY);
-const LOW_ETH = 10n ** 16n;
+const LOW_ETH = 2n * 10n ** 16n;
+let checked = 0;
 
 /** The first block with a timestamp after `ts`. Its hash seeds the draw for paid places. */
 async function firstBlockAfter(ts: number, from: bigint) {
@@ -30,8 +30,11 @@ async function firstBlockAfter(ts: number, from: bigint) {
 /** Fix the result of every poll past its close: tally, both roots, then `finalize` from the poster key. */
 export async function finalizeTick() {
   if (!wallet || ADDR.ask === ZERO) return;
-  const eth = await publicClient.getBalance({ address: wallet.account.address });
-  if (eth < LOW_ETH) console.error(`[finalizer] poster has ${formatEther(eth)} ETH left`);
+  if (Date.now() - checked > 10 * 60_000) {
+    checked = Date.now();
+    const eth = await publicClient.getBalance({ address: wallet.account.address });
+    if (eth < LOW_ETH) console.error(`[finalizer] poster has ${formatEther(eth)} ETH left`);
+  }
 
   // a minute of slack after close, so an answer already in flight is stored before the answers are read
   const now = await chainTime();

@@ -20,6 +20,7 @@ export function Verify() {
     ["SilverAsk", address(ADDR.ask)],
     ["SilverAlgorithm", address(ADDR.algorithm)],
     ["$ZC", address(ADDR.zc)],
+    ...(ADDR.sc === ZERO ? [] : ([["$SC", address(ADDR.sc)]] as [string, ReactNode][])),
     [
       "Rules hash",
       <Link key="rules" href="/algorithm">

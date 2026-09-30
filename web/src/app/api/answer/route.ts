@@ -6,7 +6,7 @@ import type { Content } from "@/lib/content";
 import { publicClient } from "@/lib/server/chain";
 import { db, isHidden } from "@/lib/server/db";
 import { chainTime, isEligible } from "@/lib/server/eligibility";
-import { clientIp, limited } from "@/lib/server/rate";
+import { busy, clientIp, limited } from "@/lib/server/rate";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ const fail = (error: string, status = 400) => Response.json({ error }, { status,
 
 export async function POST(req: Request) {
   if (limited(`answer:${clientIp(req)}`, 30)) return fail("too many requests", 429);
+  if (busy()) return fail("busy right now, try again in a minute", 503);
   if (Number(req.headers.get("content-length") ?? Infinity) > 4096) return fail("too large", 413);
 
   const b = await req.json().catch(() => null);
@@ -28,7 +29,9 @@ export async function POST(req: Request) {
   const poll = await db.poll(b.pollId);
   if (!poll) return fail("no such poll", 404);
   if (isHidden(poll.id)) return fail("this poll was removed", 410);
-  if (poll.status !== "open" || poll.closes_at <= (await chainTime())) return fail("this poll is closed", 409);
+  const now = await chainTime().catch(() => null);
+  if (now === null) return fail("could not reach Ethereum right now, try again", 503);
+  if (poll.status !== "open" || poll.closes_at <= now) return fail("this poll is closed", 409);
   if (!poll.content) return fail("this poll has no published question");
 
   const { questions } = JSON.parse(poll.content) as Content;
@@ -54,7 +57,9 @@ export async function POST(req: Request) {
     return fail("could not check the signature right now, try again", 503);
   }
   if (!valid) return fail("the signature does not match", 401);
-  if (!(await isEligible(poll, voter))) return fail(`this wallet held less than $${MIN_HOLD_USD} of ZC or SC when the poll opened`, 403);
+  const eligible = await isEligible(poll, voter).catch(() => null);
+  if (eligible === null) return fail("could not reach Ethereum right now, try again", 503);
+  if (!eligible) return fail(`this wallet held less than $${MIN_HOLD_USD} of ZC or SC when the poll opened`, 403);
 
   const added = await db.addAnswer({ poll_id: b.pollId, voter, choices, region, age, salt: b.salt, signature: b.signature });
   if (!added) return fail("this wallet already answered", 409);
