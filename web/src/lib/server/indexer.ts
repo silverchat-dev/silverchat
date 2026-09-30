@@ -8,9 +8,11 @@ import { publicClient } from "./chain";
 import { db } from "./db";
 import { prices, tokensFor } from "./price";
 
-const CHUNK = 9_000n;
-// every tick looks back this far again, so a reorg that reorders asks heals itself
-const TAIL = 32n;
+// the RPC's free plan answers eth_getLogs for at most 10 blocks at a time
+const CHUNK = 10n;
+// every tick looks back this far again, so a reorg that reorders asks heals itself; with the 2-block lag below this
+// keeps a normal tick to one request
+const TAIL = 6n;
 const MIN_HOLD = BigInt(MIN_HOLD_USD) * 10n ** 18n;
 
 const EVENTS = askAbi.filter((x) => x.type === "event" && ["Asked", "Finalized", "Refunded"].includes(x.name));
