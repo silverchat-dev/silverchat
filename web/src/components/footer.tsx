@@ -29,6 +29,9 @@ export function Footer() {
           <Link className={link} href="/algorithm">
             The rules
           </Link>
+          <Link className={link} href="/stats">
+            Stats
+          </Link>
           <span>
           $ZC{" "}
           <a className={link} href={`${EXPLORER}/token/${ADDR.zc}`} target="_blank" rel="noreferrer">

@@ -202,6 +202,7 @@ export default function DocsPage() {
               ["GET /api/export", "every poll, for your own copy"],
               ["GET /api/receipt?poll={id}&leaf={leaf}", "proof that one answer is in a fixed result"],
               ["GET /api/health", "head block, indexed block, ZC price and the dollar price per person"],
+              ["GET /api/stats", "ZC spent, earned by answerers, returned, treasury, burned, and the burn address"],
               ["POST /api/polls", "publish a question and get its hash before you pay"],
               ["POST /api/answer", "a signed answer"],
             ].map(([k, v]) => (
