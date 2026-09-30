@@ -22,7 +22,7 @@ const BOOK: [string, string, number[], string][] = [
   ["Algorithm hash", "A new algorithm hash only counts after a twenty-day delay.", [27], "SilverAlgorithm holds the hash of the rules file."],
   ["Anonymous answers", "Votes are anonymous. Results split by what people say about themselves.", [27], "Signed answers, recorded without addresses. Optional region and age."],
   ["Open clients", "An open API lets people write their own client and take their data with them.", [3, 8], "Open API and export. Build your own reader."],
-  ["Predict", "Silverchat Predict lets people, or bots, bet on future events.", [27], "Not yet. It comes after launch."],
+  ["Predict", "Silverchat Predict lets people, or bots, bet on future events.", [27], "Not yet."],
   ["Reading the network", "The AI Emerald writes a broad report of what people say.", [10], "Not yet."],
 ];
 
@@ -64,9 +64,9 @@ export default function DocsPage() {
         <Section id="how" title="How it works">
           <ol className="space-y-6">
             {[
-              ["Ask", "Write a question, choose how many people it asks and how high it shows, and pay in $ZC. The contract holds the payment."],
+              ["Ask", "Write a question, choose how many people it asks and how high it shows, and pay in $ZC. It costs $1 for each person asked, in ZC at the live price; High priority costs 1.2x and Top 1.5x. The contract holds the payment."],
               ["Answer", `Wallets that held $${MIN_HOLD_USD} of ZC or SC when the poll opened answer by signing. Signing is free. One answer per wallet.`],
-              ["Fix", "A minute after the poll closes, the result is fixed on Ethereum as a root over every answer. Then the contract pays out: 85% to the people who answered, 5% to the treasury, 10% burned. The part of that 85% nobody earned goes back to the asker."],
+              ["Fix", "A few minutes after the poll closes, the result is fixed on Ethereum as a root over every answer. Then the contract pays out: 85% to the people who answered, 5% to the treasury, 10% burned. The part of that 85% nobody earned goes back to the asker."],
               ["Claim", "Answerers claim their share in one transaction. What nobody claims within 90 days is burned."],
               ["Refund", "If a result is not fixed within 7 days after close, the asker takes the whole payment back."],
             ].map(([k, v], i) => (
@@ -96,8 +96,8 @@ export default function DocsPage() {
           </ul>
           <p className="text-lg leading-relaxed text-paper/80">
             When a question gets past the list, we can take the poll off the site. It stops taking answers and its question
-            no longer shows here, but it stays on Ethereum and is fixed like any other poll. Everyone who answered before it
-            was removed is paid, and the asker gets back the part nobody earned.
+            no longer shows here, but it stays on Ethereum and is fixed like any other poll. Answers given before it was
+            removed still count and are paid by the normal rules, and the asker gets back the part nobody earned.
           </p>
         </Section>
 
@@ -165,7 +165,7 @@ export default function DocsPage() {
                 <dt className="text-silver">{k}</dt>
                 <dd className="break-all">
                   {v === ZERO ? (
-                    <span className="text-silver">at launch</span>
+                    <span className="text-silver">not launched yet, on Stockereum with ZC</span>
                   ) : (
                     <a href={`${EXPLORER}/address/${v}`} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline">
                       {v}
@@ -199,6 +199,8 @@ export default function DocsPage() {
               ["GET /api/polls/{id}", "one poll: question, cost, status, totals once fixed"],
               ["GET /api/polls/{id}/leaves", "every answer of a fixed poll as choices and salt, no addresses"],
               ["GET /api/export", "every poll, for your own copy"],
+              ["GET /api/receipt?poll={id}&leaf={leaf}", "proof that one answer is in a fixed result"],
+              ["GET /api/health", "head block, indexed block, ZC price and the dollar price per person"],
               ["POST /api/polls", "publish a question and get its hash before you pay"],
               ["POST /api/answer", "a signed answer"],
             ].map(([k, v]) => (

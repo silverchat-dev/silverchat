@@ -22,7 +22,7 @@ export function Footer() {
           <a className={link} href={BOOK_URL} target="_blank" rel="noreferrer">
             Snowmoon
           </a>
-          , a novel by Vitalik Buterin. We are not affiliated with him. The contracts are unaudited and the tokens are volatile.
+          , a novel by Vitalik Buterin. We are not affiliated with him. The contracts are not audited and the tokens are volatile.
           Don&apos;t trust this page. Verify it.
         </p>
         <p className="flex shrink-0 flex-col gap-2 md:items-end">

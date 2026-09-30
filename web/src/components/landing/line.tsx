@@ -27,7 +27,7 @@ const PRINTS: { title: string; photo: string; body: string; foot: string }[] = [
   {
     title: "Fix",
     photo: "fix",
-    body: "A minute after close, the result goes on Ethereum as a root over every signed answer. Then nobody, us included, can change it.",
+    body: "A few minutes after close, the result goes on Ethereum as a root over every signed answer. Then nobody, us included, can change it.",
     foot: "not fixed in 7 days? the asker takes it all back",
   },
   {
@@ -40,7 +40,7 @@ const PRINTS: { title: string; photo: string; body: string; foot: string }[] = [
     title: "Recount",
     photo: "recount",
     body: "Your browser downloads every answer and recounts the result against the root on-chain. The rules for the feed are one public file, its hash on-chain.",
-    foot: "don't trust it, check it",
+    foot: "don't trust it, verify it",
   },
 ];
 

@@ -41,7 +41,7 @@ export function Exposure({ step, onStep }: { step: number; onStep: (step: number
       </div>
       <div className="space-y-1 text-right">
         <p className="min-w-[10ch] text-base tabular-nums text-paper" aria-live="polite">
-          {ADDR.ask === ZERO ? "pricing opens at launch" : cost !== null ? `${tokens(cost)} ZC` : "\u00a0"}
+          {ADDR.ask === ZERO ? "price not set" : cost !== null ? `${tokens(cost)} ZC` : "\u00a0"}
         </p>
         <Link href={`/ask?breadth=${breadth}`} className="block text-paper/85 underline-offset-4 hover:text-paper hover:underline">
           Ask {people(breadth)} people →

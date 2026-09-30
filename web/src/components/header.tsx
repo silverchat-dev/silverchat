@@ -28,7 +28,7 @@ export function Header() {
             <img src="/brand/wordmark.png" alt="silverchat" width={720} height={139} className="h-5 w-auto" />
           </Link>
         )}
-        <nav className="order-last flex w-full flex-wrap gap-x-7 gap-y-1 text-[13px] uppercase tracking-[0.12em] sm:order-none sm:w-auto sm:flex-1">
+        <nav className="order-last flex w-full flex-wrap gap-x-5 gap-y-1 sm:gap-x-7 text-[13px] uppercase tracking-[0.12em] sm:order-none sm:w-auto sm:flex-1">
           {NAV.map((n) => (
             <Link
               key={n.label}

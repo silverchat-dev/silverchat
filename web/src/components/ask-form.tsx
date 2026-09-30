@@ -15,6 +15,8 @@ import { people, tokens, usd } from "@/lib/format";
 import { refused } from "@/lib/moderation";
 import { BREADTHS, costOf as priceOf, PRIORITIES, SPLIT } from "@/lib/pricing";
 
+import { BUY_ZC } from "./buy";
+
 const DURATIONS = [
   { label: "1 hour", s: 3600 },
   { label: "6 hours", s: 6 * 3600 },
@@ -204,7 +206,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
                 </Pill>
               ))}
             </Choice>
-            <Choice legend="Priority" hint="How high it shows in the feed">
+            <Choice legend="Priority" hint="How high it shows in the feed. High costs 1.2x, Top 1.5x">
               {PRIORITIES.map((p, i) => (
                 <Pill key={p.label} name="priority" checked={priority === i} onChange={() => setPriority(i)}>
                   {p.label}
@@ -230,7 +232,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
         <dl className="space-y-2">
           <Row k="Reach">{people(breadth)} people</Row>
           <Row k="Priority">{PRIORITIES[priority].label}</Row>
-          <Row k="Price">{price.data === undefined ? "·" : price.data === 0n ? "not open yet" : `${tokens(price.data)} ZC a person`}</Row>
+          <Row k="Price">{price.data === undefined ? "·" : price.data === 0n ? "not set" : `${tokens(price.data)} ZC a person`}</Row>
         </dl>
         <div className="border-t border-silver/25 pt-4">
           <p className="flex items-baseline justify-between">
@@ -279,11 +281,16 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
                 ? "Cannot read the price, try again"
                 : "Reading the price…"
               : price.data === 0n
-                ? "Asking opens soon"
+                ? "Asking is paused"
                 : short
                   ? "Not enough ZC"
                   : { idle: "Ask the network", publishing: "Saving the question…", approve: "Approve ZC in your wallet…", ask: "Confirm the ask in your wallet…", developing: "Developing…" }[step]}
           </button>
+        )}
+        {short && (
+          <a href={BUY_ZC} target="_blank" rel="noreferrer" className="block text-center text-xs text-paper underline underline-offset-4">
+            Buy ZC on Uniswap
+          </a>
         )}
         {error && (
           <p role="alert" className="text-xs leading-relaxed text-paper">
@@ -331,7 +338,7 @@ function explain(e: unknown) {
     if (e.walk((x) => x instanceof UserRejectedRequestError)) return "You cancelled it in your wallet. Nothing was paid.";
     const revert = e.walk((x) => x instanceof ContractFunctionRevertedError) as ContractFunctionRevertedError | null;
     if (revert?.data?.errorName === "PriceMoved") return "The price changed while you signed. The new cost is shown. Try again.";
-    if (revert?.data?.errorName === "PriceUnset") return "Asking is not open yet.";
+    if (revert?.data?.errorName === "PriceUnset") return "Asking is paused right now. Try again later.";
     return `It did not go through: ${e.shortMessage}`;
   }
   return `It did not go through: ${e instanceof Error ? e.message : String(e)}`;

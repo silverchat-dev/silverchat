@@ -10,7 +10,7 @@ const RULES_HASH = process.env.NEXT_PUBLIC_RULES_HASH ?? "";
 export function Verify() {
   const address = (a: string) =>
     a === ZERO ? (
-      <span className="text-developer/70">at launch</span>
+      <span className="text-developer/70">not deployed</span>
     ) : (
       <a href={`${EXPLORER}/address/${a}`} target="_blank" rel="noreferrer">
         {short(a)}
@@ -35,7 +35,7 @@ export function Verify() {
     [
       "Source",
       <a key="src" href={GITHUB_URL} target="_blank" rel="noreferrer">
-        github.com/silverchat-dev
+        github.com/silverchat-dev/silverchat
       </a>,
     ],
     ["Audit", <span key="audit">none yet</span>],
@@ -46,7 +46,7 @@ export function Verify() {
       <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-8 md:py-28 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
         <div className="space-y-4">
           <h2 id="verify-title" className="text-[clamp(2rem,4.2vw,3.5rem)] leading-[1.05]">
-            Don&apos;t trust this page. Check it.
+            Don&apos;t trust this page. Verify it.
           </h2>
           <p className="max-w-md text-lg leading-relaxed text-paper/75">
             Payments, splits, refunds and every result root live on Ethereum. The contracts are not audited and the tokens

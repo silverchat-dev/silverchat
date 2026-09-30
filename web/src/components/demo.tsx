@@ -265,7 +265,7 @@ export function Demo() {
               </p>
               <p className="max-w-xl font-mono text-xs leading-relaxed text-silver">
                 For real, your browser now keeps a receipt for your answer. Once the result is fixed, it lets you find your own
-                answer in the public record, and nobody else can tell which one is yours.
+                answer in the public record, and nobody reading the record can tell which one is yours.
               </p>
             </div>
           )}
@@ -328,8 +328,8 @@ export function Demo() {
                 <Row k={`Burned ${Number(SPLIT[2][1]) / 100}%`}>{money("burned")}</Row>
               </dl>
               <p className="text-xs leading-relaxed text-silver">
-                Everyone who answers gets an equal share of the {Number(SPLIT[0][1]) / 100}%. What nobody earns goes back to the
-                asker.
+                Each paid answer gets an equal share of the {Number(SPLIT[0][1]) / 100}%, up to as many answers as the poll paid
+                for. What nobody earns goes back to the asker.
               </p>
             </>
           )}
