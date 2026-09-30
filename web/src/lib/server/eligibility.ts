@@ -40,3 +40,6 @@ export async function chainTime() {
   clock = { at: Date.now(), ts: Number(block.timestamp) };
   return clock.ts;
 }
+
+/** Chain time for display; a slow RPC must not break a page. */
+export const displayTime = () => chainTime().catch(() => Math.floor(Date.now() / 1000));

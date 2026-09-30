@@ -29,7 +29,8 @@ export const resultLeaf = (pollId: bigint, choices: number[], salt: Hex) =>
 
 export type Receipt = { pollId: string; voter: Address; choices: number[]; salt: Hex; leaf: Hex };
 
-const key = (pollId: string, voter: string) => `silverchat:receipt:${pollId}:${voter.toLowerCase()}`;
+// the chain and contract are part of the key: poll numbers start again on another deployment
+const key = (pollId: string, voter: string) => `silverchat:receipt:${CHAIN_ID}:${ADDR.ask.toLowerCase()}:${pollId}:${voter.toLowerCase()}`;
 
 export function saveReceipt(r: Receipt) {
   try {
@@ -49,7 +50,8 @@ export function loadReceipt(pollId: string, voter: string): Receipt | null {
 export function hasReceipts(voter: string) {
   try {
     const end = `:${voter.toLowerCase()}`;
-    return Object.keys(localStorage).some((k) => k.startsWith("silverchat:receipt:") && k.endsWith(end));
+    const start = `silverchat:receipt:${CHAIN_ID}:${ADDR.ask.toLowerCase()}:`;
+    return Object.keys(localStorage).some((k) => k.startsWith(start) && k.endsWith(end));
   } catch {
     return false;
   }
