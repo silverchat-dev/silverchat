@@ -1,4 +1,5 @@
 import { ADDR, BOOK_URL, EXPLORER, GITHUB_URL, ZIPCOIN_URL } from "@/lib/config";
+import { short } from "@/lib/format";
 
 const link = "text-silver underline-offset-4 hover:text-paper hover:underline";
 
@@ -25,7 +26,7 @@ export function Footer() {
         <p className="shrink-0">
           $ZC{" "}
           <a className={link} href={`${EXPLORER}/token/${ADDR.zc}`} target="_blank" rel="noreferrer">
-            {ADDR.zc.slice(0, 6)}…{ADDR.zc.slice(-4)}
+            {short(ADDR.zc)}
           </a>
         </p>
       </div>
