@@ -32,8 +32,12 @@ export type PollRow = {
 };
 
 // on globalThis so the background loops and the route handlers share one copy in dev
-const g = globalThis as typeof globalThis & { silverchatMem?: { drafts: Map<string, string>; polls: Map<string, PollRow>; kv: Map<string, string> } };
-const mem = (g.silverchatMem ??= { drafts: new Map(), polls: new Map(), kv: new Map() });
+export type AnswerRow = { poll_id: string; voter: string; choices: number[]; region: string; age: string; salt: string; signature: string };
+
+const g = globalThis as typeof globalThis & {
+  silverchatMem?: { drafts: Map<string, string>; polls: Map<string, PollRow>; answers: Map<string, AnswerRow>; kv: Map<string, string> };
+};
+const mem = (g.silverchatMem ??= { drafts: new Map(), polls: new Map(), answers: new Map(), kv: new Map() });
 
 let ready: Promise<void> | null = null;
 function init() {
@@ -47,6 +51,9 @@ function init() {
          min_hold_zc numeric not null, min_hold_sc numeric, status text not null default 'open',
          result_root text, reward_root text, reward_total numeric);
        create index if not exists polls_hash on polls (hash);
+       create table if not exists answers (
+         poll_id numeric not null, voter text not null, choices jsonb not null, region text not null, age text not null,
+         salt text not null, signature text not null, created_at timestamptz not null default now(), primary key (poll_id, voter));
        create table if not exists kv (key text primary key, value text not null);`,
     )
     .then(() => undefined);
@@ -137,6 +144,39 @@ export const db = {
       ? await pool.query(`select * from polls where status = $1 order by id desc limit $2`, [status, limit])
       : await pool.query(`select * from polls order by id desc limit $1`, [limit]);
     return r.rows.map(text);
+  },
+
+  /** False when this wallet already answered this poll. Answers never change. */
+  async addAnswer(a: AnswerRow) {
+    await init();
+    if (!pool) {
+      const k = `${a.poll_id}:${a.voter}`;
+      if (mem.answers.has(k)) return false;
+      mem.answers.set(k, a);
+      return true;
+    }
+    // only while the poll is still open in the database, so nothing slips in after the finalizer has read the answers
+    const r = await pool.query(
+      `insert into answers (poll_id, voter, choices, region, age, salt, signature)
+       select $1, $2, $3, $4, $5, $6, $7 where exists (select 1 from polls where id = $1 and status = 'open')
+       on conflict do nothing`,
+      [a.poll_id, a.voter, JSON.stringify(a.choices), a.region, a.age, a.salt, a.signature],
+    );
+    return r.rowCount === 1;
+  },
+
+  async answerCount(pollId: string) {
+    await init();
+    if (!pool) return [...mem.answers.values()].filter((a) => a.poll_id === pollId).length;
+    const r = await pool.query(`select count(*)::int as n from answers where poll_id = $1`, [pollId]);
+    return r.rows[0].n as number;
+  },
+
+  async answers(pollId: string): Promise<AnswerRow[]> {
+    await init();
+    if (!pool) return [...mem.answers.values()].filter((a) => a.poll_id === pollId);
+    const r = await pool.query(`select * from answers where poll_id = $1`, [pollId]);
+    return r.rows.map((a) => ({ ...a, poll_id: String(a.poll_id) }));
   },
 
   async get(key: string) {
