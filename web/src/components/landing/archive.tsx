@@ -9,13 +9,13 @@ import type { Content } from "@/lib/content";
 
 import { EXAMPLES, Frame, type Negative } from "./negatives";
 
-type Record = Negative & { key: string; href?: string };
+type Sheet = Negative & { key: string; href?: string };
 
-const examples: Record[] = EXAMPLES.map((n) => ({ ...n, key: String(n.block) }));
+const examples: Sheet[] = EXAMPLES.map((n) => ({ ...n, key: String(n.block) }));
 
 type Polled = { id: string; block: string; content: Content | null; tally: Tally | null };
 
-function record(p: Polled): Record | null {
+function record(p: Polled): Sheet | null {
   const q = p.content?.questions[0];
   const counts = p.tally?.totals[0];
   const total = p.tally?.answers;
@@ -26,7 +26,7 @@ function record(p: Polled): Record | null {
 
 /** The latest fixed polls as a contact sheet of negatives; pointing at one prints it. Examples until real ones exist. */
 export function Archive() {
-  const [real, setReal] = useState<Record[] | null>(null);
+  const [real, setReal] = useState<Sheet[] | null>(null);
 
   useEffect(() => {
     if (ADDR.ask === ZERO) return;
@@ -34,7 +34,7 @@ export function Archive() {
     fetch("/api/polls?status=final&limit=6", { signal: ctl.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { polls: Polled[] } | null) => {
-        const frames = (j?.polls ?? []).map(record).filter((f): f is Record => f !== null);
+        const frames = (j?.polls ?? []).map(record).filter((f): f is Sheet => f !== null);
         if (frames.length) setReal(frames);
       })
       .catch(() => {});
@@ -69,7 +69,7 @@ export function Archive() {
               <div className="relative bg-[url(/plates/film-across.webp)] bg-cover" style={{ aspectRatio: "332 / 456" }}>
                 <Frame n={f} across />
                 {/* printed: the paper comes up over the negative */}
-                <div className="absolute inset-0 opacity-0 transition-opacity duration-700 group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100">
+                <div aria-hidden className="absolute inset-0 opacity-0 transition-opacity duration-700 group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100">
                   <Frame n={f} across print />
                 </div>
               </div>

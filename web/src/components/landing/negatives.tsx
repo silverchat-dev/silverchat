@@ -117,8 +117,8 @@ export function Negatives({ across = false }: { across?: boolean }) {
     const measure = () => {
       const b = g.getBoundingClientRect();
       [c.width, c.height] = [Math.round(b.width), Math.round(b.height)];
-      const f = r.firstElementChild as HTMLElement;
-      size = across ? f.offsetWidth : f.offsetHeight;
+      const f = r.firstElementChild!.getBoundingClientRect();
+      size = across ? f.width : f.height;
     };
     const run = () => {
       const go = on && document.visibilityState === "visible";

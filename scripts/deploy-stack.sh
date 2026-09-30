@@ -50,7 +50,8 @@ print(f"cost now {e(gas * (base + tip))}  at most {e(gas * cap)}  deployer has {
 if gas * cap > limit * 1e18: sys.exit(f"at most {e(gas * cap)} is over MAX_ETH={limit}; wait for cheaper blocks")
 if gas * cap > bal: sys.exit("the deployer can't cover the worst case")
 EOF
-[ "${SEND:-}" = 1 ] || { echo "simulated only; SEND=1 to deploy"; exit 0; }
+# the script writes its JSON even when only simulating: those addresses have no code yet
+[ "${SEND:-}" = 1 ] || { rm -f "deployments/$OUT.json"; echo "simulated only; SEND=1 to deploy"; exit 0; }
 
 # the JSON is written while simulating, so a broadcast that fails partway must not leave predicted addresses behind
 forge script Silverchat.s.sol:Deploy "${flags[@]}" --broadcast --slow 2>&1 | mask || { rm -f "deployments/$OUT.json"; exit 1; }

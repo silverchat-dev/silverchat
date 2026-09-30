@@ -7,6 +7,10 @@ cd "$(dirname "$0")/.."
 out="contracts/deployments/${OUT:-mainnet}.json"
 railway=$(command -v railway || echo "$HOME/.railway/bin/railway")
 get() { python3 -c "import json,sys; print(json.load(open('$out'))[sys.argv[1]])" "$1"; }
+rpc=$(<"$HOME/.config/silverchat/rpc")
+for k in ask algorithm buyback; do
+  [ "$(cast code "$(get $k)" --rpc-url "$rpc" 2>/dev/null)" != 0x ] || { echo "no contract at $k $(get $k); deploy first" >&2; exit 1; }
+done
 project=$("$railway" status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 # deploy what is on GitHub, the same commit the rules link and hash point at
 git fetch -q origin main

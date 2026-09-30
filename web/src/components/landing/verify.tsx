@@ -10,7 +10,7 @@ const RULES_HASH = process.env.NEXT_PUBLIC_RULES_HASH ?? "";
 export function Verify() {
   const address = (a: string) =>
     a === ZERO ? (
-      <span className="text-developer/55">at launch</span>
+      <span className="text-developer/70">at launch</span>
     ) : (
       <a href={`${EXPLORER}/address/${a}`} target="_blank" rel="noreferrer">
         {short(a)}
@@ -23,19 +23,19 @@ export function Verify() {
     ["$ZC", address(ADDR.zc)],
     [
       "Rules hash",
-      <Link key="rules" href="/algorithm" >
+      <Link key="rules" href="/algorithm">
         {RULES_HASH ? short(RULES_HASH) : "see the rules"}
       </Link>,
     ],
     [
       "Every answer",
-      <Link key="api" href="/docs#api" >
+      <Link key="api" href="/docs#api">
         GET /api/polls/{"{id}"}/leaves
       </Link>,
     ],
     [
       "Source",
-      <a key="src" href={GITHUB_URL} target="_blank" rel="noreferrer" >
+      <a key="src" href={GITHUB_URL} target="_blank" rel="noreferrer">
         github.com/silverchat-dev
       </a>,
     ],
@@ -58,7 +58,7 @@ export function Verify() {
         <dl className="bg-[url(/plates/paper.webp)] bg-cover px-6 py-7 font-mono text-[13px] text-developer sm:px-9 sm:py-9">
           {stamps.map(([k, v]) => (
             <div key={k} className="grid grid-cols-[9.5rem_minmax(0,1fr)] gap-4 border-b border-developer/15 py-2.5 last:border-0 max-sm:grid-cols-1 max-sm:gap-0.5">
-              <dt className="text-developer/60">{k}</dt>
+              <dt className="text-developer/70">{k}</dt>
               <dd className="break-all text-developer [&_a]:underline [&_a]:decoration-developer/30 [&_a]:underline-offset-4 [&_a:hover]:decoration-developer">
                 {v}
               </dd>
