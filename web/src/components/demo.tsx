@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { rewards, tally } from "@/lib/algorithm";
 import { AGES, REGIONS } from "@/lib/answer";
@@ -10,6 +10,7 @@ import { EXAMPLE } from "@/lib/example";
 import { people, usd } from "@/lib/format";
 import { BREADTHS, SPLIT } from "@/lib/pricing";
 
+import { Choice, Pill, Row } from "./ask-form";
 import { useReducedMotion } from "./motion";
 import { Print } from "./print";
 
@@ -59,11 +60,30 @@ export function Demo() {
   const [error, setError] = useState<string | null>(null);
 
   const cost = BigInt(Math.round(perPerson * M)) * BigInt(breadth);
-  const money = (micro: bigint) => {
-    const d = Number(micro) / M;
-    const dollars = `$${d.toLocaleString("en-US", { minimumFractionDigits: d % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
-    return zcUsd ? `${dollars} · ${Math.round(d / zcUsd).toLocaleString("en-US")} ZC` : dollars;
+  // the cost goes into ZC once and both columns split it the way SilverAsk.finalize does, so each adds up.
+  // ponytail: whole ZC, fine while a poll costs thousands of them; count in wei with decimals if ZC nears $1
+  const zcCost = zcUsd ? BigInt(Math.round(Number(cost) / M / zcUsd)) : null;
+  const split = (c: bigint) => {
+    const pool = (c * SPLIT[0][1]) / 10_000n;
+    const treasury = (c * SPLIT[1][1]) / 10_000n;
+    const paid = rewards(c, breadth, answers.length);
+    return { cost: c, pool, treasury, burned: c - pool - treasury, each: paid.each, paid: paid.total, back: pool - paid.total };
   };
+  const usdSplit = split(cost);
+  const zcSplit = zcCost === null ? null : split(zcCost);
+  const money = (k: keyof typeof usdSplit) => {
+    const d = Number(usdSplit[k]) / M;
+    const dollars = `$${d.toLocaleString("en-US", { minimumFractionDigits: d % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
+    return zcSplit ? `${dollars} · ${zcSplit[k].toLocaleString("en-US")} ZC` : dollars;
+  };
+
+  // each step replaces what had focus: move it to the poll, or back to the question for another go
+  const head = useRef<HTMLElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (stage !== "ask") head.current?.focus();
+    else if (content) field.current?.focus();
+  }, [stage, content]);
 
   // answers come in over a few seconds; the count is all anyone sees until the result is fixed
   useEffect(() => {
@@ -99,9 +119,6 @@ export function Demo() {
     setStage(still ? "fixed" : "developing");
   }
 
-  const pool = (cost * SPLIT[0][1]) / 10_000n;
-  const treasury = (cost * SPLIT[1][1]) / 10_000n;
-  const paid = rewards(cost, breadth, answers.length);
   const result = stage === "fixed" && content ? tally(content.questions, answers) : null;
 
   return (
@@ -126,6 +143,7 @@ export function Demo() {
                   Your question
                 </label>
                 <textarea
+                  ref={field}
                   id="demo-q"
                   value={q}
                   maxLength={LIMITS.question}
@@ -166,21 +184,13 @@ export function Demo() {
                 )}
               </div>
 
-              <fieldset className="space-y-2">
-                <legend className="font-mono text-xs uppercase tracking-[0.14em]">
-                  Breadth <span className="normal-case tracking-normal text-developer/60">· How many people it asks</span>
-                </legend>
-                <div className="flex flex-wrap gap-2">
-                  {BREADTHS.map((b) => (
-                    <label key={b} className="cursor-pointer">
-                      <input type="radio" name="breadth" checked={breadth === b} onChange={() => setBreadth(b)} className="peer sr-only" />
-                      <span className="block border border-developer/50 px-3 py-1.5 font-mono text-sm tabular-nums peer-checked:border-developer peer-checked:bg-developer peer-checked:text-paper peer-focus-visible:outline peer-focus-visible:outline-1 peer-focus-visible:outline-offset-2">
-                        {people(b)}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              <Choice legend="Breadth" hint="How many people it asks">
+                {BREADTHS.map((b) => (
+                  <Pill key={b} name="breadth" checked={breadth === b} onChange={() => setBreadth(b)}>
+                    {people(b)}
+                  </Pill>
+                ))}
+              </Choice>
 
               <div className="space-y-3">
                 <button type="submit" className="w-full bg-developer py-3 font-mono text-sm text-paper">
@@ -195,7 +205,7 @@ export function Demo() {
             </form>
           ) : (
             content && (
-              <header className="space-y-4">
+              <header ref={head} tabIndex={-1} className="space-y-4 outline-none">
                 <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
                   Demo poll · {people(breadth)} people · {usd(Number(cost) / M)}
                 </p>
@@ -253,12 +263,18 @@ export function Demo() {
                   ? "Answers are coming in. Nobody sees the totals until the result is fixed, not even you, so nobody can follow the crowd."
                   : "The poll is closed. The result is being fixed."}
               </p>
+              <p className="max-w-xl font-mono text-xs leading-relaxed text-silver">
+                For real, your browser now keeps a receipt for your answer. Once the result is fixed, it lets you find your own
+                answer in the public record, and nobody else can tell which one is yours.
+              </p>
             </div>
           )}
 
           {result && content && (
             <>
-              <Print content={content} tally={result} />
+              <div className="develop" style={{ "--tau": "0.4s", animationDelay: "0s" } as CSSProperties}>
+                <Print content={content} tally={result} note="Demo, not a record" />
+              </div>
               <button type="button" onClick={() => setStage("ask")} className="font-mono text-sm text-paper underline underline-offset-4">
                 Ask another
               </button>
@@ -271,18 +287,18 @@ export function Demo() {
             <>
               <p className="text-xs uppercase tracking-[0.14em] text-silver">Paid out</p>
               <dl className="space-y-2">
-                <Row k="Each answer">{money(paid.each)}</Row>
+                <Row k="Each answer">{money("each")}</Row>
                 <Row k="Answered">
                   {answers.length.toLocaleString("en-US")} of {people(breadth)}
                 </Row>
               </dl>
               <dl className="space-y-2 border-t border-paper/15 pt-5 text-xs">
-                <Row k="To answerers">{money(paid.total)}</Row>
-                <Row k="Back to the asker">{money(pool - paid.total)}</Row>
-                <Row k={`Treasury ${Number(SPLIT[1][1]) / 100}%`}>{money(treasury)}</Row>
-                <Row k={`Burned ${Number(SPLIT[2][1]) / 100}%`}>{money(cost - pool - treasury)}</Row>
+                <Row k="To answerers">{money("paid")}</Row>
+                <Row k="Back to the asker">{money("back")}</Row>
+                <Row k={`Treasury ${Number(SPLIT[1][1]) / 100}%`}>{money("treasury")}</Row>
+                <Row k={`Burned ${Number(SPLIT[2][1]) / 100}%`}>{money("burned")}</Row>
               </dl>
-              <p className="border-t border-paper/15 pt-5 leading-relaxed text-paper">You earned {money(paid.each)} for one answer.</p>
+              <p className="border-t border-paper/15 pt-5 leading-relaxed text-paper">You earned {money("each")} for one answer.</p>
               <p className="text-xs leading-relaxed text-silver">
                 For real, you would claim it from the contract on Ethereum within 90 days.
               </p>
@@ -304,14 +320,12 @@ export function Demo() {
               <dl className="space-y-2">
                 <Row k="Reach">{people(breadth)} people</Row>
                 <Row k="Price">{usd(perPerson)} a person</Row>
-                <Row k="Cost">{money(cost)}</Row>
+                <Row k="Cost">{money("cost")}</Row>
               </dl>
               <dl className="space-y-2 border-t border-paper/15 pt-5 text-xs">
-                {SPLIT.map(([name, bps]) => (
-                  <Row key={name} k={`${name} ${Number(bps) / 100}%`}>
-                    {money((cost * bps) / 10_000n)}
-                  </Row>
-                ))}
+                <Row k={`Answerers ${Number(SPLIT[0][1]) / 100}%`}>{money("pool")}</Row>
+                <Row k={`Treasury ${Number(SPLIT[1][1]) / 100}%`}>{money("treasury")}</Row>
+                <Row k={`Burned ${Number(SPLIT[2][1]) / 100}%`}>{money("burned")}</Row>
               </dl>
               <p className="text-xs leading-relaxed text-silver">
                 Everyone who answers gets an equal share of the {Number(SPLIT[0][1]) / 100}%. What nobody earns goes back to the
@@ -321,15 +335,6 @@ export function Demo() {
           )}
         </aside>
       </div>
-    </div>
-  );
-}
-
-function Row({ k, children }: { k: string; children: React.ReactNode }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-silver">{k}</dt>
-      <dd className="text-right text-paper tabular-nums">{children}</dd>
     </div>
   );
 }
