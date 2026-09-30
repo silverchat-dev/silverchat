@@ -1,6 +1,6 @@
 import "server-only";
 
-import { parseUnits, type Hex } from "viem";
+import { parseUnits, TransactionNotFoundError, type Hex } from "viem";
 
 import { askAbi } from "@/lib/abi";
 import { ADDR, ZERO } from "@/lib/config";
@@ -12,15 +12,17 @@ let pending: Hex | null = null;
 let pushed = 0;
 
 /**
- * Keep `pricePerPerson` at the dollar price in ZC. Pushes only when it drifts more than 5%, and moves at most 25% per
- * push, so one bad reading cannot swing it far and a real move still gets there in a few minutes.
+ * Keep `pricePerPerson` at the dollar price in ZC. Pushes only when it drifts more than 5%, at most every 10 minutes and
+ * at most 25% per push, so one bad reading cannot swing it far and gas stays small; a doubling of ZC takes about half an
+ * hour to show on-chain.
  */
 export async function priceTick() {
   if (!wallet || ADDR.ask === ZERO) return;
   if (pending) {
     // still in the mempool: a new tx would only queue behind it with the next nonce. Wait until it lands or is dropped.
     const landed = await publicClient.getTransactionReceipt({ hash: pending }).catch(() => null);
-    if (!landed && (await publicClient.getTransaction({ hash: pending }).catch(() => null))) return;
+    const gone = landed ? true : await publicClient.getTransaction({ hash: pending }).then(() => false, (e) => e instanceof TransactionNotFoundError);
+    if (!gone) return;
     pending = null;
   }
   if (Date.now() - pushed < 10 * 60_000) return;

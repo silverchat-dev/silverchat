@@ -21,7 +21,6 @@ const DAY = 86_400_000;
 export async function GET(req: Request, { params }: RouteContext<"/api/claims/[address]">) {
   const headers = { "cache-control": "no-store" };
   if (limited(`claims:${clientIp(req)}`, 30)) return Response.json({ error: "too many requests" }, { status: 429, headers });
-  if (busy()) return Response.json({ error: "busy right now, try again in a minute" }, { status: 503, headers });
   const { address } = await params;
   const q = new URL(req.url).searchParams;
   const day = q.get("day") ?? "";
@@ -30,6 +29,7 @@ export async function GET(req: Request, { params }: RouteContext<"/api/claims/[a
   if (!isAddress(address)) return Response.json({ error: "bad address" }, { status: 400, headers });
   const fresh = [0, 1].some((back) => new Date(Date.now() - back * DAY).toISOString().slice(0, 10) === day);
   if (!fresh || !isHex(sig)) return Response.json({ error: "sign the rewards message first" }, { status: 401, headers });
+  if (busy()) return Response.json({ error: "busy right now, try again in a minute" }, { status: 503, headers });
   const ok = await publicClient.verifyMessage({ address, message: rewardsMessage(address, day), signature: sig as Hex }).catch(() => false);
   if (!ok) return Response.json({ error: "the signature does not match" }, { status: 401, headers });
 

@@ -26,7 +26,7 @@ export async function GET() {
     prices().catch(() => null),
     balances(),
     // closed over 15 minutes ago and still not fixed
-    db.due(Math.floor(Date.now() / 1000) - 15 * 60).then((r) => r.length),
+    db.overdue(Math.floor(Date.now() / 1000) - 15 * 60),
   ]);
   const ok =
     head !== null &&

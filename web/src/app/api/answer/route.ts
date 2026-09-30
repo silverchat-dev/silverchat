@@ -15,7 +15,6 @@ const fail = (error: string, status = 400) => Response.json({ error }, { status,
 
 export async function POST(req: Request) {
   if (limited(`answer:${clientIp(req)}`, 30)) return fail("too many requests", 429);
-  if (busy()) return fail("busy right now, try again in a minute", 503);
   if (Number(req.headers.get("content-length") ?? Infinity) > 4096) return fail("too large", 413);
 
   const b = await req.json().catch(() => null);
@@ -42,6 +41,7 @@ export async function POST(req: Request) {
   }
 
   const voter = b.voter.toLowerCase() as Address;
+  if (busy()) return fail("busy right now, try again in a minute", 503);
   // verifyTypedData also accepts smart-account signatures (ERC-1271), so a Safe holding ZC can answer
   let valid: boolean;
   try {

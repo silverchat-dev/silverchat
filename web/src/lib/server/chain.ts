@@ -37,10 +37,21 @@ const MAX_FEE = parseGwei("30");
 
 type Wallet = NonNullable<ReturnType<typeof walletFor>>;
 
-/** Simulate first so a call that would revert costs nothing, then send. Returns the tx hash. */
-export async function send(wallet: Wallet, call: { address: Hex; abi: Abi; functionName: string; args: readonly unknown[] }) {
+/** Current EIP-1559 fees, or an error while they are over the cap. */
+export async function feesOrThrow() {
   const fees = await publicClient.estimateFeesPerGas();
   if (fees.maxFeePerGas > MAX_FEE) throw new Error(`gas is ${formatGwei(fees.maxFeePerGas)} gwei, over the ${formatGwei(MAX_FEE)} cap; trying later`);
-  const { request } = await publicClient.simulateContract({ ...call, account: wallet.account, ...fees } as Parameters<typeof publicClient.simulateContract>[0]);
-  return wallet.writeContract(request as Parameters<Wallet["writeContract"]>[0]);
+  return fees;
+}
+
+/** Simulate first so a call that would revert costs nothing, then send. Returns the tx hash. */
+export async function send(
+  wallet: Wallet,
+  call: { address: Hex; abi: Abi; functionName: string; args: readonly unknown[] },
+  fees?: Awaited<ReturnType<typeof feesOrThrow>>,
+) {
+  const fee = fees ?? (await feesOrThrow());
+  const { request } = await publicClient.simulateContract({ ...call, account: wallet.account } as Parameters<typeof publicClient.simulateContract>[0]);
+  // the fees go on the transaction only: on the simulation, some nodes want the sender to hold their gas cap times the fee
+  return wallet.writeContract({ ...request, ...fee } as Parameters<Wallet["writeContract"]>[0]);
 }

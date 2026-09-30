@@ -7,8 +7,9 @@ export function limited(key: string, max: number, windowMs = 60_000) {
   const now = Date.now();
   const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
   recent.push(now);
+  hits.delete(key);
   hits.set(key, recent);
-  // a Map keeps insertion order: drop the oldest half, not everyone's counters
+  // a Map keeps insertion order and every hit re-inserts: drop the least recently used half, not everyone's counters
   if (hits.size > 10_000) for (const k of [...hits.keys()].slice(0, 5_000)) hits.delete(k);
   return recent.length > max;
 }

@@ -6,6 +6,7 @@ import { ADDR, ZERO } from "@/lib/config";
 
 import { publicClient } from "./chain";
 import type { PollRow } from "./db";
+import { busy } from "./rate";
 
 // a balance at a past block never changes, so the answer can be kept for good
 const cache = new Map<string, boolean>();
@@ -21,6 +22,7 @@ export async function isEligible(poll: PollRow, voter: Address) {
   const key = `${poll.id}:${voter}`;
   const known = cache.get(key);
   if (known !== undefined) return known;
+  if (busy()) throw new Error("busy");
 
   const block = BigInt(poll.block);
   let ok = (await balanceAt(ADDR.zc, voter, block)) >= BigInt(poll.min_hold_zc);

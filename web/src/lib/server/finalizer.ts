@@ -1,13 +1,13 @@
 import "server-only";
 
-import { formatEther, type Hex } from "viem";
+import { formatEther, TransactionNotFoundError, type Hex } from "viem";
 
 import { tally } from "@/lib/algorithm";
 import { askAbi } from "@/lib/abi";
 import { ADDR, ZERO } from "@/lib/config";
 import type { Content } from "@/lib/content";
 
-import { poster as wallet, publicClient, send } from "./chain";
+import { feesOrThrow, poster as wallet, publicClient, send } from "./chain";
 import { db, type PollRow } from "./db";
 import { chainTime } from "./eligibility";
 import { trees } from "./trees";
@@ -49,7 +49,13 @@ export async function finalizeTick() {
 
 async function finalizeOne(poll: PollRow) {
   // a slow first attempt is still in the mempool: sending again would only revert
-  if (poll.finalize_tx?.startsWith("0x") && (await publicClient.getTransaction({ hash: poll.finalize_tx as Hex }).catch(() => null))) return;
+  // (only "not found" means it was dropped; a failed lookup is not a reason to send twice)
+  if (poll.finalize_tx?.startsWith("0x")) {
+    const gone = await publicClient.getTransaction({ hash: poll.finalize_tx as Hex }).then(() => false, (e) => e instanceof TransactionNotFoundError);
+    if (!gone) return;
+  }
+  // over the gas cap there is no point searching the seed block and building the trees
+  const fees = await feesOrThrow();
   // take the row before reading answers: nothing can be added after this
   if (!(await db.claimFinalizing(poll.id))) return;
   const seedBlock = await firstBlockAfter(poll.closes_at, BigInt(poll.block));
@@ -70,7 +76,7 @@ async function finalizeOne(poll: PollRow) {
     abi: askAbi,
     functionName: "finalize",
     args: [BigInt(poll.id), t.resultRoot, t.rewardRoot, t.rewardTotal],
-  });
+  }, fees);
   await db.setFinalizing(poll.id, { ...record, finalize_tx: hash });
   console.log(`[finalizer] poll ${poll.id}: ${t.answers.length} answers, ${formatEther(t.rewardTotal)} ZC to answerers (${hash})`);
 }

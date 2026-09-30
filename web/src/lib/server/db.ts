@@ -198,6 +198,14 @@ export const db = {
     );
   },
 
+  /** How many polls with a question closed before `ts` and are still not fixed, retries or not. */
+  async overdue(ts: number): Promise<number> {
+    await init();
+    if (!pool) return [...mem.polls.values()].filter((p) => p.status === "open" && p.content && p.closes_at < ts).length;
+    const r = await pool.query(`select count(*)::int as n from polls where status = 'open' and content is not null and closes_at < $1`, [ts]);
+    return r.rows[0].n;
+  },
+
   /** Final polls from the last 90 days that `voter` answered. */
   async answeredFinal(voter: string, since: number): Promise<PollRow[]> {
     await init();
