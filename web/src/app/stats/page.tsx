@@ -20,7 +20,7 @@ export default async function StatsPage() {
 
   const plates: [string, bigint, string][] = [
     ["Spent asking", s.spent, "Every ZC paid into polls so far."],
-    ["Earned by answerers", s.earned, "85% of each fixed poll, in equal shares per paid answer."],
+    ["Earned by answerers", s.earned, "Their share of each fixed poll's 85%, equal per paid answer."],
     ["Burned by Silverchat", s.burned, "10% of each fixed poll, sent to the burn address."],
   ];
   const rows: [string, string, string][] = [
@@ -69,7 +69,7 @@ export default async function StatsPage() {
 
       {share !== null && s.burnAddress !== null && s.supply !== null && (
         <div className="space-y-4">
-          <h2 className="text-3xl">All ZC ever burned, by anyone</h2>
+          <h2 className="text-3xl">ZC at the burn address</h2>
           <div className="h-3 bg-paper/10" aria-hidden>
             <div className="h-full bg-paper" style={{ width: `${share}%` }} />
           </div>

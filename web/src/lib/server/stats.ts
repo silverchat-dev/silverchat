@@ -38,7 +38,8 @@ export async function stats(): Promise<Stats> {
       ADDR.ask === ZERO ? null : publicClient.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "balanceOf", args: [ADDR.ask] }),
       publicClient.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "balanceOf", args: [BURN] }),
       publicClient.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "totalSupply" }),
-    ]).catch(() => [null, null, null] as const),
+    // one failed read keeps the last good numbers instead of blanking them for a minute
+    ]).catch(() => [cached?.stats.inContract ?? null, cached?.stats.burnAddress ?? null, cached?.stats.supply ?? null] as const),
   ]);
 
   const s: Stats = { polls: polls.length, answers, spent: 0n, earned: 0n, returned: 0n, treasury: 0n, burned: 0n, open: 0n, inContract: chain[0], burnAddress: chain[1], supply: chain[2] };
