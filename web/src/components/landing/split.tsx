@@ -12,7 +12,7 @@ import { costOf, SPLIT } from "@/lib/pricing";
 const BANDS = [
   { name: "Answerers", note: "An equal share for every paid answer. What nobody earned goes back to the asker.", ink: 0.92 },
   { name: "Treasury", note: "Kept by the treasury, a Safe on Ethereum.", ink: 0.55 },
-  { name: "Burned", note: "Burned as ZC. Gone from the supply for good.", ink: 0.26 },
+  { name: "Burned", note: "Sent to the burn address, out of circulation for good.", ink: 0.26 },
 ];
 
 const at = (i: number) => ({ "--tau": "1.4s", "--from": `${4 + i * 7}%`, "--to": `${26 + i * 7}%` }) as CSSProperties;
@@ -74,7 +74,7 @@ export function Split() {
             {example.map((v, i) => `${tokens(v)} ${["to answerers", "to the treasury", "burned"][i]}`).join(" · ")}.
           </>
         ) : ADDR.ask === ZERO ? (
-          "Pricing opens at launch: a fixed dollar amount for each person asked, paid in ZC at the live price."
+          "The price is $1 for each person asked, paid in ZC at the live price."
         ) : (
           " "
         )}

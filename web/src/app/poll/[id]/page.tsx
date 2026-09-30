@@ -24,7 +24,10 @@ const load = cache(async (id: string) => {
 
 export async function generateMetadata({ params }: PageProps<"/poll/[id]">): Promise<Metadata> {
   const poll = await load((await params).id);
-  return { title: poll?.content ? `${poll.content.questions[0].q} · silverchat` : "Poll · silverchat" };
+  const q = poll?.content?.questions[0];
+  return q
+    ? { title: `${q.q} · silverchat`, description: `A poll on Silverchat: ${q.q} ${q.options.join(" / ")}` }
+    : { title: "Poll · silverchat" };
 }
 
 export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
@@ -57,7 +60,7 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
               <h1 className="text-3xl leading-tight">This poll was removed from Silverchat.</h1>
               <p className="max-w-xl text-lg leading-relaxed text-paper/85">
                 Its question broke the <Link href="/docs#questions" className="underline underline-offset-4">rules for questions</Link>. It stays on
-                Ethereum, and anyone who answered it before it was removed is still paid.
+                Ethereum, and answers given before it was removed still count and are paid by the normal rules.
               </p>
             </>
           ) : (

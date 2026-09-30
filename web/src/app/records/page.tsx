@@ -81,7 +81,7 @@ export default async function RecordsPage() {
         </ol>
       ) : (
         <div className="space-y-5">
-          <p className="text-xl text-paper/80">No results are fixed yet. The first one appears here a minute after a poll closes.</p>
+          <p className="text-xl text-paper/80">No results are fixed yet. The first one appears here a few minutes after a poll closes.</p>
           <Link href="/ask" className="inline-block bg-paper px-5 py-2.5 font-mono text-sm text-developer">
             Ask a question
           </Link>

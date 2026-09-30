@@ -12,6 +12,8 @@ import { AGES, domain, loadReceipt, REGIONS, resultLeaf, saveReceipt, tagsHash, 
 import { CHAIN_ID } from "@/lib/config";
 import type { Content } from "@/lib/content";
 
+import { Buy } from "./buy";
+
 type You = { eligible: boolean };
 
 export function AnswerPanel({ pollId, content, open }: { pollId: string; content: Content; open: boolean }) {
@@ -108,7 +110,14 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
           </button>
         </p>
       ) : you.data && !you.data.eligible ? (
-        <p className="mt-5 text-lg">This wallet held less than ${MIN_HOLD_USD} of ZC or SC when the poll opened, so it cannot answer this one.</p>
+        <div className="mt-5 space-y-4">
+          <p className="text-lg">This wallet held less than ${MIN_HOLD_USD} of ZC or SC when the poll opened, so it cannot answer this one.</p>
+          <p className="text-developer/80">
+            Hold ${MIN_HOLD_USD} of ZC or SC and you can answer every poll asked after that. Get a little more than ${MIN_HOLD_USD}:
+            prices move, and the check uses the price when each poll opens.
+          </p>
+          <Buy />
+        </div>
       ) : (
         <form
           className="mt-6 space-y-8"

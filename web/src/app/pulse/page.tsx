@@ -12,8 +12,8 @@ export default async function PulsePage() {
   const { polls: live, now } = await liveFeed(60);
 
   return (
-    <section className="space-y-10 px-5 py-10 sm:px-8 md:py-14">
-      <header className="mx-auto max-w-6xl space-y-4">
+    <section className="mx-auto max-w-6xl space-y-10 px-5 py-10 sm:px-8 md:py-14">
+      <header className="space-y-4">
         <h1 className="text-5xl leading-tight">Pulse</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
           Every question open right now, laid out like a contact sheet, in the order the{" "}
@@ -25,7 +25,7 @@ export default async function PulsePage() {
       </header>
 
       {live.length ? (
-        <ol className="mx-auto grid max-w-6xl grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
+        <ol className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
           {live.map((p, i) => {
             const q = p.content ? (JSON.parse(p.content) as Content).questions[0].q : null;
             const filled = Math.min(1, (p.answers ?? 0) / p.breadth);
