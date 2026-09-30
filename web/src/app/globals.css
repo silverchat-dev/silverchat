@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-developer: #141312;
+  --color-tray: #2b2926;
+  --color-silver: #a7a9ac;
+  --color-paper: #e9e4da;
+  --color-safelight: #e0582c;
+
+  --font-serif: var(--font-caslon), Georgia, serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+html {
+  background: var(--color-developer);
+  color: var(--color-paper);
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-serif);
+}
+
+::selection {
+  background: var(--color-paper);
+  color: var(--color-developer);
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-paper);
+  outline-offset: 3px;
+}

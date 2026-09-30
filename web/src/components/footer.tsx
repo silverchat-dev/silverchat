@@ -1,0 +1,34 @@
+import { ADDR, BOOK_URL, EXPLORER, GITHUB_URL, ZIPCOIN_URL } from "@/lib/config";
+
+const link = "text-silver underline-offset-4 hover:text-paper hover:underline";
+
+export function Footer() {
+  return (
+    <footer className="border-t border-silver/25">
+      <div className="flex flex-col gap-6 px-5 py-8 font-mono text-xs leading-relaxed text-silver/80 sm:px-8 md:flex-row md:justify-between">
+        <p className="max-w-xl">
+          Open source at{" "}
+          <a className={link} href={GITHUB_URL} target="_blank" rel="noreferrer">
+            github.com/silverchat-dev/silverchat
+          </a>
+          . Questions are paid in{" "}
+          <a className={link} href={ZIPCOIN_URL} target="_blank" rel="noreferrer">
+            $ZC
+          </a>
+          . Silverchat comes from{" "}
+          <a className={link} href={BOOK_URL} target="_blank" rel="noreferrer">
+            Snowmoon
+          </a>
+          , a novel by Vitalik Buterin. We are not affiliated with him. The contracts are unaudited and the tokens are volatile.
+          Don&apos;t trust this page. Verify it.
+        </p>
+        <p className="shrink-0">
+          $ZC{" "}
+          <a className={link} href={`${EXPLORER}/token/${ADDR.zc}`} target="_blank" rel="noreferrer">
+            {ADDR.zc.slice(0, 6)}…{ADDR.zc.slice(-4)}
+          </a>
+        </p>
+      </div>
+    </footer>
+  );
+}
