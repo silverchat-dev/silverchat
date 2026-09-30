@@ -6,10 +6,9 @@ import { askAbi } from "@/lib/abi";
 import { ADDR, ZERO } from "@/lib/config";
 
 import { publicClient, send, walletFor } from "./chain";
-import { prices, tokensFor } from "./price";
+import { prices, tokensFor, USD_PER_PERSON } from "./price";
 
 const wallet = walletFor(process.env.PRICER_PRIVATE_KEY);
-const USD_PER_PERSON = parseUnits(process.env.PRICE_USD_PER_PERSON ?? "1", 18);
 
 let pending: { hash: Hex; at: number } | null = null;
 
@@ -26,7 +25,7 @@ export async function priceTick() {
     pending = null;
   }
 
-  const target = tokensFor(USD_PER_PERSON, (await prices()).zc);
+  const target = tokensFor(parseUnits(USD_PER_PERSON, 18), (await prices()).zc);
   const now = await publicClient.readContract({ address: ADDR.ask, abi: askAbi, functionName: "pricePerPerson" });
   let next = target;
   if (now !== 0n) {
