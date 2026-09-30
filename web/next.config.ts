@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   env: {
     NEXT_PUBLIC_RULES_HASH: RULES_HASH,
-    NEXT_PUBLIC_COMMIT: process.env.RAILWAY_GIT_COMMIT_SHA ?? "main",
+    NEXT_PUBLIC_COMMIT: process.env.NEXT_PUBLIC_COMMIT ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? "main",
   },
   // the data is public on purpose: other clients may read it (Snowmoon, ch. 3)
   async headers() {
@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "access-control-allow-origin", value: "*" },
           { key: "access-control-allow-methods", value: "GET, POST, OPTIONS" },
-          { key: "access-control-allow-headers", value: "content-type" },
+          { key: "access-control-allow-headers", value: "content-type, x-rewards-signature" },
         ],
       },
     ];

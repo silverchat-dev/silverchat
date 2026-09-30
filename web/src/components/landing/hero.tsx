@@ -7,7 +7,7 @@ import { Negatives } from "./negatives";
 
 const MECHANICS = [
   ["Pay to ask", "You pay $ZC to ask. More ZC reaches more people."],
-  ["Answer and earn", `Holders of $${MIN_HOLD_USD} of ZC or SC answer with a free signature and share ${Number(SPLIT[0][1]) / 100}% of what you paid.`],
+  ["Answer and earn", `Holders of $${MIN_HOLD_USD} of ZC or SC answer with a free signature and share up to ${Number(SPLIT[0][1]) / 100}% of what you paid.`],
   ["Fixed on-chain", "The result goes on Ethereum. After that nobody can change it, not even us."],
 ];
 

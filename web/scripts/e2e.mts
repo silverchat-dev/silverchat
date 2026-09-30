@@ -125,9 +125,9 @@ const before = await pub.readContract({ address: ZC, abi: erc20Abi, functionName
 type Claim = { id: string; amount: string; proof: Hex[] };
 const day = today();
 const sig = await wallet(VOTERS[0]).signMessage({ message: rewardsMessage(VOTERS[0].address, day) });
-const claimsUrl = `${APP}/api/claims/${VOTERS[0].address}?day=${day}&sig=${sig}`;
-check((await fetch(`${APP}/api/claims/${VOTERS[0].address}?day=${day}&sig=0x00`)).status === 401, "rewards are private without the wallet's signature");
-const { claims } = (await (await fetch(claimsUrl)).json()) as { claims: Claim[] };
+const claimsUrl = `${APP}/api/claims/${VOTERS[0].address}?day=${day}`;
+check((await fetch(claimsUrl, { headers: { "x-rewards-signature": "0x00" } })).status === 401, "rewards are private without the wallet's signature");
+const { claims } = (await (await fetch(claimsUrl, { headers: { "x-rewards-signature": sig } })).json()) as { claims: Claim[] };
 check(claims.some((c) => c.id === String(id)), "the voter has a reward to claim from this poll");
 await pub.waitForTransactionReceipt({
   hash: await wallet(VOTERS[0]).writeContract({
@@ -140,6 +140,6 @@ await pub.waitForTransactionReceipt({
 const after = await pub.readContract({ address: ZC, abi: erc20Abi, functionName: "balanceOf", args: [VOTERS[0].address] });
 const sum = claims.reduce((s, c) => s + BigInt(c.amount), 0n);
 check(after - before === sum, `claimed ${sum} wei of ZC from ${claims.length} poll(s) through the on-chain proofs`);
-const left = (await (await fetch(claimsUrl)).json()) as { claims: Claim[] };
+const left = (await (await fetch(claimsUrl, { headers: { "x-rewards-signature": sig } })).json()) as { claims: Claim[] };
 check(left.claims.length === 0, "nothing is left to claim");
 console.log("all good");

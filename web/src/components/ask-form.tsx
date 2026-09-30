@@ -245,7 +245,8 @@ export function AskForm({ initialBreadth = 10_000 }: { initialBreadth?: number }
           </dl>
         )}
         <p className="text-xs leading-relaxed text-silver">
-          The contract holds your ZC until the result is fixed. If it is never fixed, you take all of it back 7 days after the poll closes.
+          The contract holds your ZC until the result is fixed. The answerers&apos; share is at most; what they don&apos;t earn comes back
+          to you. If the result is never fixed, you take all of it back 7 days after the poll closes.
         </p>
 
         {!address ? (

@@ -45,6 +45,8 @@ export async function finalizeTick() {
 }
 
 async function finalizeOne(poll: PollRow) {
+  // nobody could read a question that never reached us; leave it unfixed so the asker takes the 7-day refund
+  if (!poll.content) return;
   // a slow first attempt is still in the mempool: sending again would only revert
   if (poll.finalize_tx?.startsWith("0x") && (await publicClient.getTransaction({ hash: poll.finalize_tx as Hex }).catch(() => null))) return;
   // take the row before reading answers: nothing can be added after this
