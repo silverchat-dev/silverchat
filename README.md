@@ -10,7 +10,7 @@ The polling network from Vitalik Buterin's novel [Snowmoon](https://vitalik.eth.
 - **Claim** — answerers claim their share in one transaction within 90 days; what nobody claims is burned. If a result is not fixed within 7 days of close, the asker can take the whole payment back.
 - **Pulse** — the open polls in feed order, ranked by one public rules file whose hash sits in `SilverAlgorithm` behind a 20-day delay (ch. 27).
 
-Site: https://silverchat.cash · $ZC: `0x4E67DB19044549fF420860834c91b45BaD298722` · $SC: after launch, on Stockereum
+Site: https://silverchat.cash · $ZC: `0x4E67DB19044549fF420860834c91b45BaD298722` · $SC: `0x905b25701Ee91CfA23a0A981Badd26B58b8454D2` (Stockereum, paired with ZC)
 
 ## Verify it yourself
 
