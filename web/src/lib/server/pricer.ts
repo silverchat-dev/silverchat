@@ -9,7 +9,7 @@ import { publicClient, send, walletFor } from "./chain";
 import { prices, tokensFor } from "./price";
 
 const wallet = walletFor(process.env.PRICER_PRIVATE_KEY);
-const USD_PER_PERSON = parseUnits(process.env.PRICE_USD_PER_PERSON ?? "0.10", 18);
+const USD_PER_PERSON = parseUnits(process.env.PRICE_USD_PER_PERSON ?? "1", 18);
 
 let pending: { hash: Hex; at: number } | null = null;
 
