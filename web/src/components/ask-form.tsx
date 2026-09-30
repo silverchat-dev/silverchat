@@ -11,13 +11,8 @@ import { askAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { canonical, contentHash, LIMITS, parseContent } from "@/lib/content";
 import { people, tokens, usd } from "@/lib/format";
+import { BREADTHS, costOf as priceOf, PRIORITIES, SPLIT } from "@/lib/pricing";
 
-const BREADTHS = [100, 1000, 10_000, 100_000, 1_000_000];
-const PRIORITIES = [
-  { label: "Normal", mult: 10_000n },
-  { label: "High", mult: 12_000n },
-  { label: "Top", mult: 15_000n },
-];
 const DURATIONS = [
   { label: "1 hour", s: 3600 },
   { label: "6 hours", s: 6 * 3600 },
@@ -26,18 +21,12 @@ const DURATIONS = [
   { label: "7 days", s: 7 * 86_400 },
   { label: "30 days", s: 30 * 86_400 },
 ];
-const SPLIT = [
-  ["Answerers", 3500n],
-  ["Treasury", 2500n],
-  ["SC buyback", 2000n],
-  ["Burned", 2000n],
-] as const;
 
 type Step = "idle" | "publishing" | "approve" | "ask" | "developing";
 
 const blank = () => ({ q: "", options: ["", ""] });
 
-export function AskForm() {
+export function AskForm({ initialBreadth = 10_000 }: { initialBreadth?: number }) {
   const router = useRouter();
   // the connector's own chain: wagmi's useChainId stays on the configured chain even when the wallet is elsewhere
   const { address, chainId } = useAccount();
@@ -46,7 +35,7 @@ export function AskForm() {
   const { writeContractAsync } = useWriteContract();
 
   const [questions, setQuestions] = useState([blank()]);
-  const [breadth, setBreadth] = useState(10_000);
+  const [breadth, setBreadth] = useState(BREADTHS.includes(initialBreadth) ? initialBreadth : 10_000);
   const [priority, setPriority] = useState(0);
   const [duration, setDuration] = useState(86_400);
   const [step, setStep] = useState<Step>("idle");
@@ -66,8 +55,7 @@ export function AskForm() {
     refetchInterval: 60_000,
   });
 
-  // same math as SilverAsk.costOf
-  const costOf = (p: bigint) => (p * BigInt(breadth) * PRIORITIES[priority].mult) / 10_000n;
+  const costOf = (p: bigint) => priceOf(p, breadth, priority);
   const cost = price.data ? costOf(price.data) : null;
   const costUsd = cost !== null && zcUsd.data ? Number(formatUnits(cost, 18)) * zcUsd.data : null;
 

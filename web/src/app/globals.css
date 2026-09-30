@@ -53,3 +53,34 @@ body {
 .film::after {
   bottom: 5px;
 }
+
+/* the exposure dial: a hairline track and a small paper knob */
+.exposure {
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+.exposure::-webkit-slider-runnable-track {
+  height: 1px;
+  background: color-mix(in srgb, var(--color-paper) 40%, transparent);
+}
+.exposure::-moz-range-track {
+  height: 1px;
+  background: color-mix(in srgb, var(--color-paper) 40%, transparent);
+}
+.exposure::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6.5px;
+  border-radius: 50%;
+  background: var(--color-paper);
+}
+.exposure::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-paper);
+}

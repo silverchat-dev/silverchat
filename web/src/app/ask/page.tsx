@@ -4,7 +4,8 @@ import { AskForm } from "@/components/ask-form";
 
 export const metadata: Metadata = { title: "Ask the network · silverchat" };
 
-export default function AskPage() {
+export default async function AskPage({ searchParams }: PageProps<"/ask">) {
+  const breadth = Number((await searchParams).breadth);
   return (
     <section className="mx-auto max-w-6xl space-y-10 px-5 py-10 sm:px-8 md:py-14">
       <header className="max-w-2xl space-y-4">
@@ -14,7 +15,7 @@ export default function AskPage() {
           people Silverchat polls. It works the same way here.
         </p>
       </header>
-      <AskForm />
+      <AskForm initialBreadth={breadth} />
     </section>
   );
 }

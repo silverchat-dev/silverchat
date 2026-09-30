@@ -9,3 +9,7 @@ export const WORDMARK = String.raw` @@@@@@   @@@  @@@       @@@  @@@  @@@@@@@@  
     !:!   :!:   :!:       ::!!:!   :!:       :!:  !:!  :!:       :!:  !:!  :!:  !:!    :!:
 :::: ::    ::   :: ::::    ::::     :: ::::  ::   :::   ::: :::  ::   :::  ::   :::     ::
 :: : :    :    : :: : :     :      : :: ::    :   : :   :: :: :   :   : :   :   : :     :`;
+
+// SILVER over CHAT for narrow screens: the same art, cut between R and C
+const rows = WORDMARK.split("\n");
+export const WORDMARK_STACKED = [...rows.map((r) => r.slice(0, 53).trimEnd()), "", ...rows.map((r) => r.slice(55).trimEnd())].join("\n");
