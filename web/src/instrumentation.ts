@@ -3,6 +3,7 @@ export async function register() {
 
   const { indexTick } = await import("./lib/server/indexer");
   const { priceTick } = await import("./lib/server/pricer");
+  const { finalizeTick } = await import("./lib/server/finalizer");
 
   const loop = (name: string, fn: () => Promise<void>, everyMs: number) => {
     let failures = 0;
@@ -21,4 +22,5 @@ export async function register() {
 
   loop("indexer", indexTick, 12_000);
   loop("pricer", priceTick, 60_000);
+  loop("finalizer", finalizeTick, 30_000);
 }

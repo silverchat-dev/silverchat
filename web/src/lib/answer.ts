@@ -44,3 +44,13 @@ export function loadReceipt(pollId: string, voter: string): Receipt | null {
     return null;
   }
 }
+
+/** Whether this browser holds any receipt for `voter`, i.e. the wallet answered something from here. */
+export function hasReceipts(voter: string) {
+  try {
+    const end = `:${voter.toLowerCase()}`;
+    return Object.keys(localStorage).some((k) => k.startsWith("silverchat:receipt:") && k.endsWith(end));
+  } catch {
+    return false;
+  }
+}

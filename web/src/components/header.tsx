@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { BlockClock } from "@/components/block-clock";
+import { Rewards } from "@/components/rewards";
 import { GITHUB_URL } from "@/lib/config";
 
 const NAV: { href: string; label: string; external?: boolean }[] = [
@@ -50,7 +51,10 @@ export function Header() {
               Launch app
             </Link>
           ) : (
-            <ConnectButton chainStatus="none" showBalance={false} accountStatus={{ smallScreen: "avatar", largeScreen: "full" }} />
+            <>
+              <Rewards />
+              <ConnectButton chainStatus="none" showBalance={false} accountStatus={{ smallScreen: "avatar", largeScreen: "full" }} />
+            </>
           )}
         </div>
       </div>

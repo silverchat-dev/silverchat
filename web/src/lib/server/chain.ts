@@ -12,7 +12,13 @@ const RPC_URL = process.env.RPC_URL ?? "https://eth.drpc.org";
 const chain =
   CHAIN_ID === 1
     ? mainnet
-    : defineChain({ id: CHAIN_ID, name: "mainnet fork", nativeCurrency: mainnet.nativeCurrency, rpcUrls: { default: { http: [RPC_URL] } } });
+    : defineChain({
+        id: CHAIN_ID,
+        name: "mainnet fork",
+        nativeCurrency: mainnet.nativeCurrency,
+        rpcUrls: { default: { http: [RPC_URL] } },
+        contracts: mainnet.contracts,
+      });
 
 export const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
 

@@ -1,6 +1,9 @@
 import "server-only";
 
 import { Pool } from "pg";
+import type { Address } from "viem";
+
+import type { Tally } from "@/lib/algorithm";
 
 /**
  * Postgres when DATABASE_URL is set (Railway), in-memory otherwise (local dev).
@@ -29,10 +32,15 @@ export type PollRow = {
   result_root: string | null;
   reward_root: string | null;
   reward_total: string | null;
+  seed?: string | null;
+  seed_block?: string | null;
+  tally?: Tally | null;
+  finalize_tx?: string | null;
+  finalize_at?: number | null;
 };
 
 // on globalThis so the background loops and the route handlers share one copy in dev
-export type AnswerRow = { poll_id: string; voter: string; choices: number[]; region: string; age: string; salt: string; signature: string };
+export type AnswerRow = { poll_id: string; voter: Address; choices: number[]; region: string; age: string; salt: string; signature: string };
 
 const g = globalThis as typeof globalThis & {
   silverchatMem?: { drafts: Map<string, string>; polls: Map<string, PollRow>; answers: Map<string, AnswerRow>; kv: Map<string, string> };
@@ -51,16 +59,30 @@ function init() {
          min_hold_zc numeric not null, min_hold_sc numeric, status text not null default 'open',
          result_root text, reward_root text, reward_total numeric);
        create index if not exists polls_hash on polls (hash);
+       alter table polls add column if not exists seed text;
+       alter table polls add column if not exists seed_block numeric;
+       alter table polls add column if not exists tally jsonb;
+       alter table polls add column if not exists finalize_tx text;
+       alter table polls add column if not exists finalize_at bigint;
        create table if not exists answers (
          poll_id numeric not null, voter text not null, choices jsonb not null, region text not null, age text not null,
          salt text not null, signature text not null, created_at timestamptz not null default now(), primary key (poll_id, voter));
+       create index if not exists answers_voter on answers (voter);
        create table if not exists kv (key text primary key, value text not null);`,
     )
     .then(() => undefined);
   return ready;
 }
 
-const text = (r: PollRow) => ({ ...r, id: String(r.id), cost: String(r.cost), block: String(r.block), closes_at: Number(r.closes_at) });
+const text = (r: PollRow) => ({
+  ...r,
+  id: String(r.id),
+  cost: String(r.cost),
+  block: String(r.block),
+  closes_at: Number(r.closes_at),
+  seed_block: r.seed_block == null ? null : String(r.seed_block),
+  finalize_at: r.finalize_at == null ? null : Number(r.finalize_at),
+});
 
 export const db = {
   async saveDraft(hash: string, content: string) {
@@ -119,6 +141,65 @@ export const db = {
     await pool.query(`update polls set status = 'final', result_root = $2, reward_root = $3, reward_total = $4 where id = $1`, [id, resultRoot, rewardRoot, rewardTotal]);
   },
 
+  /** Open polls past their close, not sent in the last 15 minutes. */
+  async due(now: number): Promise<PollRow[]> {
+    await init();
+    const stale = Math.floor(Date.now() / 1000) - 15 * 60;
+    if (!pool) {
+      return [...mem.polls.values()].filter((p) => p.status === "open" && p.closes_at < now && !(p.finalize_at && p.finalize_at > stale));
+    }
+    const r = await pool.query(
+      `select * from polls where status = 'open' and closes_at < $1 and (finalize_at is null or finalize_at < $2) order by id limit 20`,
+      [now, stale],
+    );
+    return r.rows.map(text);
+  },
+
+  /**
+   * Take a due poll for finalizing, atomically. From here no answer can be added (see addAnswer), and a second worker
+   * gets false. Must happen before the answers are read.
+   */
+  async claimFinalizing(id: string) {
+    await init();
+    const now = Math.floor(Date.now() / 1000);
+    const stale = now - 15 * 60;
+    if (!pool) {
+      const p = mem.polls.get(id);
+      if (!p || p.status !== "open" || (p.finalize_at && p.finalize_at > stale)) return false;
+      p.finalize_at = now;
+      return true;
+    }
+    const r = await pool.query(
+      `update polls set finalize_at = $2 where id = $1 and status = 'open' and (finalize_at is null or finalize_at < $3)`,
+      [id, now, stale],
+    );
+    return r.rowCount === 1;
+  },
+
+  /** Saved before the finalize transaction is sent, so a restart does not send it twice. */
+  async setFinalizing(id: string, f: { seed: string; seed_block: string; tally: Tally; result_root: string; reward_root: string; reward_total: string; finalize_tx: string }) {
+    await init();
+    const at = Math.floor(Date.now() / 1000);
+    if (!pool) return void Object.assign(mem.polls.get(id) ?? {}, { ...f, finalize_at: at });
+    await pool.query(
+      `update polls set seed = $2, seed_block = $3, tally = $4, result_root = $5, reward_root = $6, reward_total = $7, finalize_tx = $8, finalize_at = $9 where id = $1`,
+      [id, f.seed, f.seed_block, JSON.stringify(f.tally), f.result_root, f.reward_root, f.reward_total, f.finalize_tx, at],
+    );
+  },
+
+  /** Final polls from the last 90 days that `voter` answered. */
+  async answeredFinal(voter: string, since: number): Promise<PollRow[]> {
+    await init();
+    if (!pool) {
+      return [...mem.polls.values()].filter((p) => p.status === "final" && (p.finalize_at ?? 0) >= since && mem.answers.has(`${p.id}:${voter}`));
+    }
+    const r = await pool.query(
+      `select p.* from polls p join answers a on a.poll_id = p.id where a.voter = $1 and p.status = 'final' and p.finalize_at >= $2 order by p.id desc`,
+      [voter, since],
+    );
+    return r.rows.map(text);
+  },
+
   async setRefunded(id: string) {
     await init();
     if (!pool) return void Object.assign(mem.polls.get(id) ?? {}, { status: "refunded" });
@@ -158,7 +239,7 @@ export const db = {
     // only while the poll is still open in the database, so nothing slips in after the finalizer has read the answers
     const r = await pool.query(
       `insert into answers (poll_id, voter, choices, region, age, salt, signature)
-       select $1, $2, $3, $4, $5, $6, $7 where exists (select 1 from polls where id = $1 and status = 'open')
+       select $1, $2, $3, $4, $5, $6, $7 where exists (select 1 from polls where id = $1 and status = 'open' and finalize_at is null)
        on conflict do nothing`,
       [a.poll_id, a.voter, JSON.stringify(a.choices), a.region, a.age, a.salt, a.signature],
     );
