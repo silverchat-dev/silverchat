@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BaseError, ContractFunctionRevertedError, encodeFunctionData, erc20Abi, formatEther, formatUnits, parseEventLogs, UserRejectedRequestError, type Address, type Hex } from "viem";
+import { BaseError, ContractFunctionRevertedError, encodeFunctionData, erc20Abi, formatEther, formatUnits, parseEventLogs, UserRejectedRequestError, type Address, type Hex, type Log } from "viem";
 import { useAccount, useCapabilities, useConfig, usePublicClient, useReadContract, useSendCalls, useSwitchChain, useWriteContract } from "wagmi";
 import { waitForCallsStatus } from "wagmi/actions";
 
@@ -27,7 +27,7 @@ const DURATIONS = [
   { label: "30 days", s: 30 * 86_400 },
 ];
 
-type Step = "idle" | "publishing" | "buy" | "batch" | "approve" | "ask" | "developing";
+type Step = "idle" | "publishing" | "buy" | "batch" | "sent" | "approve" | "ask" | "developing";
 
 const blank = () => ({ q: "", options: ["", ""] });
 
@@ -66,11 +66,12 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
   });
 
   const costOf = (p: bigint) => priceOf(p, breadth, priority);
-  const shortBy = price.data && balance.data !== undefined && balance.data < priceOf(price.data, breadth, priority) ? priceOf(price.data, breadth, priority) - balance.data : null;
-  const eth = useEthFor(shortBy);
+
   // say it while they type, not after they connect a wallet
   const word = refused({ v: 1, questions });
   const cost = price.data ? costOf(price.data) : null;
+  const shortBy = cost !== null && balance.data !== undefined && balance.data < cost ? cost - balance.data : null;
+  const eth = useEthFor(shortBy);
   const costUsd = cost !== null && zcUsd.data ? Number(formatUnits(cost, 18)) * zcUsd.data : null;
 
   const edit = (i: number, fn: (q: { q: string; options: string[] }) => void) =>
@@ -117,17 +118,24 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
           const fromBlock = await client.getBlockNumber();
           const { id } = await sendCallsAsync({ chainId: CHAIN_ID, forceAtomic: true, calls });
           const done = await waitForCallsStatus(config, { id, timeout: 900_000 }).catch(() => null);
-          // wallets report batches in different shapes, so the chain decides: this wallet's ask of this question since the batch
-          const find = async () =>
-            (await client.getContractEvents({ address: ADDR.ask, abi: askAbi, eventName: "Asked", args: { asker: address, contentHash: hash }, fromBlock }))[0];
-          let asked = await find();
-          for (let i = 0; !asked && done?.status === "success" && i < 10; i++) {
-            await new Promise((r) => setTimeout(r, 3000));
+          if (done?.status === "failure") throw new Error("the wallet's batch did not go through, so nothing was bought");
+          // the wallet's own receipts first; wallets report in different shapes, so then the chain: this wallet's ask of this question since the batch
+          const receiptLogs = (done?.receipts ?? []).flatMap((r) => r.logs) as unknown as Log[];
+          let asked: { args: { id?: bigint } } | undefined = parseEventLogs({ abi: askAbi, logs: receiptLogs, eventName: "Asked" })[0];
+          const find = () =>
+            client
+              .getContractEvents({ address: ADDR.ask, abi: askAbi, eventName: "Asked", args: { asker: address, contentHash: hash }, fromBlock })
+              .then((l) => l[0], () => undefined);
+          for (let i = 0; !asked && i < 40; i++) {
             asked = await find();
+            if (!asked) await new Promise((r) => setTimeout(r, 3000));
           }
           // all or nothing: once the ask is on chain the ZC is paid
           if (asked) return settle(String(asked.args.id));
-          throw new Error(done ? "the wallet's batch did not go through, so nothing was bought" : "the wallet did not report back; check its activity before trying again");
+          // the batch may still land: never offer to pay again from here
+          setStep("sent");
+          setError("Your wallet sent it, but the ask hasn't shown up yet. Look for it in Records before you try again.");
+          return;
         }
         setStep("buy");
         await buy(client, address, need, value, writeContractAsync);
@@ -159,7 +167,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
       setStep("idle");
       price.refetch();
       balance.refetch();
-      setError(explain(e) + (bought ? " The ZC you bought is in your wallet." : ""));
+      setError(bought ? `${explain(e).replace(" Nothing was paid.", "")} The ZC you bought is in your wallet; the ask was not paid.` : explain(e));
     }
   }
 
@@ -175,7 +183,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
   }
 
   const busy = step !== "idle";
-  const short = cost !== null && balance.data !== undefined && balance.data < cost;
+  const short = shortBy !== null;
 
   return (
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -324,6 +332,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
                   publishing: "Saving the question…",
                   buy: "Confirm the ZC buy in your wallet…",
                   batch: "Confirm in your wallet…",
+                  sent: "Sent. Check Records",
                   approve: "Approve ZC in your wallet…",
                   ask: "Confirm the ask in your wallet…",
                   developing: "Developing…",
@@ -334,7 +343,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
                   : "Reading the price…"
                 : price.data === 0n
                   ? "Asking is paused"
-                  : short && shortBy !== null
+                  : short
                     ? eth.eth
                       ? `Buy ${tokens(shortBy, 0)} ZC and ask`
                       : eth.error

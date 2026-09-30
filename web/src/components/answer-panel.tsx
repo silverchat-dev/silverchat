@@ -121,7 +121,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
             Hold ${MIN_HOLD_USD} of ZC or SC and you can answer every poll asked after that. Get a little more than ${MIN_HOLD_USD}:
             prices move, and the check uses the price when each poll opens.
           </p>
-          <BuyHold usd={MIN_HOLD_USD + 2} zcUsd={zcUsd.data ?? null} />
+          <BuyHold usd={MIN_HOLD_USD + 2} zcUsd={zcUsd.isError ? null : zcUsd.data} />
         </div>
       ) : (
         <form

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { BaseError, formatEther, parseUnits, UserRejectedRequestError, type PublicClient } from "viem";
+import { BaseError, formatEther, parseEther, parseUnits, UserRejectedRequestError, type PublicClient } from "viem";
 import { useAccount, useBalance, usePublicClient, useWriteContract } from "wagmi";
 
 import { routerAbi } from "@/lib/abi";
@@ -21,6 +21,8 @@ const BUY_SC = `https://stockereum.com/t/${ADDR.sc}`;
 
 // bought on top of what's needed, so a small price move between quote and buy doesn't revert it; it stays in the wallet
 export const withBuffer = (zc: bigint) => (zc * 103n) / 100n;
+// ETH kept back for gas, up to three transactions on the slow path
+const GAS_ROOM = parseEther("0.003");
 
 /**
  * ETH that buys at least `want` ZC, from the router's own quote (the launch fee included). A probe gives the rate,
@@ -30,7 +32,9 @@ export async function ethFor(client: PublicClient, want: bigint) {
   const quote = async (eth: bigint) =>
     (await client.readContract({ address: ADDR.stockereumRouter, abi: routerAbi, functionName: "quoteBuyWithEth", args: [POOL_KEY, ADDR.weth, eth] }))[1];
   const probe = 10n ** 16n;
-  let eth = (want * probe) / (await quote(probe)) + 1n;
+  const rate = await quote(probe);
+  if (rate === 0n) throw new Error("the pool has no ZC to sell");
+  let eth = (want * probe) / rate + 1n;
   for (let i = 0; i < 3; i++) {
     const out = await quote(eth);
     if (out >= want) return eth;
@@ -51,7 +55,7 @@ export function useEthFor(want: bigint | null) {
     refetchInterval: 15_000,
     retry: 1,
   });
-  return { eth: q.data, error: q.error, loading: q.isLoading, have: eth.data?.value, enough: q.data !== undefined && eth.data !== undefined && eth.data.value > q.data };
+  return { eth: q.data, error: q.error, have: eth.data?.value, enough: q.data !== undefined && eth.data !== undefined && eth.data.value > q.data + GAS_ROOM };
 }
 
 /** The buy transaction for at least `minOut` ZC, simulated with the user's own account first. */
@@ -71,7 +75,7 @@ export async function buy(client: PublicClient, account: `0x${string}`, minOut: 
 const ethText = (wei: bigint) => `${Number(formatEther(wei)).toPrecision(2)} ETH`;
 
 /** A wallet short of the $20 hold buys about $22 of ZC right here, in one transaction. SC stays a link to Stockereum. */
-export function BuyHold({ usd, zcUsd }: { usd: number; zcUsd: number | null }) {
+export function BuyHold({ usd, zcUsd }: { usd: number; zcUsd: number | null | undefined }) {
   const client = usePublicClient();
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -107,7 +111,7 @@ export function BuyHold({ usd, zcUsd }: { usd: number; zcUsd: number | null }) {
         )}
       </div>
       <p className="text-xs leading-relaxed text-developer/70">
-        {q.error ? (
+        {q.error || zcUsd === null ? (
           <>
             Can&apos;t get a price right now.{" "}
             <a href={STOCKEREUM_ZC} target="_blank" rel="noreferrer" className="underline underline-offset-4">
