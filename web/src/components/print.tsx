@@ -10,7 +10,7 @@ import { pct } from "@/lib/format";
 type View = "all" | "region" | "age";
 
 /** The fixed result, printed: one block per question, bars as silver density on fiber paper. */
-export function Print({ content, tally }: { content: Content; tally: Tally }) {
+export function Print({ content, tally, note }: { content: Content; tally: Tally; note?: string }) {
   const [view, setView] = useState<View>("all");
   const views = (["all", "region", "age"] as const).filter((v) => v === "all" || tally[v]);
   // a fixed order, so the layout says nothing about which group answered first
@@ -20,7 +20,9 @@ export function Print({ content, tally }: { content: Content; tally: Tally }) {
   return (
     <section aria-label="Result" className="bg-paper px-5 py-7 text-developer sm:px-9 sm:py-9">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <p className="font-mono text-xs uppercase tracking-[0.14em]">Result · {tally.answers.toLocaleString("en-US")} answers</p>
+        <p className="font-mono text-xs uppercase tracking-[0.14em]">
+          Result · {tally.answers.toLocaleString("en-US")} answers{note && ` · ${note}`}
+        </p>
         {views.length > 1 && (
           <div role="group" aria-label="Break down by" className="flex gap-1 font-mono text-xs">
             {views.map((v) => (

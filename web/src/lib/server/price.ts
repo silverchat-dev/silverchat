@@ -7,6 +7,9 @@ import { ADDR, ZERO } from "@/lib/config";
 
 import { publicClient } from "./chain";
 
+/** What asking one person costs, in dollars; the pricer turns it into ZC. */
+export const USD_PER_PERSON = process.env.PRICE_USD_PER_PERSON ?? "1";
+
 const WAD = 10n ** 18n;
 const Q192 = 2n ** 192n;
 // Stockereum builds every pool the same way: fee 0 (the hook charges), tick spacing 200

@@ -295,7 +295,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
   );
 }
 
-function Choice({ legend, hint, className = "", children }: { legend: string; hint: string; className?: string; children: React.ReactNode }) {
+export function Choice({ legend, hint, className = "", children }: { legend: string; hint: string; className?: string; children: React.ReactNode }) {
   return (
     <fieldset className={`space-y-2 ${className}`}>
       <legend className="font-mono text-xs uppercase tracking-[0.14em]">
@@ -306,7 +306,7 @@ function Choice({ legend, hint, className = "", children }: { legend: string; hi
   );
 }
 
-function Pill({ name, checked, onChange, children }: { name: string; checked: boolean; onChange: () => void; children: React.ReactNode }) {
+export function Pill({ name, checked, onChange, children }: { name: string; checked: boolean; onChange: () => void; children: React.ReactNode }) {
   return (
     <label className="cursor-pointer">
       <input type="radio" name={name} checked={checked} onChange={onChange} className="peer sr-only" />
@@ -317,7 +317,7 @@ function Pill({ name, checked, onChange, children }: { name: string; checked: bo
   );
 }
 
-function Row({ k, children }: { k: string; children: React.ReactNode }) {
+export function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-silver">{k}</dt>

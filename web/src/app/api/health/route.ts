@@ -2,7 +2,7 @@ import { formatUnits } from "viem";
 
 import { publicClient } from "@/lib/server/chain";
 import { db } from "@/lib/server/db";
-import { prices } from "@/lib/server/price";
+import { prices, USD_PER_PERSON } from "@/lib/server/price";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,7 @@ export async function GET() {
       indexed: cursor,
       zcUsd: p ? formatUnits(p.zc, 18) : null,
       scUsd: p?.sc ? formatUnits(p.sc, 18) : null,
+      usdPerPerson: Number(USD_PER_PERSON),
     },
     { headers: { "cache-control": "no-store" } },
   );
