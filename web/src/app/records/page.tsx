@@ -26,7 +26,11 @@ export default async function RecordsPage() {
         <h1 className="text-5xl leading-tight">Records</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
           Every print keeps its negative. These are the fixed results, newest first, each with the root it was fixed under
-          on Ethereum.
+          on Ethereum. Where the ZC went is on the{" "}
+          <Link href="/stats" className="underline underline-offset-4">
+            stats page
+          </Link>
+          .
         </p>
       </header>
 

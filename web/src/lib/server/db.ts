@@ -270,6 +270,17 @@ export const db = {
     return r.rowCount === 1;
   },
 
+  /** Every poll's money fields and the total answer count, hidden polls included (they are paid like any other). */
+  async ledger(): Promise<{ polls: { status: PollRow["status"]; cost: string; reward_total: string | null }[]; answers: number }> {
+    await init();
+    if (!pool) return { polls: [...mem.polls.values()].map((p) => ({ status: p.status, cost: p.cost, reward_total: p.reward_total })), answers: mem.answers.size };
+    const [p, a] = await Promise.all([
+      pool.query(`select status, cost::text as cost, reward_total::text as reward_total from polls`),
+      pool.query(`select count(*)::int as n from answers`),
+    ]);
+    return { polls: p.rows, answers: a.rows[0].n };
+  },
+
   async answerCount(pollId: string) {
     await init();
     if (!pool) return [...mem.answers.values()].filter((a) => a.poll_id === pollId).length;
