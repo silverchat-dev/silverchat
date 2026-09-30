@@ -85,8 +85,8 @@ body {
   background: var(--color-paper);
 }
 
-/* the example print comes up like a real one, dark marks first and pale ones last, at half speed (the WebGL tray carries
-   on from the same point, then goes as fast as the developer is stirred) */
+/* the example print comes up like a real one, dark marks first and pale ones last, at two thirds speed (the WebGL tray
+   carries on from the same point, then goes as fast as the developer is stirred) */
 @keyframes develop {
   from {
     opacity: 0;
@@ -94,7 +94,7 @@ body {
 }
 @media (prefers-reduced-motion: no-preference) {
   .develop {
-    animation: develop calc(var(--tau) * 8) cubic-bezier(0.15, 0.6, 0.45, 1) 0.8s both;
+    animation: develop calc(var(--tau) * 6) cubic-bezier(0.15, 0.6, 0.45, 1) 0.8s both;
   }
 }
 

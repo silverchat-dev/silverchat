@@ -43,7 +43,7 @@ const MAX_DROPS = 48;
 // the rock on each block: one damped cycle at 0.7 Hz
 const ROCK = { hz: 0.7, decay: 0.6, length: 1.6, force: 4e-4 };
 // development: slow on its own, fast while the developer moves over the print (agitation, in extra seconds per second)
-const AGITATION = { base: 0.2, max: 3, decay: 0.8, perAmp: 0.3, rock: 1.5 };
+const AGITATION = { base: 0.35, max: 3, decay: 0.8, perAmp: 0.3, rock: 1.5 };
 // the print stops changing after this much development time, and the loop may sleep
 const DEVELOPED = 14;
 // the print picked up: a stiff wet sheet held at one point and bending down from it (the far corner 10 to 20 degrees).
@@ -315,8 +315,9 @@ export async function mountTray(canvas: HTMLCanvasElement, opts: { card: HTMLEle
     uPaper: { value: paper },
     uCard: { value: card },
     uSurface: { value: SURFACE },
-    // pick up where the HTML print's own develop animation is (half speed after a 0.8 s start), so the switch doesn't show
-    uDevTime: { value: sincePaint > 0.8 ? 0.8 + (sincePaint - 0.8) / 2 : sincePaint },
+    // pick up where the HTML print's own develop animation is (two thirds speed after a 0.8 s start), so the switch
+    // doesn't show
+    uDevTime: { value: sincePaint > 0.8 ? 0.8 + ((sincePaint - 0.8) * 2) / 3 : sincePaint },
     uDmax: { value: exposure.dmax },
     uSpeed: { value: exposure.speed },
     uFog: { value: exposure.fog },

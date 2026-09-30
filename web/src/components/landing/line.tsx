@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import Image from "next/image";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useBlock } from "wagmi";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
@@ -10,120 +11,36 @@ import { useReducedMotion } from "../motion";
 
 const share = (i: number) => `${Number(SPLIT[i][1]) / 100}%`;
 
-const PRINTS: { title: string; body: string; foot: string; image: ReactNode }[] = [
+const PRINTS: { title: string; photo: string; body: string; foot: string }[] = [
   {
     title: "Ask",
+    photo: "ask",
     body: "Write a question and pay in $ZC. Choose how many holders it reaches, from 100 to a million, and how high it sits in the feed.",
     foot: "priced per person, in ZC",
-    image: (
-      <svg viewBox="0 0 120 80" className="size-full">
-        {/* the dial: five stops, one set */}
-        <line x1="14" y1="46" x2="106" y2="46" stroke="currentColor" strokeOpacity=".45" />
-        {[14, 37, 60, 83, 106].map((x, i) => (
-          <g key={x}>
-            <line x1={x} y1="42" x2={x} y2="50" stroke="currentColor" strokeOpacity=".6" />
-            <text x={x} y="62" textAnchor="middle" fontSize="6.5" fill="currentColor" fillOpacity={i === 2 ? 1 : 0.55} fontFamily="var(--font-jetbrains)">
-              {["100", "1K", "10K", "100K", "1M"][i]}
-            </text>
-          </g>
-        ))}
-        <circle cx="60" cy="46" r="4.5" fill="currentColor" />
-        <text x="60" y="30" textAnchor="middle" fontSize="9" fill="currentColor" fontFamily="var(--font-caslon)">
-          10,000 people
-        </text>
-      </svg>
-    ),
   },
   {
     title: "Answer",
+    photo: "answer",
     body: `Hold $${MIN_HOLD_USD} of ZC or SC at the block a poll opens and you can answer it. You sign, you don't pay gas. One answer per wallet.`,
     foot: "a sample of the network, not everyone",
-    image: (
-      <svg viewBox="0 0 120 80" className="size-full">
-        {/* a signature on the line */}
-        <path
-          d="M18 50c8-14 13-20 16-16s-6 18-2 18 10-22 15-22-3 20 2 20 9-15 13-15-2 12 3 12 8-9 12-9 3 6 7 6 6-3 10-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-        <line x1="14" y1="58" x2="106" y2="58" stroke="currentColor" strokeOpacity=".4" />
-        <text x="60" y="70" textAnchor="middle" fontSize="6.5" fill="currentColor" fillOpacity=".6" fontFamily="var(--font-jetbrains)">
-          signed · 0 gas
-        </text>
-      </svg>
-    ),
   },
   {
     title: "Fix",
+    photo: "fix",
     body: "A minute after close, the result goes on Ethereum as a root over every signed answer. Then nobody, us included, can change it.",
     foot: "not fixed in 7 days? the asker takes it all back",
-    image: (
-      <svg viewBox="0 0 120 80" className="size-full">
-        {/* blocks in a chain, the last one sealed */}
-        {[0, 1, 2].map((i) => (
-          <g key={i}>
-            <rect x={12 + i * 34} y="26" width="26" height="26" fill="none" stroke="currentColor" strokeOpacity={i === 2 ? 1 : 0.45} />
-            {i < 2 && <line x1={38 + i * 34} y1="39" x2={46 + i * 34} y2="39" stroke="currentColor" strokeOpacity=".45" />}
-          </g>
-        ))}
-        <path d="M86 39l4 4 8-9" fill="none" stroke="currentColor" strokeWidth="1.6" />
-        <text x="60" y="66" textAnchor="middle" fontSize="6.5" fill="currentColor" fillOpacity=".6" fontFamily="var(--font-jetbrains)">
-          root 0x9f3c…e1a4
-        </text>
-      </svg>
-    ),
   },
   {
     title: "Claim",
+    photo: "claim",
     body: `Up to ${share(0)} of what the asker paid, an equal share per paid answer. Claim yours in one transaction within 90 days.`,
     foot: "unclaimed shares are burned",
-    image: (
-      <svg viewBox="0 0 120 80" className="size-full">
-        {/* a claim slip: a few polls answered, one total */}
-        {[
-          ["poll 12", "1.84"],
-          ["poll 15", "0.92"],
-          ["poll 19", "3.10"],
-        ].map(([k, v], i) => (
-          <g key={k} fontSize="6.5" fill="currentColor" fillOpacity=".7" fontFamily="var(--font-jetbrains)">
-            <text x="22" y={24 + i * 11}>{k}</text>
-            <text x="98" y={24 + i * 11} textAnchor="end">
-              {v} ZC
-            </text>
-          </g>
-        ))}
-        <line x1="22" y1="54" x2="98" y2="54" stroke="currentColor" strokeOpacity=".45" />
-        <text x="98" y="66" textAnchor="end" fontSize="8" fill="currentColor" fontFamily="var(--font-jetbrains)">
-          5.86 ZC
-        </text>
-        <text x="22" y="66" fontSize="6.5" fill="currentColor" fillOpacity=".6" fontFamily="var(--font-jetbrains)">
-          one claim
-        </text>
-      </svg>
-    ),
   },
   {
     title: "Recount",
+    photo: "recount",
     body: "Your browser downloads every answer and recounts the result against the root on-chain. The rules for the feed are one public file, its hash on-chain.",
     foot: "don't trust it, check it",
-    image: (
-      <svg viewBox="0 0 120 80" className="size-full">
-        {/* tally marks, counted twice */}
-        {[0, 1, 2].map((g) => (
-          <g key={g} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-            {[0, 1, 2, 3].map((k) => (
-              <line key={k} x1={20 + g * 30 + k * 5} y1="26" x2={20 + g * 30 + k * 5} y2="46" />
-            ))}
-            <line x1={17 + g * 30} y1="42" x2={40 + g * 30} y2="30" />
-          </g>
-        ))}
-        <text x="60" y="66" textAnchor="middle" fontSize="6.5" fill="currentColor" fillOpacity=".6" fontFamily="var(--font-jetbrains)">
-          9,481 = 9,481
-        </text>
-      </svg>
-    ),
   },
 ];
 
@@ -319,7 +236,6 @@ export function Line() {
   return (
     <section aria-labelledby="line-title" className="relative overflow-hidden py-20 md:py-28">
       <div className="mx-auto max-w-6xl space-y-4 px-5 sm:px-8">
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-silver">How it works</p>
         <h2 id="line-title" className="max-w-2xl text-[clamp(2rem,4.2vw,3.5rem)] leading-[1.05]">
           How a question becomes a record
         </h2>
@@ -353,7 +269,9 @@ export function Line() {
             >
               <Peg />
               <article className="flex min-h-[25rem] flex-col bg-[url(/plates/paper.webp)] bg-cover p-3 pb-4 text-developer ">
-                <div className="aspect-[3/2] bg-developer text-paper/90">{p.image}</div>
+                <div className="relative aspect-[3/2] overflow-hidden bg-developer">
+                  <Image src={`/plates/prints/${p.photo}.webp`} alt="" fill sizes="240px" className="object-cover" />
+                </div>
                 <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-developer/60">{String(i + 1).padStart(2, "0")}</p>
                 <h3 className="mt-1 text-2xl leading-tight">{p.title}</h3>
                 <p className="mt-2 text-[0.95rem] leading-snug text-developer/85">{p.body}</p>

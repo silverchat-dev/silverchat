@@ -28,13 +28,10 @@ export function Split() {
 
   return (
     <section aria-labelledby="split-title" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 md:py-28">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-end">
-        <div className="space-y-4">
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-silver">Where the ZC goes</p>
-          <h2 id="split-title" className="text-[clamp(2rem,4.2vw,3.5rem)] leading-[1.05]">
-            ZC is spent. SC is owned.
-          </h2>
-        </div>
+      <div className="space-y-4">
+        <h2 id="split-title" className="max-w-2xl text-[clamp(2rem,4.2vw,3.5rem)] leading-[1.05]">
+          ZC is spent. SC is owned.
+        </h2>
         <p className="max-w-xl text-lg leading-relaxed text-paper/75">
           Every poll is paid in ZC and split the moment its result is fixed. One fifth is burned as ZC. Another fifth buys
           SC, and that SC is burned.

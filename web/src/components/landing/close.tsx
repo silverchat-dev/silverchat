@@ -3,7 +3,7 @@ import Link from "next/link";
 /** The last word: ask, or answer. */
 export function Close() {
   return (
-    <section aria-labelledby="close-title" className="relative overflow-hidden border-t border-silver/15">
+    <section aria-labelledby="close-title">
       <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8 md:py-36">
         <h2 id="close-title" className="text-[clamp(3rem,10vw,9rem)] leading-[0.92]">
           Ask the network.
