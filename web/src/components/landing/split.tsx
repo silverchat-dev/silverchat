@@ -46,10 +46,10 @@ export function Split() {
         {SPLIT.map(([, bps], i) => (
           <li
             key={BANDS[i].name}
-            className={`develop on-view flex min-h-44 flex-col justify-end p-3 md:min-h-64 md:p-5 ${BANDS[i].ink > 0.5 ? "text-paper" : "text-developer"}`}
+            className={`develop on-view @container flex min-h-44 flex-col justify-end md:min-h-64 ${bps < 1500n ? "p-2 md:p-3" : "p-3 md:p-5"} ${BANDS[i].ink > 0.5 ? "text-paper" : "text-developer"}`}
             style={{ ...at(i), backgroundColor: `rgb(20 19 18 / ${BANDS[i].ink})` }}
           >
-            <span className="block text-[clamp(1.5rem,5vw,4.5rem)] leading-none tabular-nums">{pct(bps)}</span>
+            <span className="block text-[clamp(1.25rem,min(5vw,34cqw),4.5rem)] leading-none tabular-nums">{pct(bps)}</span>
             {bps >= 1500n && <span className="mt-2 block font-mono text-[11px] uppercase tracking-[0.16em]">{BANDS[i].name}</span>}
           </li>
         ))}
