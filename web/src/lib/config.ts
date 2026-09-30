@@ -1,14 +1,17 @@
-import type { Address } from "viem";
+import { getAddress, isAddress, type Address } from "viem";
 
 export const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 
 export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? "1");
 export const PUBLIC_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "https://ethereum-rpc.publicnode.com";
 
+const SC = process.env.NEXT_PUBLIC_SC?.trim();
+if (SC && !isAddress(SC)) throw new Error("NEXT_PUBLIC_SC is not an address");
+
 export const ADDR = {
   zc: "0x4E67DB19044549fF420860834c91b45BaD298722" as Address,
   /** Zero until $SC launches. */
-  sc: (process.env.NEXT_PUBLIC_SC ?? ZERO) as Address,
+  sc: SC ? getAddress(SC) : ZERO,
   ask: (process.env.NEXT_PUBLIC_ASK ?? ZERO) as Address,
   algorithm: (process.env.NEXT_PUBLIC_ALGORITHM ?? ZERO) as Address,
   weth: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,

@@ -1,19 +1,19 @@
 import "server-only";
 
-import { formatEther, type Hex } from "viem";
+import { formatEther, TransactionNotFoundError, type Hex } from "viem";
 
 import { tally } from "@/lib/algorithm";
 import { askAbi } from "@/lib/abi";
 import { ADDR, ZERO } from "@/lib/config";
 import type { Content } from "@/lib/content";
 
-import { publicClient, send, walletFor } from "./chain";
+import { feesOrThrow, poster as wallet, publicClient, send } from "./chain";
 import { db, type PollRow } from "./db";
 import { chainTime } from "./eligibility";
 import { trees } from "./trees";
 
-const wallet = walletFor(process.env.POSTER_PRIVATE_KEY);
-const LOW_ETH = 10n ** 16n;
+const LOW_ETH = 2n * 10n ** 16n;
+let checked = 0;
 
 /** The first block with a timestamp after `ts`. Its hash seeds the draw for paid places. */
 async function firstBlockAfter(ts: number, from: bigint) {
@@ -30,12 +30,19 @@ async function firstBlockAfter(ts: number, from: bigint) {
 /** Fix the result of every poll past its close: tally, both roots, then `finalize` from the poster key. */
 export async function finalizeTick() {
   if (!wallet || ADDR.ask === ZERO) return;
-  const eth = await publicClient.getBalance({ address: wallet.account.address });
-  if (eth < LOW_ETH) console.error(`[finalizer] poster has ${formatEther(eth)} ETH left`);
+  if (Date.now() - checked > 10 * 60_000) {
+    checked = Date.now();
+    const eth = await publicClient.getBalance({ address: wallet.account.address });
+    if (eth < LOW_ETH) console.error(`[finalizer] poster has ${formatEther(eth)} ETH left`);
+  }
 
   // a minute of slack after close, so an answer already in flight is stored before the answers are read
   const now = await chainTime();
-  for (const poll of await db.due(now - 60)) {
+  const due = await db.due(now - 60);
+  if (!due.length) return;
+  // over the gas cap this throws once for the whole tick, and the loop backs off instead of retrying every poll
+  await feesOrThrow();
+  for (const poll of due) {
     try {
       await finalizeOne(poll);
     } catch (e) {
@@ -46,7 +53,11 @@ export async function finalizeTick() {
 
 async function finalizeOne(poll: PollRow) {
   // a slow first attempt is still in the mempool: sending again would only revert
-  if (poll.finalize_tx?.startsWith("0x") && (await publicClient.getTransaction({ hash: poll.finalize_tx as Hex }).catch(() => null))) return;
+  // (only "not found" means it was dropped; a failed lookup is not a reason to send twice)
+  if (poll.finalize_tx?.startsWith("0x")) {
+    const gone = await publicClient.getTransaction({ hash: poll.finalize_tx as Hex }).then(() => false, (e) => e instanceof TransactionNotFoundError);
+    if (!gone) return;
+  }
   // take the row before reading answers: nothing can be added after this
   if (!(await db.claimFinalizing(poll.id))) return;
   const seedBlock = await firstBlockAfter(poll.closes_at, BigInt(poll.block));

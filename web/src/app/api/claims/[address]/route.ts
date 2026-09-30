@@ -5,7 +5,7 @@ import { ADDR } from "@/lib/config";
 import { rewardsMessage } from "@/lib/rewards";
 import { publicClient } from "@/lib/server/chain";
 import { db } from "@/lib/server/db";
-import { clientIp, limited } from "@/lib/server/rate";
+import { busy, clientIp, limited } from "@/lib/server/rate";
 import { finalTrees } from "@/lib/server/trees";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,7 @@ export async function GET(req: Request, { params }: RouteContext<"/api/claims/[a
   if (!isAddress(address)) return Response.json({ error: "bad address" }, { status: 400, headers });
   const fresh = [0, 1].some((back) => new Date(Date.now() - back * DAY).toISOString().slice(0, 10) === day);
   if (!fresh || !isHex(sig)) return Response.json({ error: "sign the rewards message first" }, { status: 401, headers });
+  if (busy()) return Response.json({ error: "busy right now, try again in a minute" }, { status: 503, headers });
   const ok = await publicClient.verifyMessage({ address, message: rewardsMessage(address, day), signature: sig as Hex }).catch(() => false);
   if (!ok) return Response.json({ error: "the signature does not match" }, { status: 401, headers });
 

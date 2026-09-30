@@ -7,10 +7,15 @@ export function limited(key: string, max: number, windowMs = 60_000) {
   const now = Date.now();
   const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
   recent.push(now);
+  hits.delete(key);
   hits.set(key, recent);
-  if (hits.size > 10_000) hits.clear();
+  // a Map keeps insertion order and every hit re-inserts: drop the least recently used half, not everyone's counters
+  if (hits.size > 10_000) for (const k of [...hits.keys()].slice(0, 5_000)) hits.delete(k);
   return recent.length > max;
 }
+
+/** True when every client together made more RPC-backed requests this minute than the workers can spare. */
+export const busy = () => limited("rpc", 600);
 
 /** The proxy appends the address it saw, so the last hop is the one a client cannot fake. */
 export const clientIp = (req: Request) => req.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() ?? "local";

@@ -55,7 +55,17 @@ let inflight: Promise<Prices> | null = null;
 async function read(): Promise<Prices> {
   const [wethPerZc, usdPerEth] = await Promise.all([median(ADDR.zc, ADDR.weth), ethUsd()]);
   const zc = (wethPerZc * usdPerEth) / WAD;
-  const sc = ADDR.sc === ZERO ? null : ((await median(ADDR.sc, ADDR.zc)) * zc) / WAD;
+  // a pool that isn't there yet (or is younger than the median's 60 blocks) is "no SC price", not a failed read
+  const sc =
+    ADDR.sc === ZERO
+      ? null
+      : await median(ADDR.sc, ADDR.zc).then(
+          (x) => (x * zc) / WAD,
+          (e) => {
+            if (e instanceof Error && e.message === "pool not initialized") return null;
+            throw e;
+          },
+        );
   return { at: Date.now(), zc, sc };
 }
 
