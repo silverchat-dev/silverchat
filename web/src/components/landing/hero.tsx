@@ -20,7 +20,7 @@ export function Hero() {
         <pre className="hidden text-[calc(100cqw/56)] sm:block">{WORDMARK}</pre>
       </div>
 
-      <div className="mt-8 grid gap-10 lg:mt-4 lg:grid-cols-[minmax(0,26fr)_minmax(0,50fr)_minmax(0,13fr)] lg:grid-rows-[auto_1fr] lg:gap-x-8 lg:gap-y-8 xl:gap-x-12">
+      <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-10 lg:mt-4 lg:grid-cols-[minmax(0,26fr)_minmax(0,50fr)_minmax(0,13fr)] lg:grid-rows-[auto_1fr] lg:gap-x-8 lg:gap-y-8 xl:gap-x-12">
         <div className="@container space-y-4 lg:pt-6">
           {/* sized so "Watch the answer develop." (12.8em) always fits one line of the column */}
           <p className="text-[min(2.75rem,calc(100cqw/13))] leading-[1.08] whitespace-nowrap">
@@ -30,8 +30,12 @@ export function Hero() {
           <p className="max-w-sm text-lg leading-relaxed text-paper/80">The polling network from Snowmoon, <span className="whitespace-nowrap">ch. 27</span>. Now on Ethereum.</p>
         </div>
 
-        <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <div className="space-y-10 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           <Darkroom />
+          {/* on narrower screens the strip lies on its side under the tray */}
+          <div className="lg:hidden">
+            <Negatives across />
+          </div>
         </div>
 
         <div className="hidden space-y-4 lg:col-start-3 lg:row-span-2 lg:row-start-1 lg:block">

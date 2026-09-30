@@ -194,7 +194,7 @@ export function TrayCanvas({ step }: { step: number }) {
       />
       <p
         aria-hidden
-        className={`pointer-events-none absolute bottom-[8.5%] left-1/2 -translate-x-1/2 font-mono text-[10px] whitespace-nowrap uppercase tracking-[0.2em] text-paper/70 transition-opacity duration-700 ${on && !used ? "opacity-100" : "opacity-0"}`}
+        className={`pointer-events-none absolute bottom-[8.5%] left-1/2 max-sm:hidden -translate-x-1/2 font-mono text-[10px] whitespace-nowrap uppercase tracking-[0.2em] text-paper/70 transition-opacity duration-700 ${on && !used ? "opacity-100" : "opacity-0"}`}
       >
         Stir the tray or pick up the print
       </p>

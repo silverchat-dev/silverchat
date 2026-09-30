@@ -10,9 +10,9 @@ const RULES_HASH = process.env.NEXT_PUBLIC_RULES_HASH ?? "";
 export function Verify() {
   const address = (a: string) =>
     a === ZERO ? (
-      <span className="text-silver">at launch</span>
+      <span className="text-developer/70">at launch</span>
     ) : (
-      <a href={`${EXPLORER}/address/${a}`} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline">
+      <a href={`${EXPLORER}/address/${a}`} target="_blank" rel="noreferrer">
         {short(a)}
       </a>
     );
@@ -23,19 +23,19 @@ export function Verify() {
     ["$ZC", address(ADDR.zc)],
     [
       "Rules hash",
-      <Link key="rules" href="/algorithm" className="underline-offset-4 hover:underline">
+      <Link key="rules" href="/algorithm">
         {RULES_HASH ? short(RULES_HASH) : "see the rules"}
       </Link>,
     ],
     [
       "Every answer",
-      <Link key="api" href="/docs#api" className="underline-offset-4 hover:underline">
+      <Link key="api" href="/docs#api">
         GET /api/polls/{"{id}"}/leaves
       </Link>,
     ],
     [
       "Source",
-      <a key="src" href={GITHUB_URL} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline">
+      <a key="src" href={GITHUB_URL} target="_blank" rel="noreferrer">
         github.com/silverchat-dev
       </a>,
     ],
@@ -43,10 +43,9 @@ export function Verify() {
   ];
 
   return (
-    <section aria-labelledby="verify-title" className="border-t border-silver/15">
-      <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-8 md:py-28 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <section aria-labelledby="verify-title">
+      <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-8 md:py-28 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
         <div className="space-y-4">
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-silver">Verify it</p>
           <h2 id="verify-title" className="text-[clamp(2rem,4.2vw,3.5rem)] leading-[1.05]">
             Don&apos;t trust this page. Check it.
           </h2>
@@ -55,19 +54,17 @@ export function Verify() {
             are volatile. Read the code before you put in more than you can lose.
           </p>
         </div>
-        <ul className="grid gap-3 self-start sm:grid-cols-2">
-          {stamps.map(([k, v], i) => (
-            <li
-              key={k}
-              className="border border-silver/35 px-4 py-3 font-mono text-xs"
-              // stamped by hand: never quite square
-              style={{ transform: `rotate(${[-0.6, 0.4, -0.3, 0.7, 0.2, -0.5, 0.5, -0.2][i]}deg)` }}
-            >
-              <span className="block text-[10px] uppercase tracking-[0.2em] text-silver">{k}</span>
-              <span className="mt-1 block break-all text-paper">{v}</span>
-            </li>
+        {/* the back of the print, where a darkroom writes down what it used */}
+        <dl className="bg-[url(/plates/paper.webp)] bg-cover px-6 py-7 font-mono text-[13px] text-developer sm:px-9 sm:py-9">
+          {stamps.map(([k, v]) => (
+            <div key={k} className="grid grid-cols-[9.5rem_minmax(0,1fr)] gap-4 border-b border-developer/15 py-2.5 last:border-0 max-sm:grid-cols-1 max-sm:gap-0.5">
+              <dt className="text-developer/70">{k}</dt>
+              <dd className="break-all text-developer [&_a]:underline [&_a]:decoration-developer/30 [&_a]:underline-offset-4 [&_a:hover]:decoration-developer">
+                {v}
+              </dd>
+            </div>
           ))}
-        </ul>
+        </dl>
       </div>
     </section>
   );

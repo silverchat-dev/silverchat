@@ -10,13 +10,10 @@ const PAIRS = [
 /** What chapter 27 describes, next to what is built here. */
 export function Book() {
   return (
-    <section aria-labelledby="book-title" className="relative overflow-hidden border-y border-silver/15 bg-tray/40">
+    <section aria-labelledby="book-title">
       <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-8 md:py-28 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]">
-        <div className="relative">
-          {/* the chapter number, set like a running head in a book */}
-          <p aria-hidden className="text-[clamp(8rem,22vw,18rem)] leading-[0.8] text-paper/[0.07] select-none">27</p>
-          <div className="mt-[-0.4em] space-y-4 lg:sticky lg:top-24">
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-silver">From the book</p>
+        <div>
+          <div className="space-y-4 lg:sticky lg:top-24">
             <h2 id="book-title" className="text-[clamp(2rem,4.2vw,3.5rem)] leading-[1.05]">
               It starts in chapter 27.
             </h2>

@@ -152,10 +152,11 @@ export const db = {
     await init();
     const stale = Math.floor(Date.now() / 1000) - 15 * 60;
     if (!pool) {
-      return [...mem.polls.values()].filter((p) => p.status === "open" && p.closes_at < now && !(p.finalize_at && p.finalize_at > stale));
+      return [...mem.polls.values()].filter((p) => p.status === "open" && p.content && p.closes_at < now && !(p.finalize_at && p.finalize_at > stale));
     }
     const r = await pool.query(
-      `select * from polls where status = 'open' and closes_at < $1 and (finalize_at is null or finalize_at < $2) order by id limit 20`,
+      // a poll whose question never reached us is left for the asker's 7-day refund, and never holds up the others
+      `select * from polls where status = 'open' and content is not null and closes_at < $1 and (finalize_at is null or finalize_at < $2) order by id limit 20`,
       [now, stale],
     );
     return r.rows.map(text);
