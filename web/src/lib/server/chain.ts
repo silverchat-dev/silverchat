@@ -45,12 +45,9 @@ export async function feesOrThrow() {
 }
 
 /** Simulate first so a call that would revert costs nothing, then send. Returns the tx hash. */
-export async function send(
-  wallet: Wallet,
-  call: { address: Hex; abi: Abi; functionName: string; args: readonly unknown[] },
-  fees?: Awaited<ReturnType<typeof feesOrThrow>>,
-) {
-  const fee = fees ?? (await feesOrThrow());
+export async function send(wallet: Wallet, call: { address: Hex; abi: Abi; functionName: string; args: readonly unknown[] }) {
+  // read at send time: fees fetched before slow work can fall behind the base fee
+  const fee = await feesOrThrow();
   const { request } = await publicClient.simulateContract({ ...call, account: wallet.account } as Parameters<typeof publicClient.simulateContract>[0]);
   // the fees go on the transaction only: on the simulation, some nodes want the sender to hold their gas cap times the fee
   return wallet.writeContract({ ...request, ...fee } as Parameters<Wallet["writeContract"]>[0]);

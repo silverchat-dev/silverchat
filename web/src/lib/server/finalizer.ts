@@ -38,7 +38,11 @@ export async function finalizeTick() {
 
   // a minute of slack after close, so an answer already in flight is stored before the answers are read
   const now = await chainTime();
-  for (const poll of await db.due(now - 60)) {
+  const due = await db.due(now - 60);
+  if (!due.length) return;
+  // over the gas cap this throws once for the whole tick, and the loop backs off instead of retrying every poll
+  await feesOrThrow();
+  for (const poll of due) {
     try {
       await finalizeOne(poll);
     } catch (e) {
@@ -54,8 +58,6 @@ async function finalizeOne(poll: PollRow) {
     const gone = await publicClient.getTransaction({ hash: poll.finalize_tx as Hex }).then(() => false, (e) => e instanceof TransactionNotFoundError);
     if (!gone) return;
   }
-  // over the gas cap there is no point searching the seed block and building the trees
-  const fees = await feesOrThrow();
   // take the row before reading answers: nothing can be added after this
   if (!(await db.claimFinalizing(poll.id))) return;
   const seedBlock = await firstBlockAfter(poll.closes_at, BigInt(poll.block));
@@ -76,7 +78,7 @@ async function finalizeOne(poll: PollRow) {
     abi: askAbi,
     functionName: "finalize",
     args: [BigInt(poll.id), t.resultRoot, t.rewardRoot, t.rewardTotal],
-  }, fees);
+  });
   await db.setFinalizing(poll.id, { ...record, finalize_tx: hash });
   console.log(`[finalizer] poll ${poll.id}: ${t.answers.length} answers, ${formatEther(t.rewardTotal)} ZC to answerers (${hash})`);
 }
