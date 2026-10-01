@@ -34,21 +34,32 @@ function useAllPolls(enabled: boolean) {
     enabled,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
-    queryFn: async (): Promise<Poll[]> => (await (await fetch("/api/export")).json()).polls ?? [],
+    queryFn: async (): Promise<Poll[]> => {
+      const res = await fetch("/api/export");
+      // a refused read must not look like an empty record, or leaving /me would store "nothing seen"
+      if (!res.ok) throw new Error(res.statusText);
+      return (await res.json()).polls ?? [];
+    },
   });
 }
 
 /** `now` is when the export was read, so a render never reads the clock. */
 function useYours(address: string | undefined, all: Poll[] | undefined, now: number) {
+  const savedText = useSyncExternalStore(subscribe, savedRaw, () => null);
   return useMemo(() => {
-    if (!address || !all) return null;
+    if (!all) return null;
+    const byId = new Map(all.map((p) => [p.id, p]));
+    const saved = parse<string[]>(savedText, [])
+      .map((id) => byId.get(id))
+      .filter((p): p is Poll => !!p);
+    if (!address) return { asked: [], answered: [], saved, states: {} as Record<string, State> };
     const me = address.toLowerCase();
     const answered = new Set(receiptIds(me));
     const asked = all.filter((p) => p.asker.toLowerCase() === me);
     const mine = all.filter((p) => answered.has(p.id) && p.asker.toLowerCase() !== me);
-    const states = Object.fromEntries([...asked, ...mine].map((p) => [p.id, stateOf(p, now)])) as Record<string, State>;
-    return { asked, answered: mine, states };
-  }, [address, all, now]);
+    const states = Object.fromEntries([...asked, ...mine, ...saved].map((p) => [p.id, stateOf(p, now)])) as Record<string, State>;
+    return { asked, answered: mine, saved, states };
+  }, [address, all, now, savedText]);
 }
 
 /** The statuses stored at the end of the last visit to /me, null before the first one. */
@@ -73,7 +84,7 @@ export function YouLink({ className }: { className: string }) {
       {fresh && (
         <>
           <span aria-hidden className="ml-1.5 inline-block size-1.5 bg-paper align-middle" />
-          <span className="sr-only"> (news)</span>
+          <span className="sr-only"> · new results</span>
         </>
       )}
     </Link>
@@ -81,12 +92,12 @@ export function YouLink({ className }: { className: string }) {
 }
 
 export function YouPage() {
-  const { address } = useAccount();
+  const { address, isReconnecting } = useAccount();
   const all = useAllPolls(true);
   const now = all.dataUpdatedAt / 1000;
   const yours = useYours(address, all.data, now);
   const seen = useSeen(address);
-  const saved = parse<string[]>(useSyncExternalStore(subscribe, savedRaw, () => null), []);
+  const loading = all.isPending || isReconnecting;
 
   // what you saw is stored when you leave, so the marks stay for the whole visit
   const latest = useRef(yours?.states);
@@ -103,30 +114,28 @@ export function YouPage() {
     };
   }, [address]);
 
-  const byId = new Map((all.data ?? []).map((p) => [p.id, p]));
-  const savedPolls = saved.map((id) => byId.get(id)).filter((p): p is Poll => !!p);
-
   return (
     <div className="space-y-14">
-      {!address ? (
+      {all.isError && !all.data && <p className="font-mono text-sm text-silver">Could not read the record. Try again in a minute.</p>}
+      {isReconnecting ? null : !address ? (
         <div className="space-y-4">
           <p className="text-xl text-paper/80">Connect a wallet to see the polls you asked and answered.</p>
           <ConnectButton />
         </div>
       ) : (
         <>
-          <List title="Asked by you" polls={yours?.asked} seen={seen} now={now} empty="You have not asked a question with this wallet yet." loading={all.isPending} />
+          <List title="Asked by you" polls={yours?.asked} seen={seen} now={now} empty="You have not asked a question with this wallet yet." loading={loading} />
           <List
             title="Answered on this device"
             polls={yours?.answered}
             seen={seen}
             now={now}
-            empty="No answers from this wallet on this device. Answers given on another device show there."
-            loading={all.isPending}
+            empty="No answers from this wallet on this device. Answers you gave on another device are listed on that device."
+            loading={loading}
           />
         </>
       )}
-      <List title="Saved" polls={savedPolls} seen={null} now={now} empty="Nothing saved. Save a poll from its page to keep it here." loading={all.isPending} />
+      <List title="Saved" polls={yours?.saved} seen={seen} now={now} empty="Nothing saved. Save a poll from its page to keep it here." loading={loading} />
     </div>
   );
 }
@@ -172,7 +181,8 @@ function Row({ poll, now, fresh }: { poll: Poll; now: number; fresh: boolean }) 
 
   return (
     <li>
-      <Link href={`/poll/${poll.id}`} className="grid gap-x-6 gap-y-1 py-4 hover:bg-paper/5 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-baseline">
+      {/* no prefetch: a burst of requests for exactly these polls would tell the server which ones you answered */}
+      <Link href={`/poll/${poll.id}`} prefetch={false} className="grid gap-x-6 gap-y-1 py-4 hover:bg-paper/5 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-baseline">
         <span className="min-w-0 space-y-1">
           <span className="block font-mono text-xs uppercase tracking-[0.14em] text-silver">
             No. {poll.id}
@@ -189,9 +199,7 @@ function Row({ poll, now, fresh }: { poll: Poll; now: number; fresh: boolean }) 
 
 /** Keep a poll on /me, in this browser only. */
 export function SaveButton({ id }: { id: string }) {
-  const text = useSyncExternalStore(subscribe, savedRaw, () => undefined);
-  if (text === undefined) return null;
-  const on = parse<string[]>(text, []).includes(id);
+  const on = parse<string[]>(useSyncExternalStore(subscribe, savedRaw, () => null), []).includes(id);
   return (
     <button
       type="button"
