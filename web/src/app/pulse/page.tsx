@@ -14,7 +14,7 @@ export default async function PulsePage({ searchParams }: PageProps<"/pulse">) {
   // the whole feed is ranked first, then filtered, so a topic keeps the global order
   const { polls: all, now } = await liveFeed(10_000);
   const live = all
-    .map((p) => ({ ...p, parsed: p.content ? (JSON.parse(p.content) as Content) : null }))
+    .map((p, i) => ({ ...p, n: i + 1, parsed: p.content ? (JSON.parse(p.content) as Content) : null }))
     .filter((p) => !topic || topicOf(p.parsed) === topic)
     .slice(0, 60);
 
@@ -34,14 +34,14 @@ export default async function PulsePage({ searchParams }: PageProps<"/pulse">) {
 
       {live.length ? (
         <ol className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
-          {live.map((p, i) => {
+          {live.map((p) => {
             const q = p.parsed?.questions[0].q ?? null;
             const t = topicOf(p.parsed);
             const filled = Math.min(1, (p.answers ?? 0) / p.breadth);
             return (
               <li key={p.id} className="film">
                 <span aria-hidden className="absolute left-3 top-[14px] font-mono text-[9px] leading-none tracking-[0.2em] text-paper/40">
-                  {i + 1} ▸ SILVERCHAT {p.id}
+                  {p.n} ▸ SILVERCHAT {p.id}
                   {t && ` ▸ ${t.toUpperCase()}`}
                 </span>
                 <Link
@@ -69,7 +69,7 @@ export default async function PulsePage({ searchParams }: PageProps<"/pulse">) {
       ) : (
         <div className="film mx-auto max-w-xl">
           <div className="space-y-4 bg-paper/5 p-8 text-center">
-            <p className="text-2xl">{topic ? `No ${topic} questions are open right now.` : "No questions are open right now."}</p>
+            <p className="text-2xl">{topic ? `No questions under ${topic} are open right now.` : "No questions are open right now."}</p>
             <Link href="/ask" className="inline-block bg-paper px-5 py-2.5 font-mono text-sm text-developer">
               Ask the first one
             </Link>

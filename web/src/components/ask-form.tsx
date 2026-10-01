@@ -251,7 +251,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
           )}
 
           <div className="grid gap-7 border-t border-developer/25 pt-7 sm:grid-cols-2">
-            <Choice legend="Topic" hint="Where it shows when people filter the Pulse" className="sm:col-span-2">
+            <Choice legend="Topic" hint="Where it shows when people filter by topic" className="sm:col-span-2">
               {TOPICS.map((t) => (
                 <Pill key={t} name="topic" checked={topic === t} onChange={() => setTopic(t)}>
                   {t}

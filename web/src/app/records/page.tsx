@@ -20,7 +20,7 @@ function lead(content: Content | null, tally: Tally | null | undefined) {
 
 export default async function RecordsPage({ searchParams }: PageProps<"/records">) {
   const topic = pickTopic((await searchParams).topic);
-  // ponytail: filters the newest 500 in memory; a topic column with an index when records outgrow that
+  // filters the newest 500 in memory; add a topic column and index when records outgrow that
   const fixed = (await db.polls(topic ? 500 : 100, "final"))
     .map((p) => ({ ...p, parsed: p.content ? (JSON.parse(p.content) as Content) : null }))
     .filter((p) => !topic || topicOf(p.parsed) === topic)
@@ -94,7 +94,7 @@ export default async function RecordsPage({ searchParams }: PageProps<"/records"
       ) : (
         <div className="space-y-5">
           <p className="text-xl text-paper/80">
-            {topic ? `No ${topic} results are fixed yet.` : "No results are fixed yet. The first one appears here a few minutes after a poll closes."}
+            {topic ? `No results under ${topic} are fixed yet.` : "No results are fixed yet. The first one appears here a few minutes after a poll closes."}
           </p>
           <Link href="/ask" className="inline-block bg-paper px-5 py-2.5 font-mono text-sm text-developer">
             Ask a question

@@ -102,8 +102,8 @@ export default function DocsPage() {
             removed still count and are paid by the normal rules, and the asker gets back the part nobody earned.
           </p>
           <p className="text-lg leading-relaxed text-paper/80">
-            Each question goes under one topic, which the asker picks: {TOPICS.join(", ")}. The topic is part of the hash
-            paid on Ethereum, so nobody can move a poll to another topic later. Polls asked before topics came have none
+            Each poll goes under one topic, which the asker picks: {TOPICS.join(", ")}. The topic is in the hash that goes on
+            Ethereum when you pay, so nobody can move a poll to another topic later. Polls from before topics have no topic
             and show only under All. A topic filter keeps the feed order; it only hides the other polls.
           </p>
         </Section>

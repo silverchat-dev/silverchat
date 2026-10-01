@@ -39,6 +39,7 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
   const developing = poll.status === "open" && !open;
   const refundable = developing && now > poll.closesAt + REFUND_AFTER;
   const { content } = poll;
+  const topic = topicOf(content);
 
   return (
     <section className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 md:py-14 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -46,7 +47,7 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
         <header className="space-y-5">
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
             Poll No. {poll.id}
-            {topicOf(poll.content) && ` · ${topicOf(poll.content)}`} · {people(poll.breadth)} people · {tokens(poll.cost)} ZC
+            {topic && ` · ${topic}`} · {people(poll.breadth)} people · {tokens(poll.cost)} ZC
           </p>
           {content ? (
             <>
