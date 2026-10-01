@@ -117,8 +117,7 @@ export default async function RiddlePage() {
           </dl>
         )}
         <p className="border-t border-silver/25 pt-4 text-xs leading-relaxed text-silver">
-          After day seven the Safe may take the prize back. Until it does, a right reveal still wins. The team knows the
-          answer and does not play.
+          After day seven the Safe may take the prize back. Until it does, a right reveal still wins.
         </p>
       </aside>
     </section>
