@@ -42,8 +42,12 @@ export function Rewards() {
     queryKey: ["claims", address, sig],
     enabled: !!address && !!sig,
     refetchInterval: 120_000,
-    queryFn: async (): Promise<Claim[]> =>
-      (await (await fetch(`/api/claims/${address}?day=${day}`, { headers: { "x-rewards-signature": sig! } })).json()).claims ?? [],
+    // a failed load (busy, rate-limited, an expired signature) is not "nothing to claim"
+    queryFn: async (): Promise<Claim[]> => {
+      const r = await fetch(`/api/claims/${address}?day=${day}`, { headers: { "x-rewards-signature": sig! } });
+      if (!r.ok) throw new Error(`claims ${r.status}`);
+      return (await r.json()).claims ?? [];
+    },
   });
 
   if (!address || chainId !== CHAIN_ID) return null;
@@ -108,7 +112,12 @@ export function Rewards() {
         <button type="button" onClick={() => claim()} disabled={busy} className={button} title={`${list.length} ${list.length === 1 ? "poll" : "polls"}`}>
           {busy ? "Claiming…" : `Claim ${tokens(total)} ZC`}
         </button>
-      ) : null}
+      ) : note ? null : (
+        // after signing, always say something: an empty header reads as "you earned nothing"
+        <span role="status" className="font-mono text-xs text-silver">
+          {claims.isPending ? "Checking…" : claims.isError ? "Could not load rewards. Try again in a minute." : "Nothing to claim yet."}
+        </span>
+      )}
       {note && (
         <span role="status" className="font-mono text-xs text-silver">
           {note}
