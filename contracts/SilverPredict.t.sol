@@ -42,7 +42,6 @@ contract MockReality {
   mapping(bytes32 => bytes32) public results;
   mapping(bytes32 => bool) public settled;
   mapping(bytes32 => uint256) public getBond;
-  mapping(bytes32 => bool) public isPendingArbitration;
 
   function askQuestionWithMinBond(
     uint256,
@@ -66,10 +65,6 @@ contract MockReality {
     getBond[_qid] = _bond;
   }
 
-  function setPending(bytes32 _qid, bool _pending) external {
-    isPendingArbitration[_qid] = _pending;
-  }
-
   function resultForOnceSettled(bytes32 _qid) external view returns (bytes32) {
     require(settled[_qid], "question must be finalized");
     return results[_qid];
@@ -91,8 +86,8 @@ contract SilverPredictTest is Test {
   address carol = makeAddr("carol");
   address constant BURN = 0x000000000000000000000000000000000000dEaD;
 
-  uint40 closesAt;
-  uint40 resolvesAt;
+  uint32 closesAt;
+  uint32 resolvesAt;
   // phase 2, round 10 and 11
   uint80 constant R = (uint80(2) << 64) | 10;
 
@@ -119,8 +114,8 @@ contract SilverPredictTest is Test {
       _feeds,
       _stale
     );
-    closesAt = uint40(block.timestamp + 1 days);
-    resolvesAt = uint40(block.timestamp + 2 days);
+    closesAt = uint32(block.timestamp + 1 days);
+    resolvesAt = uint32(block.timestamp + 2 days);
 
     sc.mint(opener, 10_000 ether);
     vm.prank(opener);
@@ -208,6 +203,11 @@ contract SilverPredictTest is Test {
     vm.expectRevert(SilverPredict.AlreadyClaimed.selector);
     predict.claim(_id);
     assertEq(zc.balanceOf(address(predict)), 0);
+    vm.expectRevert(SilverPredict.NotOpen.selector);
+    predict.settlePrice(_id, R);
+    vm.warp(uint256(resolvesAt) + 180 days);
+    vm.expectRevert(SilverPredict.NotOpen.selector);
+    predict.voidMarket(_id);
   }
 
   function test_rounding_never_pays_more_than_the_pool() public {
@@ -230,7 +230,7 @@ contract SilverPredictTest is Test {
     assertLt(zc.balanceOf(address(predict)), 3);
   }
 
-  function test_a_stake_not_revealed_in_the_window_is_lost() public {
+  function test_no_revealed_winner_refunds_everyone_and_late_reveals_fail() public {
     uint256 _id = _openPrice(4000e8);
     _stake(_id, alice, 100 ether, 1);
     _stake(_id, bob, 100 ether, 2);
@@ -315,6 +315,58 @@ contract SilverPredictTest is Test {
     assertEq(uint8(_m.status), uint8(SilverPredict.Status.Void));
     assertTrue(_m.refund);
     assertFalse(_m.invalid);
+    vm.prank(alice);
+    predict.claim(_id);
+    assertEq(zc.balanceOf(alice), 1000 ether);
+  }
+
+  function test_a_zero_or_negative_price_voids_the_market() public {
+    uint256 _id = _openPrice(4000e8);
+    _bracket(0);
+    _toSettle();
+    predict.settlePrice(_id, R);
+    assertEq(uint8(predict.market(_id).status), uint8(SilverPredict.Status.Void));
+  }
+
+  function test_the_owner_cannot_change_the_staleness_of_an_open_market() public {
+    uint256 _id = _openPrice(4000e8);
+    _stake(_id, alice, 100 ether, 1);
+    _stake(_id, bob, 100 ether, 2);
+    vm.warp(closesAt);
+    _reveal(_id, alice, 1);
+    _reveal(_id, bob, 2);
+    vm.prank(owner);
+    predict.setFeed(address(feed), 0);
+    _bracket(4100e8);
+    _toSettle();
+    predict.settlePrice(_id, R);
+    assertEq(uint8(predict.market(_id).status), uint8(SilverPredict.Status.Yes));
+    // and new markets cannot use the feed any more
+    vm.prank(opener);
+    vm.expectRevert(SilverPredict.FeedNotAllowed.selector);
+    predict.openPrice(bytes32(0), address(feed), 1, uint32(block.timestamp + 1 days), uint32(block.timestamp + 2 days));
+  }
+
+  function test_a_reveal_batch_skips_revealed_stakes_and_fails_whole_on_a_bad_salt() public {
+    uint256 _id = _openPrice(4000e8);
+    _stake(_id, alice, 100 ether, 1);
+    _stake(_id, bob, 100 ether, 2);
+    vm.warp(closesAt);
+    _reveal(_id, alice, 1);
+    address[] memory _who = new address[](2);
+    (_who[0], _who[1]) = (alice, bob);
+    uint8[] memory _sides = new uint8[](2);
+    (_sides[0], _sides[1]) = (1, 2);
+    bytes32[] memory _salts = new bytes32[](2);
+    (_salts[0], _salts[1]) = (_salt(alice), bytes32("wrong"));
+    vm.expectRevert(SilverPredict.BadReveal.selector);
+    predict.reveal(_id, _who, _sides, _salts);
+    assertEq(predict.market(_id).no, 0);
+    _salts[1] = _salt(bob);
+    predict.reveal(_id, _who, _sides, _salts);
+    // alice counted once
+    assertEq(predict.market(_id).yes, 100 ether);
+    assertEq(predict.market(_id).no, 100 ether);
   }
 
   function test_proof_across_an_aggregator_change() public {
@@ -410,15 +462,11 @@ contract SilverPredictTest is Test {
     assertEq(sc.balanceOf(opener), 10_000 ether);
   }
 
-  function test_an_answered_or_disputed_event_cannot_be_voided_early() public {
+  function test_an_answered_event_cannot_be_voided_early() public {
     uint256 _id = _openEvent();
     bytes32 _qid = predict.market(_id).questionId;
     vm.warp(uint256(resolvesAt) + 30 days);
     reality.setBond(_qid, 0.02 ether);
-    vm.expectRevert(SilverPredict.TooEarly.selector);
-    predict.voidMarket(_id);
-    reality.setBond(_qid, 0);
-    reality.setPending(_qid, true);
     vm.expectRevert(SilverPredict.TooEarly.selector);
     predict.voidMarket(_id);
     // the hard stop ends it
@@ -447,11 +495,11 @@ contract SilverPredictTest is Test {
   function test_guards() public {
     vm.startPrank(opener);
     vm.expectRevert(SilverPredict.BadTimes.selector);
-    predict.openPrice(bytes32(0), address(feed), 1, uint40(block.timestamp + 10 minutes), resolvesAt);
+    predict.openPrice(bytes32(0), address(feed), 1, uint32(block.timestamp + 10 minutes), resolvesAt);
     vm.expectRevert(SilverPredict.BadTimes.selector);
     predict.openPrice(bytes32(0), address(feed), 1, resolvesAt, closesAt);
     vm.expectRevert(SilverPredict.BadTimes.selector);
-    predict.openPrice(bytes32(0), address(feed), 1, closesAt, uint40(block.timestamp + 365 days));
+    predict.openPrice(bytes32(0), address(feed), 1, closesAt, uint32(block.timestamp + 365 days));
     vm.expectRevert(SilverPredict.FeedNotAllowed.selector);
     predict.openPrice(bytes32(0), makeAddr("fake feed"), 1, closesAt, resolvesAt);
     vm.stopPrank();

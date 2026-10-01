@@ -19,7 +19,7 @@ contract PredictHarness is SilverPredict {
 
   address constant KLEROS = 0xFf32eff53459485074b4Db14633252C9dcA3791A;
 
-  function backdate(uint256 _id, uint40 _closesAt, uint40 _resolvesAt) external {
+  function backdate(uint256 _id, uint32 _closesAt, uint32 _resolvesAt) external {
     markets[_id].closesAt = _closesAt;
     markets[_id].resolvesAt = _resolvesAt;
   }
@@ -81,15 +81,15 @@ contract SilverPredictFork is Test {
     uint256 _now = vm.getBlockTimestamp();
     vm.prank(opener);
     uint256 _id =
-      predict.openPrice(keccak256("eth"), address(ETH_USD), 1e8, uint40(_now + 1 hours), uint40(_now + 2 hours));
+      predict.openPrice(keccak256("eth"), address(ETH_USD), 1e8, uint32(_now + 1 hours), uint32(_now + 2 hours));
     // the lock arrived in full through SC's transfer hook
     assertEq(predict.market(_id).lock, 1000 ether);
     _seal(_id, alice, 1);
     _seal(_id, bob, 2);
 
     // stakes are in; open the reveal window now, then pretend the market resolved a day ago
-    uint40 _t = uint40(_now - 1 days);
-    predict.backdate(_id, uint40(_now), _t);
+    uint32 _t = uint32(_now - 1 days);
+    predict.backdate(_id, uint32(_now), _t);
     address[] memory _who = new address[](2);
     (_who[0], _who[1]) = (alice, bob);
     uint8[] memory _sides = new uint8[](2);
@@ -129,7 +129,7 @@ contract SilverPredictFork is Test {
     uint256 _now = vm.getBlockTimestamp();
     vm.prank(opener);
     uint256 _id = predict.openEvent(
-      unicode"Will the Silverchat fork test pass?␟test␟en", uint40(_now + 1 hours), uint40(_now + 2 hours)
+      unicode"Will the Silverchat fork test pass?␟test␟en", uint32(_now + 1 hours), uint32(_now + 2 hours)
     );
     bytes32 _qid = predict.market(_id).questionId;
     assertTrue(_qid != bytes32(0));
@@ -167,7 +167,7 @@ contract SilverPredictFork is Test {
     uint256 _now = vm.getBlockTimestamp();
     vm.prank(opener);
     uint256 _id =
-      predict.openEvent(unicode"Is this question vague?␟test␟en", uint40(_now + 1 hours), uint40(_now + 2 hours));
+      predict.openEvent(unicode"Is this question vague?␟test␟en", uint32(_now + 1 hours), uint32(_now + 2 hours));
     bytes32 _qid = predict.market(_id).questionId;
     _seal(_id, alice, 1);
     vm.warp(_now + 2 hours);

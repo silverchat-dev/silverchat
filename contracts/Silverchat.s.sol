@@ -114,6 +114,7 @@ contract DeployPredict is Script {
     require(_reality.code.length != 0 && ETH_USD.code.length != 0, "no Reality.eth or Chainlink on this chain");
     string memory _file = string.concat("./deployments/", vm.envString("OUT"), ".json");
     require(vm.exists(_file), "deploy SilverAsk first");
+    require(vm.parseJsonUint(vm.readFile(_file), ".chainId") == block.chainid, "OUT is for another chain");
 
     address[] memory _feeds = new address[](2);
     (_feeds[0], _feeds[1]) = (ETH_USD, BTC_USD);
@@ -142,9 +143,12 @@ contract DeployPredict is Script {
 
     // only on a real broadcast, so a simulation never records an address that was not deployed; only the new keys,
     // SilverAsk and SilverAlgorithm keep theirs
-    if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) return console.log("simulated, nothing written");
-    vm.writeJson(vm.toString(address(_predict)), _file, ".predict");
-    vm.writeJson(vm.toString(block.number), _file, ".predictBlock");
-    console.log("predict", address(_predict), "added to", _file);
+    if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+      vm.writeJson(vm.toString(address(_predict)), _file, ".predict");
+      vm.writeJson(vm.toString(block.number), _file, ".predictBlock");
+      console.log("predict", address(_predict), "added to", _file);
+    } else {
+      console.log("simulated, nothing written");
+    }
   }
 }

@@ -25,7 +25,6 @@ interface IReality {
   ) external payable returns (bytes32);
   function resultForOnceSettled(bytes32 _questionId) external view returns (bytes32);
   function getBond(bytes32 _questionId) external view returns (uint256);
-  function isPendingArbitration(bytes32 _questionId) external view returns (bool);
 }
 
 /**
@@ -57,8 +56,8 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
 
   struct Market {
     address opener;
-    uint40 closesAt;
-    uint40 resolvesAt;
+    uint32 closesAt;
+    uint32 resolvesAt;
     Kind kind;
     Status status;
     // every stake comes back: no revealed winner, no loser, or void
@@ -67,6 +66,8 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     bool invalid;
     bool lockClaimed;
     address feed;
+    // how old the price may be at resolve time, fixed when the market opens
+    uint32 maxStale;
     int256 threshold;
     bytes32 questionId;
     uint256 lock;
@@ -115,8 +116,8 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     address indexed opener,
     Kind kind,
     bytes32 indexed contentHash,
-    uint40 closesAt,
-    uint40 resolvesAt,
+    uint32 closesAt,
+    uint32 resolvesAt,
     uint256 lock
   );
   event PriceMarket(uint256 indexed id, address feed, int256 threshold);
@@ -187,7 +188,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
    * @notice Open a market on a price: YES when the feed's price at `_resolvesAt` is at least `_threshold`
    * @param _contentHash keccak256 of the market text published off-chain, so it can never change
    */
-  function openPrice(bytes32 _contentHash, address _feed, int256 _threshold, uint40 _closesAt, uint40 _resolvesAt)
+  function openPrice(bytes32 _contentHash, address _feed, int256 _threshold, uint32 _closesAt, uint32 _resolvesAt)
     external
     nonReentrant
     returns (uint256 _id)
@@ -197,6 +198,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     _id = _open(Kind.Price, _contentHash, _closesAt, _resolvesAt);
     Market storage _m = markets[_id];
     _m.feed = _feed;
+    _m.maxStale = uint32(maxStale[_feed]);
     _m.threshold = _threshold;
     emit PriceMarket(_id, _feed, _threshold);
   }
@@ -206,7 +208,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
    *         ETH sent along is the bounty for whoever answers it.
    * @param _question The Reality.eth question string (title, category and language joined by U+241F)
    */
-  function openEvent(string calldata _question, uint40 _closesAt, uint40 _resolvesAt)
+  function openEvent(string calldata _question, uint32 _closesAt, uint32 _resolvesAt)
     external
     payable
     nonReentrant
@@ -215,7 +217,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     _id = _open(Kind.Event, keccak256(bytes(_question)), _closesAt, _resolvesAt);
     // the market id is the nonce, so two markets with the same question and time are still two questions
     bytes32 _qid = REALITY.askQuestionWithMinBond{value: msg.value}(
-      0, _question, arbitrator, ANSWER_TIMEOUT, uint32(_resolvesAt), _id, minBond
+      0, _question, arbitrator, ANSWER_TIMEOUT, _resolvesAt, _id, minBond
     );
     markets[_id].questionId = _qid;
     emit EventMarket(_id, _qid, _question, arbitrator, minBond);
@@ -287,18 +289,22 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     }
     if (_nextAt <= _t) revert BadRound();
 
-    if (_t - _at > maxStale[_m.feed] || _answer <= 0) return _finish(_id, Status.Void);
-    _finish(_id, _answer >= _m.threshold ? Status.Yes : Status.No);
+    if (_t - _at > _m.maxStale || _answer <= 0) _finish(_id, Status.Void);
+    else _finish(_id, _answer >= _m.threshold ? Status.Yes : Status.No);
   }
 
   /// @notice Settle an event market once its Reality.eth answer is final. An invalid answer voids the market.
   function settleEvent(uint256 _id) external nonReentrant {
     Market storage _m = _settling(_id, Kind.Event);
     bytes32 _answer = REALITY.resultForOnceSettled(_m.questionId);
-    if (_answer == bytes32(uint256(1))) return _finish(_id, Status.Yes);
-    if (_answer == bytes32(0)) return _finish(_id, Status.No);
-    _m.invalid = true;
-    _finish(_id, Status.Void);
+    if (_answer == bytes32(uint256(1))) {
+      _finish(_id, Status.Yes);
+    } else if (_answer == bytes32(0)) {
+      _finish(_id, Status.No);
+    } else {
+      _m.invalid = true;
+      _finish(_id, Status.Void);
+    }
   }
 
   /**
@@ -312,7 +318,8 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
       try REALITY.resultForOnceSettled(_m.questionId) returns (bytes32) {
         revert Settleable();
       } catch {}
-      bool _unanswered = REALITY.getBond(_m.questionId) == 0 && !REALITY.isPendingArbitration(_m.questionId);
+      // no bond means nobody ever answered, and arbitration can only be asked for once someone has
+      bool _unanswered = REALITY.getBond(_m.questionId) == 0;
       if (block.timestamp < _m.resolvesAt + (_unanswered ? NO_ANSWER_VOID : HARD_STOP)) revert TooEarly();
     } else if (block.timestamp < _m.resolvesAt + HARD_STOP) {
       revert TooEarly();
@@ -377,7 +384,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     _setFeed(_feed, _maxStale);
   }
 
-  function _open(Kind _kind, bytes32 _contentHash, uint40 _closesAt, uint40 _resolvesAt)
+  function _open(Kind _kind, bytes32 _contentHash, uint32 _closesAt, uint32 _resolvesAt)
     internal
     returns (uint256 _id)
   {
@@ -449,12 +456,14 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
   }
 
   function _setArbitrator(address _arbitrator) internal {
+    if (_arbitrator == address(0)) revert ZeroAddress();
     arbitrator = _arbitrator;
     emit ArbitratorSet(_arbitrator);
   }
 
   function _setFeed(address _feed, uint256 _maxStale) internal {
     if (_feed == address(0)) revert ZeroAddress();
+    if (_maxStale > type(uint32).max) revert BadTimes();
     maxStale[_feed] = _maxStale;
     emit FeedSet(_feed, _maxStale);
   }
