@@ -81,7 +81,6 @@ contract DeployRiddle is Script {
     // only on a real broadcast, so a simulation never records an address that was not deployed
     if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
       vm.writeJson(vm.toString(address(_riddle)), _file, ".riddle");
-      vm.writeJson(vm.toString(block.number), _file, ".riddleBlock");
       console.log("riddle", address(_riddle), "added to", _file);
     } else {
       console.log("simulated, nothing written");

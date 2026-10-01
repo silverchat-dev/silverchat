@@ -49,6 +49,7 @@ export function SolvePanel({ answerHashOnChain }: { answerHashOnChain: Hex }) {
   const kept = address && hasSeal ? loadGuess(address, sealed) : null;
   const left = hasSeal && block.data !== undefined ? sealedAt + REVEAL_DELAY - block.data : null;
   const over = state.data === true || closed.data === true;
+  const countdown = left === null ? null : left > 0n ? `Reveal it in ${left} ${left === 1n ? "block" : "blocks"}.` : "You can reveal it now.";
 
   async function run(label: string, fn: () => Promise<Hex>) {
     if (!client) return;
@@ -129,8 +130,7 @@ export function SolvePanel({ answerHashOnChain }: { answerHashOnChain: Hex }) {
       ) : hasSeal && kept ? (
         <div className="space-y-3">
           <p>
-            Your guess is sealed on-chain.{" "}
-            {left === null ? null : left > 0n ? `Reveal it in ${left} ${left === 1n ? "block" : "blocks"}.` : "You can reveal it now."}
+            Your guess is sealed on-chain. {countdown}
           </p>
           <p className="break-all font-mono text-xs text-developer/70">Salt, kept in this browser: {kept.salt}. Copy it somewhere safe.</p>
           <p className="text-sm text-developer/70">
@@ -143,7 +143,10 @@ export function SolvePanel({ answerHashOnChain }: { answerHashOnChain: Hex }) {
         </div>
       ) : hasSeal ? (
         <div className="space-y-4 text-sm">
-          <p>This wallet has a sealed guess, but this browser does not hold it. Paste the answer and salt you sealed to reveal it.</p>
+          <p>
+            This wallet has a sealed guess, but this browser does not hold it. Paste the answer and salt you sealed to reveal
+            it. {countdown}
+          </p>
           <input value={pasted.answer} onChange={(e) => setPasted({ ...pasted, answer: e.target.value })} placeholder="the answer you sealed" className="w-full border-b border-developer/40 bg-transparent py-1 outline-none" />
           <input value={pasted.salt} onChange={(e) => setPasted({ ...pasted, salt: e.target.value.trim() })} placeholder="its salt, 0x…" className="w-full border-b border-developer/40 bg-transparent py-1 font-mono text-xs outline-none" />
           {pasted.answer && pasted.salt && !pastedOpens && <p>That is not the answer and salt you sealed.</p>}
@@ -155,13 +158,13 @@ export function SolvePanel({ answerHashOnChain }: { answerHashOnChain: Hex }) {
             <p className="mt-2">
               Sealing again replaces your seal and restarts the ten blocks. If you already sent a reveal, that reveal fails.
             </p>
-            <button type="button" disabled={busy || !right || mine.isPending} className={`${button} mt-3`} onClick={seal}>
+            <button type="button" disabled={busy || !right || !mine.isSuccess} className={`${button} mt-3`} onClick={seal}>
               Seal my answer again
             </button>
           </details>
         </div>
       ) : (
-        <button type="button" disabled={busy || !right || mine.isPending} className={button} onClick={seal}>
+        <button type="button" disabled={busy || !right || !mine.isSuccess} className={button} onClick={seal}>
           {busy ? note : "Seal my answer"}
         </button>
       )}
