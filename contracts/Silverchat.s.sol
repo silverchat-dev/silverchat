@@ -3,9 +3,11 @@ pragma solidity 0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Script, console} from "forge-std/Script.sol";
+import {VmSafe} from "forge-std/Vm.sol";
 
 import {SilverAlgorithm} from "./SilverAlgorithm.sol";
 import {SilverAsk} from "./SilverAsk.sol";
+import {SilverRiddle} from "./SilverRiddle.sol";
 
 /**
  * @notice Deploys the Silverchat contracts. The deployer keeps no role: every role goes to the addresses in the env.
@@ -44,5 +46,41 @@ contract Deploy is Script {
     string memory _file = string.concat("./deployments/", vm.envString("OUT"), ".json");
     vm.writeJson(_json, _file);
     console.log("wrote", _file);
+  }
+}
+
+/**
+ * @notice Deploys SilverRiddle and adds its address to an existing deployments/<OUT>.json. The seven days before the
+ *         Safe may reclaim start now, so deploy when the site and the repository are public, and fund it right after.
+ *   SAFE          the Safe that may reclaim the prize after seven days
+ *   ANSWER_HASH   keccak256 of the normalized answer; the answer itself never goes into the repository or the env
+ *   OUT           deployment name; deployments/<OUT>.json must exist
+ *   SC            optional; mainnet $SC by default
+ */
+contract DeployRiddle is Script {
+  address constant MAINNET_SC = 0x3C3959052f60cbddC498b384958841b718112353;
+
+  function run() external {
+    IERC20 _sc = IERC20(vm.envOr("SC", MAINNET_SC));
+    require(address(_sc).code.length != 0, "no SC on this chain");
+    string memory _file = string.concat("./deployments/", vm.envString("OUT"), ".json");
+    require(vm.exists(_file), "deploy SilverAsk first");
+    require(vm.parseJsonUint(vm.readFile(_file), ".chainId") == block.chainid, "OUT is for another chain");
+    bytes32 _hash = vm.envBytes32("ANSWER_HASH");
+    console.log("safe       ", vm.envAddress("SAFE"));
+    console.logBytes32(_hash);
+
+    vm.startBroadcast();
+    SilverRiddle _riddle = new SilverRiddle(_sc, _hash, vm.envAddress("SAFE"));
+    vm.stopBroadcast();
+
+    // only on a real broadcast, so a simulation never records an address that was not deployed
+    if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+      vm.writeJson(vm.toString(address(_riddle)), _file, ".riddle");
+      vm.writeJson(vm.toString(block.number), _file, ".riddleBlock");
+      console.log("riddle", address(_riddle), "added to", _file);
+    } else {
+      console.log("simulated, nothing written");
+    }
   }
 }

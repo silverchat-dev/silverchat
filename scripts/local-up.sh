@@ -7,6 +7,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RPC=http://127.0.0.1:8545
 ZC=0x4E67DB19044549fF420860834c91b45BaD298722
+SC=0x3C3959052f60cbddC498b384958841b718112353
+# the fork's riddle has a made-up answer; the real one never leaves the team
+RIDDLE_ANSWER=${RIDDLE_ANSWER:-the silver print develops in the dark}
 POOL_MANAGER=0x000000000004444c5dc75cB358380D2e3dE08A90
 
 # anvil default test accounts; these keys are public test keys. The deployer holds no role, as on mainnet.
@@ -25,11 +28,15 @@ mkdir -p deployments
 OUT=local OWNER=$(addr $OWNER_PK) TREASURY=0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 POSTER=$(addr $POSTER_PK) \
   PRICER=$(addr $PRICER_PK) RULES_HASH=$RULES_HASH RULES_SOURCE=web/src/lib/algorithm.ts \
   forge script Silverchat.s.sol:Deploy --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
+OUT=local SAFE=$(addr $OWNER_PK) ANSWER_HASH=$(cast keccak "$RIDDLE_ANSWER") \
+  forge script Silverchat.s.sol:DeployRiddle --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
+RIDDLE=$(python3 -c "import json; print(json.load(open('deployments/local.json'))['riddle'])")
 
 # ZC for the test wallet, straight out of the v4 PoolManager
 cast rpc anvil_impersonateAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 cast rpc anvil_setBalance $POOL_MANAGER 0x56BC75E2D63100000 --rpc-url $RPC >/dev/null
 cast send $ZC "transfer(address,uint256)" "$WALLET" 5000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
+cast send $SC "transfer(address,uint256)" "$RIDDLE" 2000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
 cast rpc anvil_stopImpersonatingAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 
 python3 - "$ROOT/contracts/deployments/local.json" "$ROOT/web/.env.local" "$POSTER_PK" "$PRICER_PK" <<'PY'
@@ -41,6 +48,9 @@ NEXT_PUBLIC_RPC_URL=http://127.0.0.1:8545
 NEXT_PUBLIC_ASK={d['ask']}
 NEXT_PUBLIC_ALGORITHM={d['algorithm']}
 NEXT_PUBLIC_DEPLOY_BLOCK={d['deployBlock']}
+NEXT_PUBLIC_SC=0x3C3959052f60cbddC498b384958841b718112353
+NEXT_PUBLIC_RIDDLE={d['riddle']}
+NEXT_PUBLIC_RIDDLE_BLOCK={d['riddleBlock']}
 RPC_URL=http://127.0.0.1:8545
 POSTER_PRIVATE_KEY={sys.argv[3]}
 PRICER_PRIVATE_KEY={sys.argv[4]}
