@@ -44,8 +44,10 @@ export type PollRow = {
   answers?: number;
 };
 
+export type Ledger = { status: PollRow["status"]; cost: string; reward_total: string | null; block: string; finalize_at: number | null };
+
 // on globalThis so the background loops and the route handlers share one copy in dev
-export type AnswerRow = { poll_id: string; voter: Address; choices: number[]; region: string; age: string; salt: string; signature: string };
+export type AnswerRow = { poll_id: string; voter: Address; choices: number[]; region: string; age: string; salt: string; signature: string; at?: number };
 
 const g = globalThis as typeof globalThis & {
   silverchatMem?: { drafts: Map<string, string>; polls: Map<string, PollRow>; answers: Map<string, AnswerRow>; kv: Map<string, string> };
@@ -257,7 +259,7 @@ export const db = {
     if (!pool) {
       const k = `${a.poll_id}:${a.voter}`;
       if (mem.answers.has(k)) return false;
-      mem.answers.set(k, a);
+      mem.answers.set(k, { ...a, at: Date.now() });
       return true;
     }
     // only while the poll is still open in the database, so nothing slips in after the finalizer has read the answers
@@ -270,15 +272,25 @@ export const db = {
     return r.rowCount === 1;
   },
 
-  /** Every poll's money fields and the total answer count, hidden polls included (they are paid like any other). */
-  async ledger(): Promise<{ polls: { status: PollRow["status"]; cost: string; reward_total: string | null }[]; answers: number }> {
+  /**
+   * Every poll's money fields and when it was asked and fixed, the total answer count and the answers of the last 24
+   * hours, hidden polls included (they are paid like any other).
+   */
+  async ledger(): Promise<{ polls: Ledger[]; answers: number; dayAnswers: number }> {
     await init();
-    if (!pool) return { polls: [...mem.polls.values()].map((p) => ({ status: p.status, cost: p.cost, reward_total: p.reward_total })), answers: mem.answers.size };
+    if (!pool) {
+      const since = Date.now() - 86_400_000;
+      return {
+        polls: [...mem.polls.values()].map((p) => ({ status: p.status, cost: p.cost, reward_total: p.reward_total, block: p.block, finalize_at: p.finalize_at ?? null })),
+        answers: mem.answers.size,
+        dayAnswers: [...mem.answers.values()].filter((a) => (a.at ?? 0) >= since).length,
+      };
+    }
     const [p, a] = await Promise.all([
-      pool.query(`select status, cost::text as cost, reward_total::text as reward_total from polls`),
-      pool.query(`select count(*)::int as n from answers`),
+      pool.query(`select status, cost::text as cost, reward_total::text as reward_total, block::text as block, finalize_at::float8 as finalize_at from polls`),
+      pool.query(`select count(*)::int as n, (count(*) filter (where created_at > now() - interval '1 day'))::int as day from answers`),
     ]);
-    return { polls: p.rows, answers: a.rows[0].n };
+    return { polls: p.rows, answers: a.rows[0].n, dayAnswers: a.rows[0].day };
   },
 
   async answerCount(pollId: string) {

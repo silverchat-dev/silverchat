@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { people, span, tokens } from "@/lib/format";
+import { lead, people, span, tokens } from "@/lib/format";
 import { Topics, pickTopic } from "@/components/topics";
 import { topicOf, type Content } from "@/lib/content";
+import { db } from "@/lib/server/db";
 import { liveFeed } from "@/lib/server/feed";
+import { stats } from "@/lib/server/stats";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Pulse · silverchat" };
@@ -31,6 +33,8 @@ export default async function PulsePage({ searchParams }: PageProps<"/pulse">) {
         </p>
         <Topics base="/pulse" active={topic} />
       </header>
+
+      {!topic && <NetworkNow />}
 
       {live.length ? (
         <ol className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
@@ -75,6 +79,61 @@ export default async function PulsePage({ searchParams }: PageProps<"/pulse">) {
             </Link>
           </div>
         </div>
+      )}
+    </section>
+  );
+}
+
+/** The last 24 hours across the whole network, and the newest fixed results. */
+async function NetworkNow() {
+  const [s, fixed] = await Promise.all([stats(), db.polls(4, "final")]);
+  const figures: [string, string][] = [
+    ["Answers", s.dayAnswers.toLocaleString("en-US")],
+    ["ZC paid in", s.daySpent === null ? "·" : tokens(s.daySpent, 0)],
+    ["ZC burned", tokens(s.dayBurned, 0)],
+  ];
+
+  return (
+    <section aria-labelledby="now" className="grid gap-3 lg:grid-cols-[20rem_minmax(0,1fr)]">
+      <div className="space-y-5 bg-tray p-6">
+        <h2 id="now" className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
+          The network now · last 24 hours
+        </h2>
+        <dl className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+          {figures.map(([k, v]) => (
+            <div key={k} className="flex items-baseline justify-between gap-4 sm:block sm:space-y-1">
+              <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-silver">{k}</dt>
+              <dd className="text-[clamp(1.5rem,3vw,2.25rem)] leading-none tabular-nums">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <Link href="/stats" className="inline-block font-mono text-xs text-paper/80 underline underline-offset-4 hover:text-paper">
+          Every number since launch
+        </Link>
+      </div>
+
+      {fixed.length > 0 && (
+        <ol className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Just fixed">
+          {fixed.map((p) => {
+            const content = p.content ? (JSON.parse(p.content) as Content) : null;
+            const top = lead(content, p.tally);
+            return (
+              <li key={p.id}>
+                <Link
+                  href={`/poll/${p.id}`}
+                  className="flex h-full min-h-44 flex-col justify-between gap-4 bg-[url(/plates/paper.webp)] bg-cover p-4 text-developer transition-[filter] duration-300 hover:brightness-[1.04]"
+                >
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-developer/60">Fixed · No. {p.id}</span>
+                  <span className="space-y-1">
+                    <span className="block text-4xl leading-none tabular-nums">{top ? `${top.share}%` : "·"}</span>
+                    <span className="block truncate font-mono text-[11px] uppercase tracking-[0.12em]">{top?.option ?? "no answers"}</span>
+                  </span>
+                  <span className="line-clamp-3 text-sm leading-snug text-developer/80">{content?.questions[0].q ?? "Question not published"}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
       )}
     </section>
   );

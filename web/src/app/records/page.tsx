@@ -1,22 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import type { Tally } from "@/lib/algorithm";
 import { Topics, pickTopic } from "@/components/topics";
 import { topicOf, type Content } from "@/lib/content";
 import { EXPLORER } from "@/lib/config";
-import { pct, short, tokens } from "@/lib/format";
+import { lead, short, tokens } from "@/lib/format";
 import { db } from "@/lib/server/db";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Records · silverchat" };
-
-function lead(content: Content | null, tally: Tally | null | undefined) {
-  if (!content || !tally?.answers) return null;
-  const counts = tally.totals[0];
-  const k = counts.indexOf(Math.max(...counts));
-  return { option: content.questions[0].options[k], share: pct(counts[k], tally.answers) };
-}
 
 export default async function RecordsPage({ searchParams }: PageProps<"/records">) {
   const topic = pickTopic((await searchParams).topic);

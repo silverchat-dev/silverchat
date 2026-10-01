@@ -1,5 +1,8 @@
 import { formatUnits } from "viem";
 
+import type { Tally } from "./algorithm";
+import type { Content } from "./content";
+
 const nf = (max: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: max });
 
 /** 1443790374958775117520n -> "1,443.79" */
@@ -24,3 +27,11 @@ export function span(seconds: number) {
 }
 
 export const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
+
+/** The first question's leading option and its share of the answers, once a result is fixed. */
+export function lead(content: Content | null, tally: Tally | null | undefined) {
+  if (!content || !tally?.answers) return null;
+  const counts = tally.totals[0];
+  const k = counts.indexOf(Math.max(...counts));
+  return { option: content.questions[0].options[k], share: pct(counts[k], tally.answers) };
+}
