@@ -105,6 +105,20 @@ contract SilverRiddleTest is Test {
     assertEq(sc.balanceOf(solver), 2_000_000 ether);
   }
 
+  function test_the_safe_sweeps_other_tokens_but_never_the_prize() public {
+    Coin _zc = new Coin();
+    _zc.mint(address(riddle), 9 ether);
+    vm.expectRevert(SilverRiddle.NotSafe.selector);
+    riddle.sweep(IERC20(address(_zc)));
+    vm.startPrank(safe);
+    vm.expectRevert(SilverRiddle.NotOtherToken.selector);
+    riddle.sweep(IERC20(address(sc)));
+    riddle.sweep(IERC20(address(_zc)));
+    vm.stopPrank();
+    assertEq(_zc.balanceOf(safe), 9 ether);
+    assertEq(sc.balanceOf(address(riddle)), 2_000_000 ether);
+  }
+
   function test_reclaim_after_a_solve_sweeps_what_was_sent_later() public {
     _commit(solver, ANSWER);
     vm.roll(vm.getBlockNumber() + 10);
@@ -129,15 +143,15 @@ contract SilverRiddleFork is Test {
     address _solver = makeAddr("fresh solver");
     SilverRiddle _riddle = new SilverRiddle(SC, keccak256(bytes(ANSWER)), _safe);
     vm.prank(POOL_MANAGER);
-    SC.transfer(address(_riddle), 4_000_000 ether);
-    assertEq(SC.balanceOf(address(_riddle)), 4_000_000 ether);
+    SC.transfer(address(_riddle), 2_000_000 ether);
+    assertEq(SC.balanceOf(address(_riddle)), 2_000_000 ether);
 
     vm.prank(_solver);
     _riddle.commit(keccak256(abi.encode(_solver, ANSWER, bytes32("salt"))));
     vm.roll(vm.getBlockNumber() + 10);
     vm.prank(_solver);
     _riddle.reveal(ANSWER, bytes32("salt"));
-    assertEq(SC.balanceOf(_solver), 4_000_000 ether);
+    assertEq(SC.balanceOf(_solver), 2_000_000 ether);
 
     // the reclaim path moves 2,000,000 to the Safe through the same hook
     vm.prank(POOL_MANAGER);

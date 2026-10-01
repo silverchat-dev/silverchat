@@ -39,7 +39,7 @@ cast send $ZC "transfer(address,uint256)" "$WALLET" 5000000000000000000000000 --
 cast send $SC "transfer(address,uint256)" "$RIDDLE" 2000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
 cast rpc anvil_stopImpersonatingAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 
-python3 - "$ROOT/contracts/deployments/local.json" "$ROOT/web/.env.local" "$POSTER_PK" "$PRICER_PK" <<'PY'
+python3 - "$ROOT/contracts/deployments/local.json" "$ROOT/web/.env.local" "$POSTER_PK" "$PRICER_PK" "$SC" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 open(sys.argv[2], "w").write(f"""# local anvil fork of mainnet (anvil default test keys only)
@@ -48,7 +48,7 @@ NEXT_PUBLIC_RPC_URL=http://127.0.0.1:8545
 NEXT_PUBLIC_ASK={d['ask']}
 NEXT_PUBLIC_ALGORITHM={d['algorithm']}
 NEXT_PUBLIC_DEPLOY_BLOCK={d['deployBlock']}
-NEXT_PUBLIC_SC=0x3C3959052f60cbddC498b384958841b718112353
+NEXT_PUBLIC_SC={sys.argv[5]}
 NEXT_PUBLIC_RIDDLE={d['riddle']}
 NEXT_PUBLIC_RIDDLE_BLOCK={d['riddleBlock']}
 RPC_URL=http://127.0.0.1:8545

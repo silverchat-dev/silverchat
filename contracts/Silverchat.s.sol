@@ -67,11 +67,14 @@ contract DeployRiddle is Script {
     require(vm.exists(_file), "deploy SilverAsk first");
     require(vm.parseJsonUint(vm.readFile(_file), ".chainId") == block.chainid, "OUT is for another chain");
     bytes32 _hash = vm.envBytes32("ANSWER_HASH");
-    console.log("safe       ", vm.envAddress("SAFE"));
+    address _safe = vm.envAddress("SAFE");
+    // the Safe is the only key to the prize and can never change
+    if (block.chainid == 1) require(_safe.code.length != 0, "SAFE is not a contract");
+    console.log("safe       ", _safe);
     console.logBytes32(_hash);
 
     vm.startBroadcast();
-    SilverRiddle _riddle = new SilverRiddle(_sc, _hash, vm.envAddress("SAFE"));
+    SilverRiddle _riddle = new SilverRiddle(_sc, _hash, _safe);
     vm.stopBroadcast();
 
     // only on a real broadcast, so a simulation never records an address that was not deployed
