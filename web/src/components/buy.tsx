@@ -22,8 +22,8 @@ const SC_KEY = keyFor(ADDR.sc, ADDR.zc);
 const pair = (coin: Coin) => (coin === "zc" ? { key: POOL_KEY, quote: ADDR.weth } : { key: SC_KEY, quote: ADDR.zc });
 
 /** When a quote fails, the one way out: the coin's own page on Stockereum. */
-export const STOCKEREUM_ZC = `https://stockereum.com/t/${ADDR.zc}`;
 const stockereum = (coin: Coin) => `https://stockereum.com/t/${coin === "zc" ? ADDR.zc : ADDR.sc}`;
+export const STOCKEREUM_ZC = stockereum("zc");
 
 // bought on top of what's needed, so a small price move between quote and buy doesn't revert it; it stays in the wallet
 export const withBuffer = (amount: bigint) => (amount * 103n) / 100n;
@@ -46,6 +46,7 @@ export async function ethFor(client: PublicClient, want: bigint, coin: Coin = "z
   let best: bigint | null = null;
   for (let i = 0; i < 4; i++) {
     const out = await quote(eth);
+    if (out === 0n) throw new Error("could not price that amount");
     if (out >= want) {
       if (best === null || eth < best) best = eth;
       if (out - want <= want / 200n) break;
@@ -60,7 +61,8 @@ export async function ethFor(client: PublicClient, want: bigint, coin: Coin = "z
 export function useEthFor(want: bigint | null, coin: Coin = "zc") {
   const client = usePublicClient();
   const { address } = useAccount();
-  const eth = useBalance({ address, query: { enabled: !!address } });
+  // polled, so after one buy the other button sees the ETH that is left
+  const eth = useBalance({ address, query: { enabled: !!address, refetchInterval: 15_000 } });
   const q = useQuery({
     queryKey: ["eth-for", coin, want?.toString()],
     enabled: !!client && !!want && want > 0n,
