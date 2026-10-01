@@ -20,7 +20,7 @@ commit=$(git rev-parse origin/main)
 riddle=()
 if python3 -c "import json,sys; sys.exit('riddle' not in json.load(open('$out')))"; then
   [ "$(cast code "$(get riddle)" --rpc-url "$rpc" 2>/dev/null)" != 0x ] || { echo "no contract at riddle $(get riddle)" >&2; exit 1; }
-  riddle=("NEXT_PUBLIC_RIDDLE=$(get riddle)" "NEXT_PUBLIC_RIDDLE_BLOCK=$(get riddleBlock)")
+  riddle=("NEXT_PUBLIC_RIDDLE=$(get riddle)")
 fi
 
 "$railway" variable set --service web --skip-deploys \

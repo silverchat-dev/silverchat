@@ -39,12 +39,10 @@ export const priceFeedAbi = parseAbi([
 export const riddleAbi = parseAbi([
   "function ANSWER_HASH() view returns (bytes32)",
   "function DEADLINE() view returns (uint256)",
-  "function REVEAL_DELAY() view returns (uint256)",
   "function solved() view returns (bool)",
   "function closed() view returns (bool)",
   "function winner() view returns (address)",
   "function commits(address solver) view returns (bytes32 hash, uint256 blockNumber)",
   "function commit(bytes32 hash)",
   "function reveal(string answer, bytes32 salt)",
-  "event Solved(address indexed winner, string answer, uint256 amount)",
 ]);

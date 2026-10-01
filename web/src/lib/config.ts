@@ -24,7 +24,6 @@ export const ADDR = {
 };
 
 export const DEPLOY_BLOCK = BigInt(process.env.NEXT_PUBLIC_DEPLOY_BLOCK ?? "0");
-export const RIDDLE_BLOCK = BigInt(process.env.NEXT_PUBLIC_RIDDLE_BLOCK ?? "0");
 
 export const EXPLORER = "https://etherscan.io";
 export const BOOK_URL = "https://vitalik.eth.limo/snowmoon/html/";

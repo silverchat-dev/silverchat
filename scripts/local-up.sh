@@ -28,7 +28,7 @@ mkdir -p deployments
 OUT=local OWNER=$(addr $OWNER_PK) TREASURY=0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 POSTER=$(addr $POSTER_PK) \
   PRICER=$(addr $PRICER_PK) RULES_HASH=$RULES_HASH RULES_SOURCE=web/src/lib/algorithm.ts \
   forge script Silverchat.s.sol:Deploy --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
-OUT=local SAFE=$(addr $OWNER_PK) ANSWER_HASH=$(cast keccak "$RIDDLE_ANSWER") \
+OUT=local SAFE=$(addr $OWNER_PK) ANSWER_HASH=$(echo "$RIDDLE_ANSWER" | (cd "$ROOT/web" && npx -y tsx scripts/riddle-hash.mts 2>/dev/null)) \
   forge script Silverchat.s.sol:DeployRiddle --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
 RIDDLE=$(python3 -c "import json; print(json.load(open('deployments/local.json'))['riddle'])")
 
@@ -50,7 +50,6 @@ NEXT_PUBLIC_ALGORITHM={d['algorithm']}
 NEXT_PUBLIC_DEPLOY_BLOCK={d['deployBlock']}
 NEXT_PUBLIC_SC={sys.argv[5]}
 NEXT_PUBLIC_RIDDLE={d['riddle']}
-NEXT_PUBLIC_RIDDLE_BLOCK={d['riddleBlock']}
 RPC_URL=http://127.0.0.1:8545
 POSTER_PRIVATE_KEY={sys.argv[3]}
 PRICER_PRIVATE_KEY={sys.argv[4]}

@@ -53,7 +53,8 @@ contract Deploy is Script {
  * @notice Deploys SilverRiddle and adds its address to an existing deployments/<OUT>.json. The seven days before the
  *         Safe may reclaim start now, so deploy when the site and the repository are public, and fund it right after.
  *   SAFE          the Safe that may reclaim the prize after seven days
- *   ANSWER_HASH   keccak256 of the normalized answer; the answer itself never goes into the repository or the env
+ *   ANSWER_HASH   from web/scripts/riddle-hash.mts, which normalizes like the page; the answer itself never goes into
+ *                 the repository or the env
  *   OUT           deployment name; deployments/<OUT>.json must exist
  *   SC            optional; mainnet $SC by default
  */
