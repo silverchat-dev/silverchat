@@ -78,13 +78,13 @@ export function StakePanel({ market: m, now }: { market: MarketView; now: number
     try {
       const hash = await fn();
       if (hash && (await client.waitForTransactionReceipt({ hash })).status !== "success") throw new Error("the transaction reverted");
+    } catch (e) {
+      setError(explain(e));
+    } finally {
+      // whatever happened, show what the chain holds now
       setNote(null);
       await stake.refetch();
       router.refresh();
-    } catch (e) {
-      setNote(null);
-      setError(explain(e));
-    } finally {
       setBusy(false);
     }
   }
@@ -125,7 +125,8 @@ export function StakePanel({ market: m, now }: { market: MarketView; now: number
       const sealed = commitmentOf(id, address, side, salt);
       // kept before anything is sent: without it this browser could not reveal
       const kept = saveSeal(m.id, address, sealed, { side, salt });
-      if (!kept && !handOver) throw new Error("this browser cannot keep your seal; let the keeper reveal for you, or use a browser that allows site storage");
+      // one sure holder of the seal before any ZC moves: the keeper may not take it right away
+      if (!kept) throw new Error("this browser cannot keep your seal, so it could not reveal your side; use a browser that allows site storage");
       const allowance = await client.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "allowance", args: [address, ADDR.predict] });
       if (allowance < wei) {
         setNote("Approve the ZC in your wallet…");
@@ -136,7 +137,7 @@ export function StakePanel({ market: m, now }: { market: MarketView; now: number
       const tx = await write("stake", [id, wei, sealed]);
       if ((await client.waitForTransactionReceipt({ hash: tx })).status !== "success") throw new Error("the stake reverted");
       if (handOver && !(await handSeal({ side, salt }))) {
-        throw new Error("your stake is in, but the keeper did not get your seal. Use the button below to hand it over again");
+        setError("Your stake is in, but the keeper did not get your seal. Use the link above to hand it over again.");
       }
     });
   }

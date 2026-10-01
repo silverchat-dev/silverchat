@@ -50,9 +50,9 @@ export default async function MarketPage({ params }: PageProps<"/predict/[id]">)
   const facts: [string, string][] = [
     ["Staked", `${tokens(m.pool, 0)} ZC`],
     ["Stakes", String(m.stakes)],
-    ["Staking closes", utc(m.closesAt)],
+    ["Closes", utc(m.closesAt)],
     ["Reveals end", utc(m.revealEnds)],
-    [m.kind === "price" ? "Price read at" : "Question opens", utc(m.resolvesAt)],
+    [m.kind === "price" ? "Price read" : "Opens", utc(m.resolvesAt)],
     ["SC locked", `${tokens(m.lock, 0)} by ${short(m.opener)}`],
   ];
 
