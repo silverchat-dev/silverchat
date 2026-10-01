@@ -26,6 +26,7 @@ export const algorithmAbi = parseAbi([
 export const routerAbi = parseAbi([
   "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
   "function buyWethPairWithEth(PoolKey key, uint256 minOut, bytes hookData) payable returns (uint256 amountOut)",
+  "function buyWithEth(PoolKey key, address quote, uint256 minQuoteOut, uint256 minOut, bytes hookData) payable returns (uint256 amountOut)",
   "function quoteBuyWithEth(PoolKey key, address quote, uint256 ethIn) view returns (uint256 quoteIn, uint256 tokensOut)",
 ]);
 
