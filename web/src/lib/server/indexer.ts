@@ -36,9 +36,10 @@ async function run() {
   let from = saved ? BigInt(saved) + 1n : DEPLOY_BLOCK;
   // SilverPredict goes live after SilverAsk: the first time it is on, read its logs from its own deploy block
   const predictOn = ADDR.predict !== ZERO && PREDICT_BLOCK > 0n;
-  const rewind = predictOn && !(await db.get("indexer:predict"));
+  // keyed by address, so a new SilverPredict is read from its own deploy block too
+  const rewind = predictOn && !(await db.get(`indexer:predict:${ADDR.predict.toLowerCase()}`));
   if (rewind && PREDICT_BLOCK < from) from = PREDICT_BLOCK;
-  if (!rewind && from > head - TAIL) from = head - TAIL;
+  if (from > head - TAIL) from = head - TAIL;
   if (from < DEPLOY_BLOCK) from = DEPLOY_BLOCK;
 
   while (from <= head) {
@@ -89,6 +90,6 @@ async function run() {
     await db.set("indexer", String(to));
     from = to + 1n;
   }
-  if (rewind) await db.set("indexer:predict", "1");
+  if (rewind) await db.set(`indexer:predict:${ADDR.predict.toLowerCase()}`, "1");
   await db.pruneDrafts();
 }

@@ -1,9 +1,9 @@
 import "server-only";
 
-import { BaseError, ContractFunctionRevertedError, formatEther, parseGwei, type Address, type Hex, type Log } from "viem";
+import { BaseError, ContractFunctionRevertedError, formatEther, parseGwei, TransactionNotFoundError, type Hex, type Log, type Address } from "viem";
 
 import { predictAbi, priceFeedAbi, realityAbi } from "@/lib/abi";
-import { ADDR, ZERO } from "@/lib/config";
+import { ADDR, CHAIN_ID, ZERO } from "@/lib/config";
 import { badTitle, commitmentOf, feedName, KEEPER_REVEALS_AFTER, priceTitle, REVEAL_WINDOW, STATUS, titleOf, type Side } from "@/lib/market";
 
 import { publicClient, send, walletFor } from "./chain";
@@ -156,16 +156,20 @@ async function stillInFlight(id: string) {
     await syncMarkets([id]);
     return false;
   }
-  const pending = await publicClient.getTransaction({ hash }).then(() => true, () => false);
+  // only "not found" means dropped; a failed lookup is not a reason to send twice
+  const pending = await publicClient.getTransaction({ hash }).then(() => true, (e) => !(e instanceof TransactionNotFoundError));
   if (!pending) inflight.delete(id);
   return pending;
 }
 
-/** Send, wait two blocks, then read the market back. A reorg of one block cannot leave the record ahead of the chain. */
-async function sendAndWait(id: string, c: { address: Address; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }, cap?: bigint) {
-  const hash = await send(keeper!, c as Parameters<typeof send>[1], cap);
+/**
+ * Send, wait, then read the market back. On mainnet it waits two blocks, so a one-block reorg cannot leave the record
+ * ahead of the chain; a local fork only makes blocks when it is sent something.
+ */
+async function sendAndWait(id: string, c: Parameters<typeof send>[1], cap?: bigint) {
+  const hash = await send(keeper!, c, cap);
   inflight.set(id, hash);
-  const receipt = await publicClient.waitForTransactionReceipt({ hash, confirmations: 2, timeout: 180_000 });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash, confirmations: CHAIN_ID === 1 ? 2 : 1, timeout: 180_000 });
   inflight.delete(id);
   if (receipt.status !== "success") throw new Error(`${c.functionName} reverted in ${hash}`);
   await syncMarkets([id]);
@@ -235,13 +239,12 @@ async function reopenIfTooSoon(m: MarketRow) {
   const copy = await publicClient.readContract({ address: ADDR.reality, abi: realityAbi, functionName: "reopened_questions", args: [qid] });
   if (BigInt(copy) !== 0n && !(await tooSoon(copy))) return;
   // same content, arbitrator, timeout and bond, so it is the same question; a nonce never used before
-  const hash = await send(keeper!, {
+  const hash = await sendAndWait(m.id, {
     address: ADDR.reality,
     abi: realityAbi,
     functionName: "reopenQuestion",
     args: [0n, m.question!, m.arbitrator as Address, 2 * 86_400, m.resolves_at, BigInt(Date.now()), BigInt(m.min_bond ?? 0), qid],
   });
-  await publicClient.waitForTransactionReceipt({ hash, confirmations: 2, timeout: 180_000 });
   console.error(`[keeper] market ${m.id}: reopened a question settled too soon (${hash})`);
 }
 
