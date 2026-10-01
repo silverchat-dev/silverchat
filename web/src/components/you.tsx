@@ -4,14 +4,14 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
-import { useAccount } from "wagmi";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useAccount, useSignMessage } from "wagmi";
 
 import type { Tally } from "@/lib/algorithm";
 import { receiptIds } from "@/lib/answer";
 import { topicOf, type Content } from "@/lib/content";
 import { lead, span } from "@/lib/format";
-import { isNew, parse, saveSeen, savedRaw, seenRaw, setSaved, stateOf, subscribe, type State } from "@/lib/you";
+import { isNew, parse, profileMessage, saveSeen, savedRaw, seenRaw, setSaved, stateOf, subscribe, type State } from "@/lib/you";
 
 type Poll = {
   id: string;
@@ -124,6 +124,7 @@ export function YouPage() {
         </div>
       ) : (
         <>
+          <ProfileSwitch address={address} />
           <List title="Asked by you" polls={yours?.asked} seen={seen} now={now} empty="You have not asked a question with this wallet yet." loading={loading} />
           <List
             title="Answered on this device"
@@ -209,5 +210,68 @@ export function SaveButton({ id }: { id: string }) {
     >
       {on ? "Saved" : "Save"}
     </button>
+  );
+}
+
+/** Show or hide this wallet's public profile, with one signature each way. */
+function ProfileSwitch({ address }: { address: string }) {
+  const { signMessageAsync } = useSignMessage();
+  const state = useQuery({
+    queryKey: ["profile", address],
+    queryFn: async (): Promise<boolean> => (await (await fetch(`/api/profile?address=${address}`)).json()).public === true,
+  });
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const on = state.data;
+
+  async function flip() {
+    setBusy(true);
+    setNote(null);
+    try {
+      const at = Math.floor(Date.now() / 1000);
+      const signature = await signMessageAsync({ message: profileMessage(address, !on, at) });
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ address, public: !on, at, signature }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) setNote(body.error ? `${body.error[0].toUpperCase()}${body.error.slice(1)}.` : "It did not go through. Try again.");
+      await state.refetch();
+    } catch {
+      setNote("You cancelled it in your wallet.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (on === undefined) return null;
+  return (
+    <section className="space-y-3 bg-tray p-6">
+      <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Public profile · {on ? "on" : "off"}</h2>
+      <p className="max-w-2xl leading-relaxed text-paper/80">
+        {on ? (
+          <>
+            Anyone can open{" "}
+            <Link href={`/u/${address.toLowerCase()}`} className="underline underline-offset-4">
+              your profile
+            </Link>
+            . It shows the polls you asked and the ZC you claimed, which Ethereum shows anyway, and never what you answered.
+          </>
+        ) : (
+          "Make a page anyone can open, with the polls you asked and the ZC you claimed for answering. Both are already on Ethereum. What you answered stays private."
+        )}
+      </p>
+      <div className="flex flex-wrap items-center gap-4">
+        <button type="button" onClick={flip} disabled={busy} className="border border-paper/60 px-3 py-2 font-mono text-xs text-paper hover:border-paper disabled:opacity-50">
+          {busy ? "Sign in your wallet…" : on ? "Hide my profile" : "Show my profile"}
+        </button>
+        {note && (
+          <span role="status" className="font-mono text-xs text-silver">
+            {note}
+          </span>
+        )}
+      </div>
+    </section>
   );
 }

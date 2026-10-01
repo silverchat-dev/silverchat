@@ -61,3 +61,7 @@ export const saveSeen = (wallet: string, states: Record<string, State>) => write
 
 /** A poll is new when its status moved since the last visit; one never seen counts as seen open. */
 export const isNew = (seen: Record<string, State> | null, id: string, state: State) => !!seen && (seen[id] ?? "open") !== state;
+
+/** The message a wallet signs to show or hide its public profile. `at` is unix seconds; the newest signature wins. */
+export const profileMessage = (address: string, on: boolean, at: number) =>
+  `${on ? "Show" : "Hide"} my Silverchat profile in public\n\n${address.toLowerCase()}\n${at}`;

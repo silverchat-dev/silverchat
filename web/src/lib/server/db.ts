@@ -50,9 +50,19 @@ export type Ledger = { status: PollRow["status"]; cost: string; reward_total: st
 export type AnswerRow = { poll_id: string; voter: Address; choices: number[]; region: string; age: string; salt: string; signature: string; at?: number };
 
 const g = globalThis as typeof globalThis & {
-  silverchatMem?: { drafts: Map<string, string>; polls: Map<string, PollRow>; answers: Map<string, AnswerRow>; kv: Map<string, string> };
+  silverchatMem?: {
+    drafts: Map<string, string>;
+    polls: Map<string, PollRow>;
+    answers: Map<string, AnswerRow>;
+    kv: Map<string, string>;
+    profiles: Map<string, Profile>;
+  };
 };
-const mem = (g.silverchatMem ??= { drafts: new Map(), polls: new Map(), answers: new Map(), kv: new Map() });
+const mem = (g.silverchatMem ??= { drafts: new Map(), polls: new Map(), answers: new Map(), kv: new Map(), profiles: new Map() });
+mem.profiles ??= new Map();
+
+/** A wallet's public profile switch and the time of the signature that last set it. */
+export type Profile = { public: boolean; signed_at: number };
 
 let ready: Promise<void> | null = null;
 function init() {
@@ -75,7 +85,8 @@ function init() {
          poll_id numeric not null, voter text not null, choices jsonb not null, region text not null, age text not null,
          salt text not null, signature text not null, created_at timestamptz not null default now(), primary key (poll_id, voter));
        create index if not exists answers_voter on answers (voter);
-       create table if not exists kv (key text primary key, value text not null);`,
+       create table if not exists kv (key text primary key, value text not null);
+       create table if not exists profiles (address text primary key, public boolean not null, signed_at bigint not null);`,
     )
     .then(() => undefined);
   return ready;
@@ -310,6 +321,29 @@ export const db = {
     if (!pool) return [...mem.answers.values()].filter((a) => a.poll_id === pollId);
     const r = await pool.query(`select * from answers where poll_id = $1`, [pollId]);
     return r.rows.map((a) => ({ ...a, poll_id: String(a.poll_id) }));
+  },
+
+  async profile(address: string): Promise<Profile | null> {
+    await init();
+    if (!pool) return mem.profiles.get(address) ?? null;
+    const r = await pool.query(`select public, signed_at::float8 as signed_at from profiles where address = $1`, [address]);
+    return r.rows[0] ?? null;
+  },
+
+  /** False when a signature at least as new already set it, so an old "show" cannot undo a later "hide". */
+  async setProfile(address: string, on: boolean, at: number) {
+    await init();
+    if (!pool) {
+      if ((mem.profiles.get(address)?.signed_at ?? -1) >= at) return false;
+      mem.profiles.set(address, { public: on, signed_at: at });
+      return true;
+    }
+    const r = await pool.query(
+      `insert into profiles (address, public, signed_at) values ($1, $2, $3)
+       on conflict (address) do update set public = excluded.public, signed_at = excluded.signed_at where profiles.signed_at < excluded.signed_at`,
+      [address, on, at],
+    );
+    return r.rowCount === 1;
   },
 
   async get(key: string) {
