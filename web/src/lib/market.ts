@@ -48,29 +48,38 @@ export function badTitle(title: string): string | null {
   return word ? `Silverchat does not publish questions with "${word}" in them` : null;
 }
 
+/** "2026-12-31 00:00 UTC" */
+export const utcStamp = (ts: number) => `${new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+
 /** The text of a price market, made from what is on-chain, so it can never say something else. */
 export function priceTitle(feed: string, threshold: bigint, at: number) {
   const name = feedName(feed) ?? "the feed";
   const usd = Number(threshold) / 10 ** FEED_DECIMALS;
-  const when = new Date(at * 1000).toISOString().slice(0, 16).replace("T", " ");
-  return `Will ${name} be at or above $${usd.toLocaleString("en-US", { maximumFractionDigits: FEED_DECIMALS })} on ${when} UTC, by Chainlink?`;
+  return `Will ${name} be at or above $${usd.toLocaleString("en-US", { maximumFractionDigits: FEED_DECIMALS })} on ${utcStamp(at)}, by Chainlink?`;
 }
 
-// the seal is kept in the browser too, so the staker can always reveal without the keeper
-const sealKey = (id: string, staker: string) => `silverchat:seal:${CHAIN_ID}:${ADDR.predict.toLowerCase()}:${id}:${staker.toLowerCase()}`;
+// the seal is kept in the browser too, so the staker can always reveal without the keeper. Keyed by the commitment
+// and never overwritten: a second try, a second tab or a stake that failed can never replace the seal that counts.
+const sealKey = (id: string, staker: string, commitment: Hex) =>
+  `silverchat:seal:${CHAIN_ID}:${ADDR.predict.toLowerCase()}:${id}:${staker.toLowerCase()}:${commitment.toLowerCase()}`;
 
 export type Seal = { side: Side; salt: Hex };
 
-export function saveSeal(id: string, staker: string, seal: Seal) {
+export function loadSeal(id: string, staker: string, commitment: Hex): Seal | null {
   try {
-    localStorage.setItem(sealKey(id, staker), JSON.stringify(seal));
-  } catch {}
-}
-
-export function loadSeal(id: string, staker: string): Seal | null {
-  try {
-    return JSON.parse(localStorage.getItem(sealKey(id, staker)) ?? "null");
+    return JSON.parse(localStorage.getItem(sealKey(id, staker, commitment)) ?? "null");
   } catch {
     return null;
+  }
+}
+
+/** True once the seal is stored and reads back the same. */
+export function saveSeal(id: string, staker: string, commitment: Hex, seal: Seal) {
+  try {
+    const key = sealKey(id, staker, commitment);
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(seal));
+    return loadSeal(id, staker, commitment)?.salt === seal.salt;
+  } catch {
+    return false;
   }
 }

@@ -5,6 +5,7 @@ import { cache } from "react";
 import { StakePanel } from "@/components/predict";
 import { ADDR, EXPLORER } from "@/lib/config";
 import { pct, short, span, tokens } from "@/lib/format";
+import { utcStamp as utc } from "@/lib/market";
 import { db } from "@/lib/server/db";
 import { displayTime } from "@/lib/server/eligibility";
 import { serializeMarket } from "@/lib/server/predict";
@@ -22,8 +23,6 @@ export async function generateMetadata({ params }: PageProps<"/predict/[id]">): 
   return { title: m?.title ? `${m.title} · silverchat` : "Predict · silverchat" };
 }
 
-const utc = (ts: number) => `${new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC`;
-
 export default async function MarketPage({ params }: PageProps<"/predict/[id]">) {
   const m = await load((await params).id);
   if (!m) notFound();
@@ -34,7 +33,7 @@ export default async function MarketPage({ params }: PageProps<"/predict/[id]">)
   const shown = yes + no;
   const state =
     m.status === "yes" || m.status === "no"
-      ? `Settled ${m.status.toUpperCase()}${m.refund ? ": every stake comes back, nobody revealed a winning side or every side won" : ""}`
+      ? `Settled ${m.status.toUpperCase()}${m.refund ? " · every stake comes back: nobody revealed the winning side, or nobody lost" : ""}`
       : m.status === "void"
         ? m.invalid
           ? "Void: the answer was that the question is invalid. Every stake comes back."
@@ -47,7 +46,7 @@ export default async function MarketPage({ params }: PageProps<"/predict/[id]">)
   const oracle =
     m.kind === "price"
       ? { label: `Chainlink ${m.feed}`, href: `https://data.chain.link/feeds/ethereum/mainnet/${(m.feed ?? "").toLowerCase().replace("/", "-")}` }
-      : { label: "Reality.eth question", href: `https://reality.eth.limo/app/#!/question/${ADDR.reality}-${m.questionId}` };
+      : { label: "Reality.eth question", href: `https://reality.eth.limo/#!/network/1/question/${ADDR.reality}-${m.questionId}` };
   const facts: [string, string][] = [
     ["Staked", `${tokens(m.pool, 0)} ZC`],
     ["Stakes", String(m.stakes)],
@@ -58,7 +57,7 @@ export default async function MarketPage({ params }: PageProps<"/predict/[id]">)
   ];
 
   return (
-    <section className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 md:py-14 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <section className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 md:py-14 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-w-0 space-y-10">
         <header className="space-y-5">
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">

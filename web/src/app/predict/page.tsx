@@ -59,7 +59,7 @@ export default async function PredictPage() {
                     </span>
                     <Link href={`/predict/${m.id}`} className="flex h-full min-h-40 flex-col justify-between gap-6 bg-paper p-5 text-developer hover:brightness-[1.04] sm:min-h-56">
                       <span className="line-clamp-4 text-xl leading-snug wrap-anywhere">{m.title ?? "Question not shown"}</span>
-                      <span className="flex justify-between gap-3 font-mono text-xs text-developer/70">
+                      <span className="flex flex-wrap justify-between gap-x-3 gap-y-1 font-mono text-xs whitespace-nowrap text-developer/70">
                         <span>{tokens(m.pool, 0)} ZC</span>
                         <span>{m.stakes} {m.stakes === 1 ? "stake" : "stakes"}</span>
                         <span>

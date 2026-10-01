@@ -33,7 +33,7 @@ export function Header() {
             <img src="/brand/wordmark.png" alt="silverchat" width={720} height={139} className="h-5 w-auto" />
           </Link>
         )}
-        <nav className="order-last flex w-full flex-wrap justify-between gap-y-1 text-[12px] uppercase tracking-[0.06em] sm:justify-start sm:gap-x-7 sm:text-[13px] sm:tracking-[0.12em] 2xl:order-none 2xl:w-auto 2xl:flex-1">
+        <nav className="order-last flex w-full flex-wrap justify-between gap-y-1 text-[11px] uppercase tracking-[0.06em] sm:justify-start sm:gap-x-7 sm:text-[13px] sm:tracking-[0.12em] 2xl:order-none 2xl:w-auto 2xl:flex-1">
           {NAV.map((n) => (
             <Link
               key={n.label}
