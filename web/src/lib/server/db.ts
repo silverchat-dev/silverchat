@@ -323,6 +323,14 @@ export const db = {
     return r.rows.map((a) => ({ ...a, poll_id: String(a.poll_id) }));
   },
 
+  /** Polls asked by `address`, newest first, hidden ones left out. */
+  async askedBy(address: string): Promise<PollRow[]> {
+    await init();
+    if (!pool) return [...mem.polls.values()].filter((p) => p.asker === address && !isHidden(p.id)).sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)));
+    const r = await pool.query(`select * from polls where asker = $1 and id <> all($2::numeric[]) order by id desc`, [address, HIDDEN]);
+    return r.rows.map(text);
+  },
+
   async profile(address: string): Promise<Profile | null> {
     await init();
     if (!pool) return mem.profiles.get(address) ?? null;

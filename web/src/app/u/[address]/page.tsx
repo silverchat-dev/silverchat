@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { isAddress } from "viem";
 
 import { rewards } from "@/lib/algorithm";
@@ -13,36 +14,34 @@ import { db, type PollRow } from "@/lib/server/db";
 
 export const dynamic = "force-dynamic";
 
-const cache = new Map<string, { at: number; asked: PollRow[]; claimed: bigint }>();
+const memo = new Map<string, { at: number; asked: PollRow[]; claimed: bigint }>();
 
 /**
  * Only what Ethereum already shows about a wallet: the polls it asked and the ZC it claimed. Neither moves when a poll
  * is fixed, so watching this page tells nobody which poll the wallet answered. Cached for a minute.
  */
 async function load(address: string) {
-  const hit = cache.get(address);
+  const hit = memo.get(address);
   if (hit && Date.now() - hit.at < 60_000) return hit;
-  // reads every poll; a query by asker when there are many
-  const [all, answered] = await Promise.all([db.polls(10_000), db.answeredFinal(address, 0)]);
-  const flags = answered.length
-    ? await publicClient.multicall({
-        contracts: answered.map((p) => ({ address: ADDR.ask, abi: askAbi, functionName: "claimed", args: [BigInt(p.id), address] }) as const),
-        allowFailure: false,
-      })
-    : [];
+  const [asked, answered] = await Promise.all([db.askedBy(address), db.answeredFinal(address, 0)]);
+  // one chain call for every wallet, answered or not (poll 0 never exists), so the time this page takes says nothing
+  const [, ...flags] = await publicClient.multicall({
+    contracts: [0n, ...answered.map((p) => BigInt(p.id))].map((id) => ({ address: ADDR.ask, abi: askAbi, functionName: "claimed", args: [id, address] }) as const),
+    allowFailure: false,
+  });
   // a paid place is worth the same to everyone in a poll, however many answered
   const claimed = answered.reduce((sum, p, i) => (flags[i] ? sum + rewards(BigInt(p.cost), p.breadth, 0).each : sum), 0n);
-  const entry = { at: Date.now(), asked: all.filter((p) => p.asker === address), claimed };
-  if (cache.size > 1000) cache.clear();
-  cache.set(address, entry);
+  const entry = { at: Date.now(), asked, claimed };
+  if (memo.size > 1000) memo.clear();
+  memo.set(address, entry);
   return entry;
 }
 
-async function publicAddress(raw: string) {
+const publicAddress = cache(async (raw: string) => {
   if (!isAddress(raw)) return null;
   const address = raw.toLowerCase();
   return (await db.profile(address))?.public ? address : null;
-}
+});
 
 export async function generateMetadata({ params }: PageProps<"/u/[address]">): Promise<Metadata> {
   const address = await publicAddress((await params).address);
@@ -57,9 +56,8 @@ export default async function ProfilePage({ params }: PageProps<"/u/[address]">)
   return (
     <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
       <header className="space-y-4">
-        <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Public profile</p>
-        <h1 className="text-5xl leading-tight">{short(address)}</h1>
-        <a href={`${EXPLORER}/address/${address}`} target="_blank" rel="noreferrer" className="block break-all font-mono text-xs text-paper/70 underline-offset-4 hover:underline sm:text-sm">
+        <h1 className="text-5xl leading-tight">Public profile</h1>
+        <a href={`${EXPLORER}/address/${address}`} target="_blank" rel="noreferrer" className="block break-all font-mono text-[11px] text-paper/80 underline-offset-4 hover:underline sm:text-base">
           {address}
         </a>
         <p className="max-w-2xl text-lg leading-relaxed text-paper/80">

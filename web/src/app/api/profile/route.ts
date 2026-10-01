@@ -31,7 +31,8 @@ export async function POST(req: Request) {
   if (!Number.isInteger(b.at)) return fail("bad time");
   if (typeof b.signature !== "string" || !isHex(b.signature)) return fail("bad signature");
   const now = Math.floor(Date.now() / 1000);
-  if (b.at < now - 600 || b.at > now + 60) return fail("the signature is too old, sign again");
+  if (b.at < now - 600) return fail("the signature is too old, sign again");
+  if (b.at > now + 60) return fail("this device's clock is ahead, check it and sign again");
   if (busy()) return fail("busy right now, try again in a minute", 503);
 
   const address = b.address.toLowerCase();

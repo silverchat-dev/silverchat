@@ -97,7 +97,9 @@ export function YouPage() {
   const now = all.dataUpdatedAt / 1000;
   const yours = useYours(address, all.data, now);
   const seen = useSeen(address);
-  const loading = all.isPending || isReconnecting;
+  // false on the server and the first paint: wagmi only knows a returning wallet after it mounts
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
+  const loading = all.isPending || isReconnecting || !mounted;
 
   // what you saw is stored when you leave, so the marks stay for the whole visit
   const latest = useRef(yours?.states);
@@ -116,8 +118,9 @@ export function YouPage() {
 
   return (
     <div className="space-y-14">
-      {all.isError && !all.data && <p className="font-mono text-sm text-silver">Could not read the record. Try again in a minute.</p>}
-      {isReconnecting ? null : !address ? (
+      {all.isError && !all.data ? (
+        <p className="font-mono text-sm text-silver">Could not read the record. Try again in a minute.</p>
+      ) : isReconnecting || !mounted ? null : !address ? (
         <div className="space-y-4">
           <p className="text-xl text-paper/80">Connect a wallet to see the polls you asked and answered.</p>
           <ConnectButton />
@@ -136,7 +139,9 @@ export function YouPage() {
           />
         </>
       )}
-      <List title="Saved" polls={yours?.saved} seen={seen} now={now} empty="Nothing saved. Save a poll from its page to keep it here." loading={loading} />
+      {!(all.isError && !all.data) && (
+        <List title="Saved" polls={yours?.saved} seen={seen} now={now} empty="Nothing saved. Save a poll from its page to keep it here." loading={loading} />
+      )}
     </div>
   );
 }
@@ -218,7 +223,11 @@ function ProfileSwitch({ address }: { address: string }) {
   const { signMessageAsync } = useSignMessage();
   const state = useQuery({
     queryKey: ["profile", address],
-    queryFn: async (): Promise<boolean> => (await (await fetch(`/api/profile?address=${address}`)).json()).public === true,
+    queryFn: async (): Promise<boolean> => {
+      const res = await fetch(`/api/profile?address=${address}`);
+      if (!res.ok) throw new Error(res.statusText);
+      return (await res.json()).public === true;
+    },
   });
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -227,9 +236,15 @@ function ProfileSwitch({ address }: { address: string }) {
   async function flip() {
     setBusy(true);
     setNote(null);
+    const at = Math.floor(Date.now() / 1000);
+    let signature: string;
     try {
-      const at = Math.floor(Date.now() / 1000);
-      const signature = await signMessageAsync({ message: profileMessage(address, !on, at) });
+      signature = await signMessageAsync({ message: profileMessage(address, !on, at) });
+    } catch {
+      setBusy(false);
+      return setNote("You cancelled it in your wallet.");
+    }
+    try {
       const res = await fetch("/api/profile", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -239,12 +254,13 @@ function ProfileSwitch({ address }: { address: string }) {
       if (!res.ok) setNote(body.error ? `${body.error[0].toUpperCase()}${body.error.slice(1)}.` : "It did not go through. Try again.");
       await state.refetch();
     } catch {
-      setNote("You cancelled it in your wallet.");
+      setNote("It did not go through. Try again.");
     } finally {
       setBusy(false);
     }
   }
 
+  if (state.isError && on === undefined) return <p className="font-mono text-sm text-silver">Could not read your profile setting. Try again in a minute.</p>;
   if (on === undefined) return null;
   return (
     <section className="space-y-3 bg-tray p-6">
@@ -256,7 +272,7 @@ function ProfileSwitch({ address }: { address: string }) {
             <Link href={`/u/${address.toLowerCase()}`} className="underline underline-offset-4">
               your profile
             </Link>
-            . It shows the polls you asked and the ZC you claimed, which Ethereum shows anyway, and never what you answered.
+            . It shows the polls you asked and the ZC you claimed. Ethereum shows both anyway. It does not show what you answered.
           </>
         ) : (
           "Make a page anyone can open, with the polls you asked and the ZC you claimed for answering. Both are already on Ethereum. What you answered stays private."
@@ -264,7 +280,7 @@ function ProfileSwitch({ address }: { address: string }) {
       </p>
       <div className="flex flex-wrap items-center gap-4">
         <button type="button" onClick={flip} disabled={busy} className="border border-paper/60 px-3 py-2 font-mono text-xs text-paper hover:border-paper disabled:opacity-50">
-          {busy ? "Sign in your wallet…" : on ? "Hide my profile" : "Show my profile"}
+          {busy ? "Sign the message in your wallet…" : on ? "Hide my profile" : "Show my profile"}
         </button>
         {note && (
           <span role="status" className="font-mono text-xs text-silver">
