@@ -31,12 +31,17 @@ OUT=local OWNER=$(addr $OWNER_PK) TREASURY=0x15d34AAf54267DB7D7c367839AAf71A00a2
 OUT=local SAFE=$(addr $OWNER_PK) ANSWER_HASH=$(echo "$RIDDLE_ANSWER" | (cd "$ROOT/web" && npx -y tsx scripts/riddle-hash.mts 2>/dev/null)) \
   forge script Silverchat.s.sol:DeployRiddle --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
 RIDDLE=$(python3 -c "import json; print(json.load(open('deployments/local.json'))['riddle'])")
+# Predict: 340k SC (about $100) to open a market, 300 ZC (about $5) the smallest stake
+OUT=local OWNER=$(addr $OWNER_PK) TREASURY=0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 \
+  LOCK_AMOUNT=340000000000000000000000 MIN_STAKE=300000000000000000000 \
+  forge script Silverchat.s.sol:DeployPredict --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
 
 # ZC for the test wallet, straight out of the v4 PoolManager
 cast rpc anvil_impersonateAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 cast rpc anvil_setBalance $POOL_MANAGER 0x56BC75E2D63100000 --rpc-url $RPC >/dev/null
 cast send $ZC "transfer(address,uint256)" "$WALLET" 5000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
 cast send $SC "transfer(address,uint256)" "$RIDDLE" 1000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
+cast send $SC "transfer(address,uint256)" "$WALLET" 5000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
 cast rpc anvil_stopImpersonatingAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 
 python3 - "$ROOT/contracts/deployments/local.json" "$ROOT/web/.env.local" "$POSTER_PK" "$PRICER_PK" "$SC" <<'PY'
@@ -58,4 +63,4 @@ ENABLE_WORKERS=1
 """)
 print(json.dumps(d, indent=2))
 PY
-echo "funded $WALLET with 5,000,000 ZC"
+echo "funded $WALLET with 5,000,000 ZC and 5,000,000 SC"
