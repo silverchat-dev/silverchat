@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import type { Tally } from "@/lib/algorithm";
-import type { Content } from "@/lib/content";
+import { Topics, pickTopic } from "@/components/topics";
+import { topicOf, type Content } from "@/lib/content";
 import { EXPLORER } from "@/lib/config";
 import { pct, short, tokens } from "@/lib/format";
 import { db } from "@/lib/server/db";
@@ -17,8 +18,13 @@ function lead(content: Content | null, tally: Tally | null | undefined) {
   return { option: content.questions[0].options[k], share: pct(counts[k], tally.answers) };
 }
 
-export default async function RecordsPage() {
-  const fixed = await db.polls(100, "final");
+export default async function RecordsPage({ searchParams }: PageProps<"/records">) {
+  const topic = pickTopic((await searchParams).topic);
+  // ponytail: filters the newest 500 in memory; a topic column with an index when records outgrow that
+  const fixed = (await db.polls(topic ? 500 : 100, "final"))
+    .map((p) => ({ ...p, parsed: p.content ? (JSON.parse(p.content) as Content) : null }))
+    .filter((p) => !topic || topicOf(p.parsed) === topic)
+    .slice(0, 100);
 
   return (
     <section className="mx-auto max-w-6xl space-y-10 px-5 py-10 sm:px-8 md:py-14">
@@ -32,12 +38,14 @@ export default async function RecordsPage() {
           </Link>
           .
         </p>
+        <Topics base="/records" active={topic} />
       </header>
 
       {fixed.length ? (
         <ol className="divide-y divide-silver/20 border-y border-silver/20">
           {fixed.map((p) => {
-            const content = p.content ? (JSON.parse(p.content) as Content) : null;
+            const content = p.parsed;
+            const t = topicOf(content);
             const top = lead(content, p.tally);
             return (
               <li key={p.id} className="grid gap-5 py-6 md:grid-cols-[14rem_minmax(0,1fr)_14rem] md:items-center">
@@ -49,7 +57,7 @@ export default async function RecordsPage() {
                     </span>
                   </span>
                   <span className="min-w-0 space-y-2">
-                    <span className="block font-mono text-xs uppercase tracking-[0.14em] text-silver">No. {p.id}</span>
+                    <span className="block font-mono text-xs uppercase tracking-[0.14em] text-silver">No. {p.id}{t && ` · ${t}`}</span>
                     <span className="line-clamp-2 text-2xl leading-snug">{content?.questions[0].q ?? "Question not published"}</span>
                   </span>
                 </Link>
@@ -85,7 +93,9 @@ export default async function RecordsPage() {
         </ol>
       ) : (
         <div className="space-y-5">
-          <p className="text-xl text-paper/80">No results are fixed yet. The first one appears here a few minutes after a poll closes.</p>
+          <p className="text-xl text-paper/80">
+            {topic ? `No ${topic} results are fixed yet.` : "No results are fixed yet. The first one appears here a few minutes after a poll closes."}
+          </p>
           <Link href="/ask" className="inline-block bg-paper px-5 py-2.5 font-mono text-sm text-developer">
             Ask a question
           </Link>

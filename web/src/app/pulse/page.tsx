@@ -2,14 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { people, span, tokens } from "@/lib/format";
-import type { Content } from "@/lib/content";
+import { Topics, pickTopic } from "@/components/topics";
+import { topicOf, type Content } from "@/lib/content";
 import { liveFeed } from "@/lib/server/feed";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Pulse · silverchat" };
 
-export default async function PulsePage() {
-  const { polls: live, now } = await liveFeed(60);
+export default async function PulsePage({ searchParams }: PageProps<"/pulse">) {
+  const topic = pickTopic((await searchParams).topic);
+  // the whole feed is ranked first, then filtered, so a topic keeps the global order
+  const { polls: all, now } = await liveFeed(10_000);
+  const live = all
+    .map((p) => ({ ...p, parsed: p.content ? (JSON.parse(p.content) as Content) : null }))
+    .filter((p) => !topic || topicOf(p.parsed) === topic)
+    .slice(0, 60);
 
   return (
     <section className="mx-auto max-w-6xl space-y-10 px-5 py-10 sm:px-8 md:py-14">
@@ -22,17 +29,20 @@ export default async function PulsePage() {
           </Link>{" "}
           give. Pick a frame to answer it.
         </p>
+        <Topics base="/pulse" active={topic} />
       </header>
 
       {live.length ? (
         <ol className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
           {live.map((p, i) => {
-            const q = p.content ? (JSON.parse(p.content) as Content).questions[0].q : null;
+            const q = p.parsed?.questions[0].q ?? null;
+            const t = topicOf(p.parsed);
             const filled = Math.min(1, (p.answers ?? 0) / p.breadth);
             return (
               <li key={p.id} className="film">
                 <span aria-hidden className="absolute left-3 top-[14px] font-mono text-[9px] leading-none tracking-[0.2em] text-paper/40">
                   {i + 1} ▸ SILVERCHAT {p.id}
+                  {t && ` ▸ ${t.toUpperCase()}`}
                 </span>
                 <Link
                   href={`/poll/${p.id}`}
@@ -59,7 +69,7 @@ export default async function PulsePage() {
       ) : (
         <div className="film mx-auto max-w-xl">
           <div className="space-y-4 bg-paper/5 p-8 text-center">
-            <p className="text-2xl">No questions are open right now.</p>
+            <p className="text-2xl">{topic ? `No ${topic} questions are open right now.` : "No questions are open right now."}</p>
             <Link href="/ask" className="inline-block bg-paper px-5 py-2.5 font-mono text-sm text-developer">
               Ask the first one
             </Link>

@@ -7,6 +7,7 @@ import { AnswerPanel } from "@/components/answer-panel";
 import { Print } from "@/components/print";
 import { Proof } from "@/components/proof";
 import { RefundButton } from "@/components/refund-button";
+import { topicOf } from "@/lib/content";
 import { people, span, tokens } from "@/lib/format";
 import { db } from "@/lib/server/db";
 import { displayTime } from "@/lib/server/eligibility";
@@ -44,7 +45,8 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
       <div className="min-w-0 space-y-10">
         <header className="space-y-5">
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-            Poll No. {poll.id} · {people(poll.breadth)} people · {tokens(poll.cost)} ZC
+            Poll No. {poll.id}
+            {topicOf(poll.content) && ` · ${topicOf(poll.content)}`} · {people(poll.breadth)} people · {tokens(poll.cost)} ZC
           </p>
           {content ? (
             <>

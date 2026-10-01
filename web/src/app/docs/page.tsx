@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { ADDR, BOOK_URL, chapter, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
+import { TOPICS } from "@/lib/content";
 import { REFUSED } from "@/lib/moderation";
 import { USD_PER_PERSON } from "@/lib/server/price";
 
@@ -100,6 +101,11 @@ export default function DocsPage() {
             no longer shows here, but it stays on Ethereum and is fixed like any other poll. Answers given before it was
             removed still count and are paid by the normal rules, and the asker gets back the part nobody earned.
           </p>
+          <p className="text-lg leading-relaxed text-paper/80">
+            Each question goes under one topic, which the asker picks: {TOPICS.join(", ")}. The topic is part of the hash
+            paid on Ethereum, so nobody can move a poll to another topic later. Polls asked before topics came have none
+            and show only under All. A topic filter keeps the feed order; it only hides the other polls.
+          </p>
         </Section>
 
         <Section id="book" title="From the book">
@@ -108,7 +114,7 @@ export default function DocsPage() {
             not there yet, the table says so.
           </p>
           <div className="space-y-6 sm:hidden">
-            {[...BOOK, ["Ours", "Not in the book.", [], "Paying the people who answer, the $SC token, and the split of each payment."] as (typeof BOOK)[number]].map(([k, book, chapters, here]) => (
+            {[...BOOK, ["Ours", "Not in the book.", [], "Paying the people who answer, the $SC token, the split of each payment, and topics."] as (typeof BOOK)[number]].map(([k, book, chapters, here]) => (
               <dl key={k} className="space-y-2 border-t border-silver/20 pt-4">
                 <dt className="text-xl">{k}</dt>
                 <dd className="text-paper/80">
@@ -152,7 +158,7 @@ export default function DocsPage() {
                 <tr className="border-b border-silver/15 align-top">
                   <td className="py-4 pr-6 text-lg">Ours</td>
                   <td className="py-4 pr-6 text-paper/60">Not in the book.</td>
-                  <td className="py-4 text-paper/80">Paying the people who answer, the $SC token, and the split of each payment.</td>
+                  <td className="py-4 text-paper/80">Paying the people who answer, the $SC token, the split of each payment, and topics.</td>
                 </tr>
               </tbody>
             </table>
@@ -203,7 +209,7 @@ export default function DocsPage() {
               ["GET /api/receipt?poll={id}&leaf={leaf}", "proof that one answer is in a fixed result"],
               ["GET /api/health", "head block, indexed block, ZC price and the dollar price per person"],
               ["GET /api/stats", "ZC spent, earned by answerers, returned, treasury, burned, and the burn address"],
-              ["POST /api/polls", "publish a question and get its hash before you pay"],
+              ["POST /api/polls", "publish a question and get its hash before you pay: { v: 2, topic, questions }"],
               ["POST /api/answer", "a signed answer"],
             ].map(([k, v]) => (
               <div key={k} className="grid gap-1 sm:grid-cols-[18rem_minmax(0,1fr)]">

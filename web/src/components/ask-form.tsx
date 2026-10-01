@@ -11,7 +11,7 @@ import { waitForCallsStatus } from "wagmi/actions";
 
 import { askAbi, routerAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
-import { canonical, contentHash, LIMITS, parseContent } from "@/lib/content";
+import { canonical, contentHash, LIMITS, parseContent, TOPICS, type Topic } from "@/lib/content";
 import { people, tokens, usd } from "@/lib/format";
 import { refused } from "@/lib/moderation";
 import { BREADTHS, costOf as priceOf, PRIORITIES, SPLIT } from "@/lib/pricing";
@@ -45,6 +45,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
   const atomic = caps.data?.[CHAIN_ID]?.atomic?.status === "supported";
 
   const [questions, setQuestions] = useState([blank()]);
+  const [topic, setTopic] = useState<Topic | null>(null);
   const [breadth, setBreadth] = useState(BREADTHS.includes(initialBreadth) ? initialBreadth : 100);
   const [priority, setPriority] = useState(0);
   const [duration, setDuration] = useState(86_400);
@@ -86,7 +87,8 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
 
   async function submit() {
     setError(null);
-    const content = parseContent({ v: 1, questions });
+    if (!topic) return setError("Pick a topic for the question.");
+    const content = parseContent({ v: 2, topic, questions });
     if (typeof content === "string") return setError(content[0].toUpperCase() + content.slice(1) + ".");
     if (!client || !address) return;
     const text = canonical(content);
@@ -249,6 +251,13 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
           )}
 
           <div className="grid gap-7 border-t border-developer/25 pt-7 sm:grid-cols-2">
+            <Choice legend="Topic" hint="Where it shows when people filter the Pulse" className="sm:col-span-2">
+              {TOPICS.map((t) => (
+                <Pill key={t} name="topic" checked={topic === t} onChange={() => setTopic(t)}>
+                  {t}
+                </Pill>
+              ))}
+            </Choice>
             <Choice legend="Breadth" hint="How many people it asks" className="sm:col-span-2">
               {BREADTHS.map((b) => (
                 <Pill key={b} name="breadth" checked={breadth === b} onChange={() => setBreadth(b)}>
@@ -280,6 +289,7 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
       <aside className="space-y-6 self-start bg-tray px-5 py-7 font-mono text-sm sm:px-7 lg:sticky lg:top-6">
         <p className="text-xs uppercase tracking-[0.14em] text-silver">Receipt</p>
         <dl className="space-y-2">
+          <Row k="Topic">{topic ?? "·"}</Row>
           <Row k="Reach">{people(breadth)} people</Row>
           <Row k="Priority">{PRIORITIES[priority].label}</Row>
           <Row k="Price">{price.data === undefined ? "·" : price.data === 0n ? "not set" : `${tokens(price.data)} ZC a person`}</Row>
