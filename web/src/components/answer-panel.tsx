@@ -30,9 +30,12 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  const zcUsd = useQuery({
-    queryKey: ["zcUsd"],
-    queryFn: async () => Number((await (await fetch("/api/health")).json()).zcUsd) || null,
+  const usd = useQuery({
+    queryKey: ["usd-prices"],
+    queryFn: async () => {
+      const h = await (await fetch("/api/health")).json();
+      return { zc: Number(h.zcUsd) || null, sc: Number(h.scUsd) || null };
+    },
     refetchInterval: 60_000,
   });
   const you = useQuery({
@@ -121,7 +124,7 @@ export function AnswerPanel({ pollId, content, open }: { pollId: string; content
             Hold ${MIN_HOLD_USD} of ZC or SC and you can answer every poll asked after that. Get a little more than ${MIN_HOLD_USD}:
             prices move, and the check uses the price when each poll opens.
           </p>
-          <BuyHold usd={MIN_HOLD_USD + 2} zcUsd={zcUsd.isError ? null : zcUsd.data} />
+          <BuyHold usd={MIN_HOLD_USD + 2} zcUsd={usd.isError ? null : usd.data?.zc} scUsd={usd.isError ? null : usd.data?.sc} />
         </div>
       ) : (
         <form
