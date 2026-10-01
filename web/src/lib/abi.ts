@@ -34,6 +34,40 @@ export const poolManagerAbi = parseAbi(["function extsload(bytes32 slot) view re
 
 export const priceFeedAbi = parseAbi([
   "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
+  "function getRoundData(uint80 roundId) view returns (uint80, int256 answer, uint256 startedAt, uint256 updatedAt, uint80)",
+  "function phaseId() view returns (uint16)",
+]);
+
+export const predictAbi = parseAbi([
+  "struct Market { address opener; uint32 closesAt; uint32 resolvesAt; uint8 kind; uint8 status; bool refund; bool invalid; bool lockClaimed; address feed; uint32 maxStale; int256 threshold; bytes32 questionId; uint256 lock; uint256 pool; uint256 yes; uint256 no; uint256 payout; }",
+  "function market(uint256 id) view returns (Market)",
+  "function stakes(uint256 id, address staker) view returns (uint256 amount, bytes32 commitment, uint8 side, bool claimed)",
+  "function lockAmount() view returns (uint256)",
+  "function minStake() view returns (uint256)",
+  "function openPrice(bytes32 contentHash, address feed, int256 threshold, uint32 closesAt, uint32 resolvesAt) returns (uint256)",
+  "function openEvent(string question, uint32 closesAt, uint32 resolvesAt) payable returns (uint256)",
+  "function stake(uint256 id, uint256 amount, bytes32 commitment)",
+  "function reveal(uint256 id, address[] stakers, uint8[] sides, bytes32[] salts)",
+  "function settlePrice(uint256 id, uint80 roundId)",
+  "function settleEvent(uint256 id)",
+  "function voidMarket(uint256 id)",
+  "function claim(uint256 id)",
+  "function claimLock(uint256 id)",
+  "event Opened(uint256 indexed id, address indexed opener, uint8 kind, bytes32 indexed contentHash, uint32 closesAt, uint32 resolvesAt, uint256 lock)",
+  "event PriceMarket(uint256 indexed id, address feed, int256 threshold)",
+  "event EventMarket(uint256 indexed id, bytes32 questionId, string question, address arbitrator, uint256 minBond)",
+  "event Staked(uint256 indexed id, address indexed staker, uint256 amount, bytes32 commitment)",
+  "event Revealed(uint256 indexed id, address indexed staker, uint8 side)",
+  "event Settled(uint256 indexed id, uint8 status, bool refund, uint256 payout, uint256 fee)",
+  "event Claimed(uint256 indexed id, address indexed staker, uint256 amount)",
+  "event LockClaimed(uint256 indexed id, address indexed to, uint256 amount)",
+]);
+
+// Reality.eth v3.0, ETH bonds: what the keeper needs to reopen a question answered too soon
+export const realityAbi = parseAbi([
+  "function isFinalized(bytes32 questionId) view returns (bool)",
+  "function resultFor(bytes32 questionId) view returns (bytes32)",
+  "function reopenQuestion(uint256 templateId, string question, address arbitrator, uint32 timeout, uint32 openingTs, uint256 nonce, uint256 minBond, bytes32 reopensQuestionId) payable returns (bytes32)",
 ]);
 
 export const riddleAbi = parseAbi([

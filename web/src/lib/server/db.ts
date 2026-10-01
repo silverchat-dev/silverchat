@@ -56,10 +56,72 @@ const g = globalThis as typeof globalThis & {
     answers: Map<string, AnswerRow>;
     kv: Map<string, string>;
     profiles: Map<string, Profile>;
+    markets: Map<string, MarketRow>;
+    stakes: Map<string, StakeRow>;
+    seals: Map<string, SealRow>;
   };
 };
-const mem = (g.silverchatMem ??= { drafts: new Map(), polls: new Map(), answers: new Map(), kv: new Map(), profiles: new Map() });
+const mem = (g.silverchatMem ??= {
+  drafts: new Map(),
+  polls: new Map(),
+  answers: new Map(),
+  kv: new Map(),
+  profiles: new Map(),
+  markets: new Map(),
+  stakes: new Map(),
+  seals: new Map(),
+});
 mem.profiles ??= new Map();
+mem.markets ??= new Map();
+mem.stakes ??= new Map();
+mem.seals ??= new Map();
+
+/** A Predict market as SilverPredict holds it, plus what its logs said when it opened. Status 1 open, 2 yes, 3 no, 4 void. */
+export type MarketRow = {
+  id: string;
+  kind: number;
+  opener: string;
+  question: string | null;
+  feed: string | null;
+  threshold: string | null;
+  closes_at: number;
+  resolves_at: number;
+  question_id: string | null;
+  arbitrator: string | null;
+  min_bond: string | null;
+  lock: string;
+  pool: string;
+  yes: string;
+  no: string;
+  payout: string;
+  status: number;
+  refund: boolean;
+  invalid: boolean;
+  lock_claimed: boolean;
+  block: string;
+  tx: string;
+  stakes?: number;
+};
+export type StakeRow = { market_id: string; staker: string; amount: string; commitment: string; side: number; claimed: boolean };
+/** The sealed side a staker handed the keeper. Never served by any route. */
+export type SealRow = { market_id: string; staker: string; side: number; salt: string };
+
+const MARKET_COLS = ["kind", "opener", "question", "feed", "threshold", "closes_at", "resolves_at", "question_id", "arbitrator", "min_bond", "lock", "pool", "yes", "no", "payout", "status", "refund", "invalid", "lock_claimed", "block", "tx"] as const;
+
+const market = (r: MarketRow): MarketRow => ({
+  ...r,
+  id: String(r.id),
+  threshold: r.threshold == null ? null : String(r.threshold),
+  min_bond: r.min_bond == null ? null : String(r.min_bond),
+  closes_at: Number(r.closes_at),
+  resolves_at: Number(r.resolves_at),
+  lock: String(r.lock),
+  pool: String(r.pool),
+  yes: String(r.yes),
+  no: String(r.no),
+  payout: String(r.payout),
+  block: String(r.block),
+});
 
 /** A wallet's public profile switch and the time of the signature that last set it. */
 export type Profile = { public: boolean; signed_at: number };
@@ -86,7 +148,18 @@ function init() {
          salt text not null, signature text not null, created_at timestamptz not null default now(), primary key (poll_id, voter));
        create index if not exists answers_voter on answers (voter);
        create table if not exists kv (key text primary key, value text not null);
-       create table if not exists profiles (address text primary key, public boolean not null, signed_at bigint not null);`,
+       create table if not exists profiles (address text primary key, public boolean not null, signed_at bigint not null);
+       create table if not exists markets (
+         id numeric primary key, kind int not null, opener text not null, question text, feed text, threshold numeric,
+         closes_at bigint not null, resolves_at bigint not null, question_id text, arbitrator text, min_bond numeric,
+         lock numeric not null, pool numeric not null default 0, yes numeric not null default 0, no numeric not null default 0,
+         payout numeric not null default 0, status int not null default 1, refund boolean not null default false,
+         invalid boolean not null default false, lock_claimed boolean not null default false, block numeric not null, tx text not null);
+       create table if not exists stakes (
+         market_id numeric not null, staker text not null, amount numeric not null, commitment text not null,
+         side int not null default 0, claimed boolean not null default false, primary key (market_id, staker));
+       create table if not exists seals (
+         market_id numeric not null, staker text not null, side int not null, salt text not null, primary key (market_id, staker));`,
     )
     .then(() => undefined);
   return ready;
@@ -352,6 +425,102 @@ export const db = {
       [address, on, at],
     );
     return r.rowCount === 1;
+  },
+
+  /** Insert or update the columns given for one market; a reorg that moved its log gets the new values. */
+  async upsertMarket(id: string, fields: Partial<Omit<MarketRow, "id" | "stakes">>) {
+    await init();
+    if (!pool) {
+      const old = mem.markets.get(id);
+      mem.markets.set(id, { pool: "0", yes: "0", no: "0", payout: "0", status: 1, refund: false, invalid: false, lock_claimed: false, ...old, ...fields, id } as MarketRow);
+      return;
+    }
+    const cols = MARKET_COLS.filter((c) => c in fields);
+    if (!cols.length) return;
+    const vals = cols.map((c) => fields[c]);
+    // update first: Postgres checks NOT NULL on an insert before ON CONFLICT, and only the Opened log has every column
+    const r = await pool.query(`update markets set ${cols.map((c, i) => `${c} = $${i + 2}`).join(", ")} where id = $1`, [id, ...vals]);
+    if (r.rowCount) return;
+    await pool.query(
+      `insert into markets (id, ${cols.join(", ")}) values ($1, ${cols.map((_, i) => `$${i + 2}`).join(", ")}) on conflict (id) do nothing`,
+      [id, ...vals],
+    );
+  },
+
+  async markets(limit = 200): Promise<MarketRow[]> {
+    await init();
+    if (!pool) {
+      const count = (id: string) => [...mem.stakes.values()].filter((x) => x.market_id === id).length;
+      return [...mem.markets.values()]
+        .sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)))
+        .slice(0, limit)
+        .map((m) => ({ ...m, stakes: count(m.id) }));
+    }
+    const r = await pool.query(
+      `select m.*, (select count(*) from stakes s where s.market_id = m.id)::int as stakes from markets m order by id desc limit $1`,
+      [limit],
+    );
+    return r.rows.map(market);
+  },
+
+  async market(id: string): Promise<MarketRow | null> {
+    await init();
+    if (!pool) {
+      const m = mem.markets.get(id);
+      return m ? { ...m, stakes: [...mem.stakes.values()].filter((x) => x.market_id === id).length } : null;
+    }
+    const r = await pool.query(`select m.*, (select count(*) from stakes s where s.market_id = m.id)::int as stakes from markets m where id = $1`, [id]);
+    return r.rows[0] ? market(r.rows[0]) : null;
+  },
+
+  /** Markets the keeper still has work on: open, or void on an invalid answer with the SC lock not yet sent. */
+  async marketsToKeep(): Promise<MarketRow[]> {
+    await init();
+    if (!pool) return [...mem.markets.values()].filter((m) => m.status === 1 || (m.invalid && !m.lock_claimed));
+    const r = await pool.query(`select * from markets where status = 1 or (invalid and not lock_claimed) order by id`);
+    return r.rows.map(market);
+  },
+
+  async upsertStake(row: Omit<StakeRow, "side" | "claimed">) {
+    await init();
+    if (!pool) {
+      const k = `${row.market_id}:${row.staker}`;
+      mem.stakes.set(k, { side: 0, claimed: false, ...mem.stakes.get(k), ...row });
+      return;
+    }
+    await pool.query(
+      `insert into stakes (market_id, staker, amount, commitment) values ($1, $2, $3, $4)
+       on conflict (market_id, staker) do update set amount = excluded.amount, commitment = excluded.commitment`,
+      [row.market_id, row.staker, row.amount, row.commitment],
+    );
+  },
+
+  async setStake(marketId: string, staker: string, fields: { side?: number; claimed?: boolean }) {
+    await init();
+    if (!pool) return void Object.assign(mem.stakes.get(`${marketId}:${staker}`) ?? {}, fields);
+    if (fields.side !== undefined) await pool.query(`update stakes set side = $3 where market_id = $1 and staker = $2`, [marketId, staker, fields.side]);
+    if (fields.claimed !== undefined) await pool.query(`update stakes set claimed = $3 where market_id = $1 and staker = $2`, [marketId, staker, fields.claimed]);
+  },
+
+  async saveSeal(row: SealRow) {
+    await init();
+    if (!pool) return void mem.seals.set(`${row.market_id}:${row.staker}`, row);
+    await pool.query(
+      `insert into seals (market_id, staker, side, salt) values ($1, $2, $3, $4) on conflict (market_id, staker) do nothing`,
+      [row.market_id, row.staker, row.side, row.salt],
+    );
+  },
+
+  /** Seals of stakes the chain still has sealed. */
+  async sealsToReveal(marketId: string): Promise<SealRow[]> {
+    await init();
+    if (!pool) return [...mem.seals.values()].filter((x) => x.market_id === marketId && mem.stakes.get(`${x.market_id}:${x.staker}`)?.side === 0);
+    const r = await pool.query(
+      `select x.market_id::text, x.staker, x.side, x.salt from seals x join stakes s on s.market_id = x.market_id and s.staker = x.staker
+       where x.market_id = $1 and s.side = 0`,
+      [marketId],
+    );
+    return r.rows;
   },
 
   async get(key: string) {

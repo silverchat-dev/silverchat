@@ -6,6 +6,7 @@ import { ADDR, CHAIN_ID, DEPLOY_BLOCK, ZERO } from "@/lib/config";
 
 import { publicClient } from "./chain";
 import { db } from "./db";
+import { onPredictLog, PREDICT_EVENTS, syncMarkets } from "./predict";
 import { prices, tokensFor } from "./price";
 
 // the RPC's free plan answers eth_getLogs for at most 10 blocks at a time
@@ -38,9 +39,19 @@ async function run() {
 
   while (from <= head) {
     const to = from + CHUNK - 1n < head ? from + CHUNK - 1n : head;
-    const logs = await publicClient.getLogs({ address: ADDR.ask, events: EVENTS, fromBlock: from, toBlock: to });
+    // one request for both contracts: the free plan's 10-block chunks make every extra call count
+    const predict = ADDR.predict !== ZERO;
+    const logs = await publicClient.getLogs({
+      address: predict ? [ADDR.ask, ADDR.predict] : ADDR.ask,
+      events: predict ? [...EVENTS, ...PREDICT_EVENTS] : EVENTS,
+      fromBlock: from,
+      toBlock: to,
+    });
+    const touched = new Set<string>();
     for (const log of logs) {
-      if (log.eventName === "Asked") {
+      if (predict && log.address.toLowerCase() === ADDR.predict.toLowerCase()) {
+        touched.add(await onPredictLog(log as Parameters<typeof onPredictLog>[0]));
+      } else if (log.eventName === "Asked") {
         const p = await prices();
         await db.upsertAsked({
           id: String(log.args.id),
@@ -70,6 +81,7 @@ async function run() {
         await db.setRefunded(String(log.args.id));
       }
     }
+    await syncMarkets(touched);
     await db.set("indexer", String(to));
     from = to + 1n;
   }
