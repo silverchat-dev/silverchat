@@ -94,12 +94,12 @@ async function NetworkNow() {
   ];
 
   return (
-    <section aria-labelledby="now" className="grid gap-3 lg:grid-cols-[20rem_minmax(0,1fr)]">
+    <section aria-labelledby="now" className={`grid gap-3 ${fixed.length ? "lg:grid-cols-[20rem_minmax(0,1fr)]" : ""}`}>
       <div className="space-y-5 bg-tray p-6">
         <h2 id="now" className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
           The network now · last 24 hours
         </h2>
-        <dl className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+        <dl className={`grid gap-4 sm:grid-cols-3 ${fixed.length ? "lg:grid-cols-1" : ""}`}>
           {figures.map(([k, v]) => (
             <div key={k} className="flex items-baseline justify-between gap-4 sm:block sm:space-y-1">
               <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-silver">{k}</dt>
@@ -126,7 +126,7 @@ async function NetworkNow() {
                   <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-developer/60">Fixed · No. {p.id}</span>
                   <span className="space-y-1">
                     <span className="block text-4xl leading-none tabular-nums">{top ? `${top.share}%` : "·"}</span>
-                    <span className="block truncate font-mono text-[11px] uppercase tracking-[0.12em]">{top?.option ?? "no answers"}</span>
+                    <span className="line-clamp-2 font-mono text-[11px] uppercase tracking-[0.12em]">{top?.option ?? "no answers"}</span>
                   </span>
                   <span className="line-clamp-3 text-sm leading-snug text-developer/80">{content?.questions[0].q ?? "Question not published"}</span>
                 </Link>

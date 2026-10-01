@@ -63,7 +63,9 @@ async function run() {
         if (row && (row.result_root !== log.args.resultRoot || row.reward_root !== log.args.rewardRoot)) {
           console.error(`[indexer] ALERT poll ${id} was fixed with roots this server did not compute (tx ${log.transactionHash}); rotate the poster key`);
         }
-        await db.setFinalized(id, log.args.resultRoot!, log.args.rewardRoot!, String(log.args.rewardTotal), log.transactionHash);
+        // our finalizer stamps when it sent the tx; after a rebuild from the chain, the log's block time stands in
+        const at = row?.finalize_at ?? Number((await publicClient.getBlock({ blockNumber: log.blockNumber })).timestamp);
+        await db.setFinalized(id, log.args.resultRoot!, log.args.rewardRoot!, String(log.args.rewardTotal), log.transactionHash, at);
       } else if (log.eventName === "Refunded") {
         await db.setRefunded(String(log.args.id));
       }

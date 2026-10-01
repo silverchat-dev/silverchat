@@ -143,13 +143,16 @@ export const db = {
   },
 
   /** From the Finalized log: the chain's roots and tx win over whatever the finalizer saved before sending. */
-  async setFinalized(id: string, resultRoot: string, rewardRoot: string, rewardTotal: string, tx: string) {
+  async setFinalized(id: string, resultRoot: string, rewardRoot: string, rewardTotal: string, tx: string, at: number) {
     await init();
     const f = { status: "final" as const, result_root: resultRoot, reward_root: rewardRoot, reward_total: rewardTotal, finalize_tx: tx };
-    if (!pool) return void Object.assign(mem.polls.get(id) ?? {}, f);
+    if (!pool) {
+      const p = mem.polls.get(id);
+      return void (p && Object.assign(p, f, { finalize_at: p.finalize_at ?? at }));
+    }
     await pool.query(
-      `update polls set status = 'final', result_root = $2, reward_root = $3, reward_total = $4, finalize_tx = $5 where id = $1`,
-      [id, resultRoot, rewardRoot, rewardTotal, tx],
+      `update polls set status = 'final', result_root = $2, reward_root = $3, reward_total = $4, finalize_tx = $5, finalize_at = coalesce(finalize_at, $6) where id = $1`,
+      [id, resultRoot, rewardRoot, rewardTotal, tx, at],
     );
   },
 
@@ -240,12 +243,14 @@ export const db = {
       const count = (id: string) => [...mem.answers.values()].filter((a) => a.poll_id === id).length;
       return [...mem.polls.values()]
         .filter((p) => (!status || p.status === status) && !isHidden(p.id))
-        .sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)))
+        .sort((a, b) => (status === "final" ? (b.finalize_at ?? 0) - (a.finalize_at ?? 0) : 0) || Number(BigInt(b.id) - BigInt(a.id)))
         .slice(0, limit)
         .map((p) => ({ ...p, answers: count(p.id) }));
     }
     const cols = `p.*, (select count(*) from answers a where a.poll_id = p.id)::int as answers`;
-    const r = await pool.query(`select ${cols} from polls p where ($1::text is null or status = $1) and id <> all($2::numeric[]) order by id desc limit $3`, [
+    // fixed results come newest fixed first: a long poll asked early can be fixed after short ones asked later
+    const order = status === "final" ? "finalize_at desc nulls last, id desc" : "id desc";
+    const r = await pool.query(`select ${cols} from polls p where ($1::text is null or status = $1) and id <> all($2::numeric[]) order by ${order} limit $3`, [
       status ?? null,
       HIDDEN,
       limit,
