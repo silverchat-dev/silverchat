@@ -16,9 +16,16 @@ project=$("$railway" status --json | python3 -c "import json,sys; print(json.loa
 git fetch -q origin main
 commit=$(git rev-parse origin/main)
 
+# SilverRiddle only once it is deployed; until then the riddle page says it opens soon
+riddle=()
+if python3 -c "import json,sys; sys.exit('riddle' not in json.load(open('$out')))"; then
+  [ "$(cast code "$(get riddle)" --rpc-url "$rpc" 2>/dev/null)" != 0x ] || { echo "no contract at riddle $(get riddle)" >&2; exit 1; }
+  riddle=("NEXT_PUBLIC_RIDDLE=$(get riddle)" "NEXT_PUBLIC_RIDDLE_BLOCK=$(get riddleBlock)")
+fi
+
 "$railway" variable set --service web --skip-deploys \
   "NEXT_PUBLIC_ASK=$(get ask)" "NEXT_PUBLIC_ALGORITHM=$(get algorithm)" \
-  "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$commit"
+  "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$commit" ${riddle[@]+"${riddle[@]}"}
 
 tmp=$(mktemp -d)
 git archive "$commit" web | tar -x -C "$tmp"
