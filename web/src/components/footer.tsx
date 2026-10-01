@@ -32,9 +32,11 @@ export function Footer() {
           <Link className={link} href="/stats">
             Stats
           </Link>
-          <Link className={link} href="/riddle">
-            The riddle
-          </Link>
+          {ADDR.riddle !== ZERO && (
+            <Link className={link} href="/riddle">
+              The riddle
+            </Link>
+          )}
           <span>
           $ZC{" "}
           <a className={link} href={`${EXPLORER}/token/${ADDR.zc}`} target="_blank" rel="noreferrer">

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { erc20Abi } from "viem";
 
 import { SolvePanel } from "@/components/riddle";
@@ -39,8 +40,9 @@ async function read() {
 const utc = (ts: number) => `${new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC`;
 
 export default async function RiddlePage() {
-  const live = ADDR.riddle !== ZERO;
-  const r = live ? await read().catch(() => "unread" as const) : null;
+  // nothing shows until SilverRiddle is deployed: the seven days start then, not when this page ships
+  if (ADDR.riddle === ZERO) notFound();
+  const r = await read().catch(() => "unread" as const);
   const ready = r && r !== "unread" ? r : null;
   // open for answers only once funded; a solved or closed riddle reads as such whatever its balance
   const opens = !ready || (!ready.solved && !ready.closed && ready.prize === 0n);
