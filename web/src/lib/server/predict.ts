@@ -1,10 +1,10 @@
 import "server-only";
 
-import { formatEther, type Address, type Hex, type Log } from "viem";
+import { BaseError, ContractFunctionRevertedError, formatEther, parseGwei, type Address, type Hex, type Log } from "viem";
 
 import { predictAbi, priceFeedAbi, realityAbi } from "@/lib/abi";
 import { ADDR, ZERO } from "@/lib/config";
-import { KEEPER_REVEALS_AFTER, REVEAL_WINDOW, STATUS, badTitle, feedName, priceTitle, titleOf } from "@/lib/market";
+import { badTitle, commitmentOf, feedName, KEEPER_REVEALS_AFTER, priceTitle, REVEAL_WINDOW, STATUS, titleOf, type Side } from "@/lib/market";
 
 import { publicClient, send, walletFor } from "./chain";
 import { db, type MarketRow } from "./db";
@@ -14,10 +14,15 @@ export const PREDICT_EVENTS = predictAbi.filter((x) => x.type === "event");
 
 const keeper = walletFor(process.env.KEEPER_PRIVATE_KEY);
 const LOW_ETH = 5n * 10n ** 16n;
-const UNRESOLVED = `0x${"f".repeat(63)}e`;
 const NO_ANSWER_VOID = 30 * 86_400;
+const HARD_STOP = 180 * 86_400;
 const BATCH = 50;
+// a reveal has one day left when the keeper steps in: it pays what gas costs then rather than let stakes be lost
+const REVEAL_FEE_CAP = parseGwei("500");
 let checked = 0;
+// a transaction sent and not yet mined, per market, so a slow one is never sent twice
+const inflight = new Map<string, Hex>();
+const warned = new Set<string>();
 
 type PredictLog = Log & { eventName: string; args: Record<string, unknown> };
 
@@ -131,6 +136,7 @@ export async function predictTick() {
   const now = await chainTime();
   for (const m of await db.marketsToKeep()) {
     try {
+      if (await stillInFlight(m.id)) continue;
       await keep(m, now);
     } catch (e) {
       console.error(`[keeper] market ${m.id}:`, e instanceof Error ? e.message.split("\n")[0] : e);
@@ -140,14 +146,38 @@ export async function predictTick() {
 
 const call = (functionName: string, args: readonly unknown[]) => ({ address: ADDR.predict, abi: predictAbi, functionName, args });
 
-/** Send, wait for it, then read the market back, so the next tick never sends the same thing twice. */
-async function sendAndWait(id: string, c: ReturnType<typeof call>) {
-  const hash = await send(keeper!, c);
-  const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 180_000 });
+/** True while the last transaction for this market is still pending; once mined or dropped, the market is free again. */
+async function stillInFlight(id: string) {
+  const hash = inflight.get(id);
+  if (!hash) return false;
+  const receipt = await publicClient.getTransactionReceipt({ hash }).catch(() => null);
+  if (receipt) {
+    inflight.delete(id);
+    await syncMarkets([id]);
+    return false;
+  }
+  const pending = await publicClient.getTransaction({ hash }).then(() => true, () => false);
+  if (!pending) inflight.delete(id);
+  return pending;
+}
+
+/** Send, wait two blocks, then read the market back. A reorg of one block cannot leave the record ahead of the chain. */
+async function sendAndWait(id: string, c: { address: Address; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }, cap?: bigint) {
+  const hash = await send(keeper!, c as Parameters<typeof send>[1], cap);
+  inflight.set(id, hash);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash, confirmations: 2, timeout: 180_000 });
+  inflight.delete(id);
   if (receipt.status !== "success") throw new Error(`${c.functionName} reverted in ${hash}`);
   await syncMarkets([id]);
   return hash;
 }
+
+/** A call the contract refuses right now; anything else (RPC, gas cap) is a real error and is thrown. */
+const refusedNow = (e: unknown) => e instanceof BaseError && !!e.walk((x) => x instanceof ContractFunctionRevertedError);
+const unlessRefused = (e: unknown) => {
+  if (refusedNow(e)) return null;
+  throw e;
+};
 
 async function keep(m: MarketRow, now: number) {
   const id = BigInt(m.id);
@@ -157,12 +187,21 @@ async function keep(m: MarketRow, now: number) {
   }
   const windowEnd = m.closes_at + REVEAL_WINDOW;
   if (now >= m.closes_at + KEEPER_REVEALS_AFTER && now < windowEnd) {
-    const seals = await db.sealsToReveal(m.id);
+    // only seals that open a stake the chain still holds sealed: one stale seal would fail its whole batch
+    const held = await db.sealsToReveal(m.id);
+    const onChain = held.length
+      ? await publicClient.multicall({
+          contracts: held.map((s) => ({ address: ADDR.predict, abi: predictAbi, functionName: "stakes", args: [id, s.staker as Address] }) as const),
+          allowFailure: false,
+        })
+      : [];
+    const seals = held.filter((s, i) => onChain[i][2] === 0 && onChain[i][1] === commitmentOf(id, s.staker as Address, s.side as Side, s.salt as Hex));
     for (let i = 0; i < seals.length; i += BATCH) {
       const batch = seals.slice(i, i + BATCH);
       await sendAndWait(
         m.id,
         call("reveal", [id, batch.map((s) => s.staker as Address), batch.map((s) => s.side), batch.map((s) => s.salt as Hex)]),
+        REVEAL_FEE_CAP,
       );
       for (const s of batch) await db.setStake(m.id, s.staker, { side: s.side });
     }
@@ -171,32 +210,39 @@ async function keep(m: MarketRow, now: number) {
   if (now < Math.max(m.resolves_at, windowEnd)) return;
 
   if (m.kind === 0 && m.feed) {
-    const round = await roundAt(m.feed as Address, m.resolves_at);
+    const round = await roundAt(m.feed as Address, m.resolves_at, m.id);
     if (round !== null) return void (await sendAndWait(m.id, call("settlePrice", [id, round])));
   } else if (m.question_id) {
-    const settled = await sendAndWait(m.id, call("settleEvent", [id])).catch(() => null);
+    const settled = await sendAndWait(m.id, call("settleEvent", [id])).catch(unlessRefused);
     if (settled) return;
     await reopenIfTooSoon(m);
   }
-  // only an unanswered event after 30 days, or anything after 180; the contract decides, the simulation asks it
-  if (now >= m.resolves_at + NO_ANSWER_VOID) await sendAndWait(m.id, call("voidMarket", [id])).catch(() => null);
+  // an unanswered event after 30 days, anything after 180; the contract decides, the simulation asks it
+  if (now >= m.resolves_at + (m.kind === 0 ? HARD_STOP : NO_ANSWER_VOID)) await sendAndWait(m.id, call("voidMarket", [id])).catch(unlessRefused);
 }
 
-/** Reality marks an answer given before the question opened as "too soon"; a reopened copy lets it be answered again. */
+/**
+ * "Answered too soon" is the answer someone gives on Reality when the outcome cannot be known yet. Such a question is
+ * reopened as a copy that can be answered again; SilverPredict follows the copy. Only once per settled-too-soon copy.
+ */
 async function reopenIfTooSoon(m: MarketRow) {
   const qid = m.question_id as Hex;
-  const read = (functionName: "isFinalized" | "resultFor") =>
-    publicClient.readContract({ address: ADDR.reality, abi: realityAbi, functionName, args: [qid] });
-  if (!(await read("isFinalized")) || (await read("resultFor")) !== UNRESOLVED) return;
-  const hash = await keeper!.writeContract({
+  // isSettledTooSoon reverts on a question that is not final yet, so ask isFinalized first
+  const final = (q: Hex) => publicClient.readContract({ address: ADDR.reality, abi: realityAbi, functionName: "isFinalized", args: [q] });
+  const tooSoon = async (q: Hex) =>
+    (await final(q)) && publicClient.readContract({ address: ADDR.reality, abi: realityAbi, functionName: "isSettledTooSoon", args: [q] });
+  if (!(await tooSoon(qid))) return;
+  const copy = await publicClient.readContract({ address: ADDR.reality, abi: realityAbi, functionName: "reopened_questions", args: [qid] });
+  if (BigInt(copy) !== 0n && !(await tooSoon(copy))) return;
+  // same content, arbitrator, timeout and bond, so it is the same question; a nonce never used before
+  const hash = await send(keeper!, {
     address: ADDR.reality,
     abi: realityAbi,
     functionName: "reopenQuestion",
-    // same content, arbitrator, timeout and bond; a nonce SilverPredict never uses
-    args: [0n, m.question!, m.arbitrator as Address, 2 * 86_400, m.resolves_at, (1n << 128n) + BigInt(m.id), BigInt(m.min_bond ?? 0), qid],
+    args: [0n, m.question!, m.arbitrator as Address, 2 * 86_400, m.resolves_at, BigInt(Date.now()), BigInt(m.min_bond ?? 0), qid],
   });
-  await publicClient.waitForTransactionReceipt({ hash, timeout: 180_000 });
-  console.error(`[keeper] market ${m.id}: reopened a question answered too soon (${hash})`);
+  await publicClient.waitForTransactionReceipt({ hash, confirmations: 2, timeout: 180_000 });
+  console.error(`[keeper] market ${m.id}: reopened a question settled too soon (${hash})`);
 }
 
 /**
@@ -204,7 +250,7 @@ async function reopenIfTooSoon(m: MarketRow) {
  * after it does not exist yet. A time before the current phase began is left for a hand settle; it needs the old
  * aggregator's last round, which happens once in years.
  */
-async function roundAt(feed: Address, t: number): Promise<bigint | null> {
+async function roundAt(feed: Address, t: number, marketId: string): Promise<bigint | null> {
   const read = async (round: bigint) =>
     Number((await publicClient.readContract({ address: feed, abi: priceFeedAbi, functionName: "getRoundData", args: [round] }))[3]);
   const [latest, , , latestAt] = await publicClient.readContract({ address: feed, abi: priceFeedAbi, functionName: "latestRoundData" });
@@ -213,7 +259,8 @@ async function roundAt(feed: Address, t: number): Promise<bigint | null> {
   let lo = 1n;
   let hi = latest & ((1n << 64n) - 1n);
   if ((await read((phase << 64n) | lo)) > t) {
-    console.error(`[keeper] ${feedName(feed)}: ${t} is before the current Chainlink phase; settle with settlePrice by hand`);
+    if (!warned.has(marketId)) console.error(`[keeper] market ${marketId}: ${feedName(feed)} changed aggregator after ${t}; settle with settlePrice by hand`);
+    warned.add(marketId);
     return null;
   }
   while (lo < hi) {

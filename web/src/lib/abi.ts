@@ -66,7 +66,8 @@ export const predictAbi = parseAbi([
 // Reality.eth v3.0, ETH bonds: what the keeper needs to reopen a question answered too soon
 export const realityAbi = parseAbi([
   "function isFinalized(bytes32 questionId) view returns (bool)",
-  "function resultFor(bytes32 questionId) view returns (bytes32)",
+  "function isSettledTooSoon(bytes32 questionId) view returns (bool)",
+  "function reopened_questions(bytes32 questionId) view returns (bytes32)",
   "function reopenQuestion(uint256 templateId, string question, address arbitrator, uint32 timeout, uint32 openingTs, uint256 nonce, uint256 minBond, bytes32 reopensQuestionId) payable returns (bytes32)",
 ]);
 

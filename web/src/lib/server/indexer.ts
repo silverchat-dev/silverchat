@@ -2,7 +2,7 @@ import "server-only";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { askAbi } from "@/lib/abi";
-import { ADDR, CHAIN_ID, DEPLOY_BLOCK, ZERO } from "@/lib/config";
+import { ADDR, CHAIN_ID, DEPLOY_BLOCK, PREDICT_BLOCK, ZERO } from "@/lib/config";
 
 import { publicClient } from "./chain";
 import { db } from "./db";
@@ -34,7 +34,11 @@ async function run() {
   const head = (await publicClient.getBlockNumber()) - (CHAIN_ID === 1 ? 2n : 0n);
   const saved = await db.get("indexer");
   let from = saved ? BigInt(saved) + 1n : DEPLOY_BLOCK;
-  if (from > head - TAIL) from = head - TAIL;
+  // SilverPredict goes live after SilverAsk: the first time it is on, read its logs from its own deploy block
+  const predictOn = ADDR.predict !== ZERO && PREDICT_BLOCK > 0n;
+  const rewind = predictOn && !(await db.get("indexer:predict"));
+  if (rewind && PREDICT_BLOCK < from) from = PREDICT_BLOCK;
+  if (!rewind && from > head - TAIL) from = head - TAIL;
   if (from < DEPLOY_BLOCK) from = DEPLOY_BLOCK;
 
   while (from <= head) {
@@ -85,5 +89,6 @@ async function run() {
     await db.set("indexer", String(to));
     from = to + 1n;
   }
+  if (rewind) await db.set("indexer:predict", "1");
   await db.pruneDrafts();
 }

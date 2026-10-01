@@ -432,6 +432,7 @@ export const db = {
     await init();
     if (!pool) {
       const old = mem.markets.get(id);
+      if (!old && !("kind" in fields)) return void console.error(`[indexer] market ${id} has no Opened row yet`);
       mem.markets.set(id, { pool: "0", yes: "0", no: "0", payout: "0", status: 1, refund: false, invalid: false, lock_claimed: false, ...old, ...fields, id } as MarketRow);
       return;
     }
@@ -441,6 +442,8 @@ export const db = {
     // update first: Postgres checks NOT NULL on an insert before ON CONFLICT, and only the Opened log has every column
     const r = await pool.query(`update markets set ${cols.map((c, i) => `${c} = $${i + 2}`).join(", ")} where id = $1`, [id, ...vals]);
     if (r.rowCount) return;
+    // a market whose Opened log was never read: skip it rather than stop the indexer for polls too
+    if (!("kind" in fields)) return void console.error(`[indexer] market ${id} has no Opened row yet`);
     await pool.query(
       `insert into markets (id, ${cols.join(", ")}) values ($1, ${cols.map((_, i) => `$${i + 2}`).join(", ")}) on conflict (id) do nothing`,
       [id, ...vals],
@@ -506,7 +509,9 @@ export const db = {
     await init();
     if (!pool) return void mem.seals.set(`${row.market_id}:${row.staker}`, row);
     await pool.query(
-      `insert into seals (market_id, staker, side, salt) values ($1, $2, $3, $4) on conflict (market_id, staker) do nothing`,
+      // the route checked it against the chain just now; a newer seal (a stake moved by a reorg) replaces the old one
+      `insert into seals (market_id, staker, side, salt) values ($1, $2, $3, $4)
+       on conflict (market_id, staker) do update set side = excluded.side, salt = excluded.salt`,
       [row.market_id, row.staker, row.side, row.salt],
     );
   },

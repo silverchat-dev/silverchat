@@ -12,7 +12,6 @@ export const NO = 2;
 export type Side = typeof YES | typeof NO;
 
 export const STATUS = ["none", "open", "yes", "no", "void"] as const;
-export type MarketStatus = (typeof STATUS)[number];
 
 /** The Chainlink feeds SilverPredict accepts, 8 decimals each. */
 export const FEEDS = {
