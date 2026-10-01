@@ -40,7 +40,7 @@ export function Header() {
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-5">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
           <BlockClock />
           {home ? (
             <Link href="/ask" className="bg-safelight px-5 py-2.5 font-mono text-sm text-developer hover:brightness-110">

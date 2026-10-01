@@ -6,7 +6,6 @@ import { BaseError, UserRejectedRequestError, type Hex } from "viem";
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
 
 import { askAbi } from "@/lib/abi";
-import { hasReceipts } from "@/lib/answer";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { tokens } from "@/lib/format";
 import { rewardsMessage, today } from "@/lib/rewards";
@@ -17,7 +16,8 @@ const sigKey = (address: string, day: string) => `silverchat:rewards:${address.t
 
 /**
  * Rewards for the connected wallet, claimed in one transaction. The list is private to the wallet, so it is fetched
- * with a signature, asked for once a day and only on a device where this wallet has answered.
+ * with a signature, asked for once a day. Any connected wallet can check, on any device: whoever answered on a phone
+ * and comes back on a laptop, or cleared the browser, can still find and claim what they earned.
  */
 export function Rewards() {
   const { address, chainId } = useAccount();
@@ -29,7 +29,6 @@ export function Rewards() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  const answered = useMemo(() => !!address && hasReceipts(address), [address]);
   const stored = useMemo(() => {
     try {
       return address ? sessionStorage.getItem(sigKey(address, day)) : null;
@@ -47,7 +46,7 @@ export function Rewards() {
       (await (await fetch(`/api/claims/${address}?day=${day}`, { headers: { "x-rewards-signature": sig! } })).json()).claims ?? [],
   });
 
-  if (!address || chainId !== CHAIN_ID || !answered) return null;
+  if (!address || chainId !== CHAIN_ID) return null;
 
   async function check() {
     if (!address) return;
