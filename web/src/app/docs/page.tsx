@@ -14,6 +14,7 @@ const SECTIONS = [
   ["questions", "Questions"],
   ["book", "From the book"],
   ["contracts", "Contracts"],
+  ["predict", "Predict"],
   ["api", "API"],
   ["trust", "Trust"],
 ] as const;
@@ -24,7 +25,7 @@ const BOOK: [string, string, number[], string][] = [
   ["Algorithm hash", "A new algorithm hash only counts after a twenty-day delay.", [27], "SilverAlgorithm holds the hash of the rules file."],
   ["Anonymous answers", "Votes are anonymous. Results split by what people say about themselves.", [27], "Signed answers, recorded without addresses. Optional region and age."],
   ["Open clients", "An open API lets people write their own client and take their data with them.", [3, 8], "Open API and export. Build your own reader."],
-  ["Predict", "Silverchat Predict lets people, or bots, bet on future events.", [27], "Not yet."],
+  ["Predict", "Silverchat Predict lets people, or bots, bet on future events.", [27], "Stake ZC on YES or NO with a sealed side. Chainlink or Reality.eth settles it."],
   ["Reading the network", "The AI Emerald writes a broad report of what people say.", [10], "Not yet."],
 ];
 
@@ -32,6 +33,7 @@ export default function DocsPage() {
   const contracts: [string, string][] = [
     ["SilverAsk", ADDR.ask],
     ["SilverAlgorithm", ADDR.algorithm],
+    ...(ADDR.predict !== ZERO ? ([["SilverPredict", ADDR.predict]] as [string, string][]) : []),
     ["$ZC", ADDR.zc],
     ["$SC", ADDR.sc],
   ];
@@ -114,7 +116,7 @@ export default function DocsPage() {
             not there yet, the table says so.
           </p>
           <div className="space-y-6 sm:hidden">
-            {[...BOOK, ["Ours", "Not in the book.", [], "Paying the people who answer, the $SC token, the split of each payment, topics, your own page of polls, and public profiles you can turn on."] as (typeof BOOK)[number]].map(([k, book, chapters, here]) => (
+            {[...BOOK, ["Ours", "Not in the book.", [], "Paying the people who answer, the $SC token, the split of each payment, topics, your own page of polls, public profiles you can turn on, and the SC you lock to open a market."] as (typeof BOOK)[number]].map(([k, book, chapters, here]) => (
               <dl key={k} className="space-y-2 border-t border-silver/20 pt-4">
                 <dt className="text-xl">{k}</dt>
                 <dd className="text-paper/80">
@@ -158,7 +160,7 @@ export default function DocsPage() {
                 <tr className="border-b border-silver/15 align-top">
                   <td className="py-4 pr-6 text-lg">Ours</td>
                   <td className="py-4 pr-6 text-paper/60">Not in the book.</td>
-                  <td className="py-4 text-paper/80">Paying the people who answer, the $SC token, the split of each payment, topics, your own page of polls, and public profiles you can turn on.</td>
+                  <td className="py-4 text-paper/80">Paying the people who answer, the $SC token, the split of each payment, topics, your own page of polls, public profiles you can turn on, and the SC you lock to open a market.</td>
                 </tr>
               </tbody>
             </table>
@@ -195,6 +197,26 @@ export default function DocsPage() {
           </p>
         </Section>
 
+        <Section id="predict" title="Predict">
+          <ol className="space-y-6">
+            {[
+              ["Open", "Lock $SC to open a market on a price (Chainlink ETH/USD or BTC/USD at a set time) or on an event (a yes/no question on Reality.eth). The SC comes back when the market settles YES or NO; if the question turns out invalid, it goes to the treasury."],
+              ["Stake", "Stake $ZC on YES or NO before the market closes, one stake per wallet. The amount is public; your side is sealed, so nobody can follow the crowd. Your browser keeps the seal. You can also hand it to our keeper."],
+              ["Reveal", "In the 72 hours after close, sides are revealed: by your browser when you come back, or by the keeper after 48 hours if you handed it the seal. A side still sealed when the 72 hours end counts as lost."],
+              ["Settle", "A price market settles on the Chainlink round that was current at its time. An event market settles on the final answer on Reality.eth: our keeper posts the first answer, anyone can overrule it with twice the bond, and Kleros settles a dispute."],
+              ["Claim", "Winners share the whole pool less 2%: 1% is burned and 1% goes to the treasury. If nobody revealed the winning side, or nobody lost, every stake comes back and nothing is taken. A market nobody answered is void after 30 days, any market after 180, and every stake comes back."],
+            ].map(([k, v], i) => (
+              <li key={k} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4">
+                <span className="font-mono text-sm text-silver">{String(i + 1).padStart(2, "0")}</span>
+                <span className="space-y-1">
+                  <span className="block text-2xl">{k}</span>
+                  <span className="block text-lg leading-relaxed text-paper/80">{v}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </Section>
+
         <Section id="api" title="API">
           <p className="text-lg leading-relaxed text-paper/80">
             Everything public is open to any client, from any site. Build your own reader; that is how Gladias learned to
@@ -211,6 +233,9 @@ export default function DocsPage() {
               ["GET /api/stats", "ZC spent, earned by answerers, returned, treasury, burned, and the burn address, and the last 24 hours (answers, ZC paid in, ZC burned)"],
               ["POST /api/polls", "publish a question and get its hash before you pay: { v: 2, topic, questions }"],
               ["POST /api/answer", "a signed answer"],
+              ["GET /api/markets", "Predict markets, with revealed sides once they close"],
+              ["GET /api/markets/{id}", "one market"],
+              ["POST /api/markets/{id}/seal", "hand the keeper your sealed side, checked against your stake"],
               ["GET /api/profile?address={address}", "whether a wallet shows its public profile"],
               ["POST /api/profile", "show or hide your profile, signed by the wallet"],
             ].map(([k, v]) => (
@@ -232,6 +257,8 @@ export default function DocsPage() {
               "The pricer key sets the ZC price per person. You never pay more than the cost you sign.",
               "The rules hash proves what was published and when. It does not prove our server runs it; rerunning the feed does.",
               `One wallet, one answer, with a $${MIN_HOLD_USD} minimum: a sample of the network, not of everyone.`,
+              "Predict: the keeper sees the side of every seal handed to it before the market closes. It can skip your reveal; your browser keeps the seal and can reveal on its own inside the window.",
+              "Predict: our keeper posts the first answer to an event market. Anyone can overrule it on Reality.eth with twice the bond, and Kleros settles a dispute. Chainlink and Reality.eth are outside services we do not run.",
               "The contracts are owned by a Safe from launch.",
               "The contracts are not audited. The tokens are volatile. Don't trust this page. Verify it.",
             ].map((t) => (

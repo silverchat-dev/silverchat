@@ -53,7 +53,7 @@ export function priceTitle(feed: string, threshold: bigint, at: number) {
   const name = feedName(feed) ?? "the feed";
   const usd = Number(threshold) / 10 ** FEED_DECIMALS;
   const when = new Date(at * 1000).toISOString().slice(0, 16).replace("T", " ");
-  return `Will ${name} be at or above $${usd.toLocaleString("en-US")} on ${when} UTC, by Chainlink?`;
+  return `Will ${name} be at or above $${usd.toLocaleString("en-US", { maximumFractionDigits: FEED_DECIMALS })} on ${when} UTC, by Chainlink?`;
 }
 
 // the seal is kept in the browser too, so the staker can always reveal without the keeper
