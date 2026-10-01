@@ -16,7 +16,8 @@ const balanceAt = (token: Address, voter: Address, block: bigint) =>
 
 /**
  * Holders of $20 of ZC or SC at the block the poll was asked. A token can sit in one wallet only at the end of that
- * block, so passing it around or borrowing it in the same block buys no extra answers. Needs an archive RPC.
+ * block, so passing it around or borrowing it in the same block buys no extra answers. A sample of the network, not
+ * "a big chunk of the population to see the poll" (Snowmoon, ch. 27). Needs an archive RPC.
  */
 export async function isEligible(poll: PollRow, voter: Address) {
   const key = `${poll.id}:${voter}`;

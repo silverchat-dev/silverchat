@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * Every poll with its question, totals and roots, never who answered. Open to any client: build your own Silverchat
- * reader on it (Snowmoon, ch. 3). Answers of a fixed poll are at /api/polls/[id]/leaves.
+ * reader on it (Snowmoon, ch. 3). Gladias learned this way: "The first project I gave myself when I seriously got into
+ * programming as an adult was writing an alternative client for Silverchat" (ch. 8). Answers of a fixed poll are at
+ * /api/polls/[id]/leaves.
  */
 export async function GET(req: Request) {
   if (limited(`export:${clientIp(req)}`, 10)) return Response.json({ error: "too many requests" }, { status: 429 });

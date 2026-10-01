@@ -18,7 +18,8 @@ export function BlockClock() {
 
   if (!block || !now) return <span className="font-mono text-xs tracking-wider text-silver">···</span>;
 
-  // Blocks land on 12s slots, so count down to the next slot even if the last poll is a bit stale.
+  // Blocks land on 12s slots, the book's ticks ("After about ten ticks, the roof was closed", Snowmoon, ch. 27), so
+  // count down to the next slot even if the last poll is a bit stale.
   const next = SLOT - (Math.max(0, now - Number(block.timestamp)) % SLOT);
   return (
     <span className="font-mono text-xs tracking-wider tabular-nums text-paper/85" title="Ethereum mainnet">

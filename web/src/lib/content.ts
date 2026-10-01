@@ -4,7 +4,9 @@ import { refused } from "./moderation";
 
 /**
  * Poll content, shared by the browser and the server. Its hash goes on-chain in `ask()`, so the text form is fixed:
- * built by hand in this key order, strings trimmed, nothing else. Bump `v` before changing any of it.
+ * built by hand in this key order, strings trimmed, nothing else. Like the data field in the book, "an encoding of
+ * Gladias's home address, in the correct format according to the standard shopping protocol" (Snowmoon, ch. 16): one
+ * form, hashed the same everywhere. Bump `v` before changing any of it.
  */
 export type Content = { v: 1; questions: { q: string; options: string[] }[] };
 
