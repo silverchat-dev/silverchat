@@ -8,7 +8,10 @@ import { ADDR, ZERO } from "@/lib/config";
 import { people, tokens } from "@/lib/format";
 import { BREADTHS, costOf } from "@/lib/pricing";
 
-/** The exposure dial: how many people a question reaches, what that costs today, and the way to ask. */
+/**
+ * The exposure dial: how many people a question reaches, what that costs today, and the way to ask. "It lets you ask a
+ * question to a large cross-section of people on the platform" (Snowmoon, ch. 27); the dial sets how large.
+ */
 export function Exposure({ step, onStep }: { step: number; onStep: (step: number) => void }) {
   const price = useReadContract({ address: ADDR.ask, abi: askAbi, functionName: "pricePerPerson", query: { enabled: ADDR.ask !== ZERO } });
   const breadth = BREADTHS[step];

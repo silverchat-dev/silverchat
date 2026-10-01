@@ -10,7 +10,10 @@ export const PRIORITIES = [
 export const costOf = (pricePerPerson: bigint, breadth: number, priority: number) =>
   (pricePerPerson * BigInt(breadth) * PRIORITIES[priority].mult) / 10_000n;
 
-/** Where each poll's ZC goes once the result is fixed, in basis points. */
+/**
+ * Where each poll's ZC goes once the result is fixed, in basis points. The burn is the book's costly signal, "except
+ * for burning a hundred zipcoins at his doorstep" (Snowmoon, ch. 20).
+ */
 export const SPLIT = [
   ["Answerers", 8500n],
   ["Treasury", 500n],

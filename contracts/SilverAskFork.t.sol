@@ -22,12 +22,14 @@ contract SilverAskFork is Test {
   address alice = makeAddr("alice");
   address bob = makeAddr("bob");
 
+  // one question; the book's poll hid its real ones "alongside hundreds of other questions" (Snowmoon, ch. 27)
   bytes32 constant CONTENT = keccak256(
     "{\"v\":1,\"questions\":[{\"q\":\"Will ETH be above $5,000 before January?\",\"options\":[\"Yes\",\"No\"]}]}"
   );
 
   function setUp() public {
-    vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth.drpc.org")), 26_085_290);
+    // the block of the first poll on mainnet
+    vm.createSelectFork(vm.envOr("ETH_RPC_URL", string("https://eth.drpc.org")), 26_092_358);
     ask = new SilverAsk(ZC, treasury, owner, poster, pricer);
     vm.prank(pricer);
     ask.setPrice(3 ether + 7);
