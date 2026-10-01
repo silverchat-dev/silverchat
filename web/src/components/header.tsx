@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { BlockClock } from "@/components/block-clock";
 import { Rewards } from "@/components/rewards";
+import { YouLink } from "@/components/you";
 import { ADDR, ZERO } from "@/lib/config";
 
 const NAV = [
@@ -15,6 +16,8 @@ const NAV = [
   { href: "/docs", label: "Docs" },
   { href: "/demo", label: "Try it" },
 ];
+
+const NAV_LINK = "text-paper/80 hover:text-paper aria-[current=page]:text-paper";
 
 export function Header() {
   const path = usePathname();
@@ -29,17 +32,18 @@ export function Header() {
             <img src="/brand/wordmark.png" alt="silverchat" width={720} height={139} className="h-5 w-auto" />
           </Link>
         )}
-        <nav className="order-last flex w-full flex-wrap gap-x-5 gap-y-1 text-[13px] uppercase tracking-[0.12em] sm:gap-x-7 2xl:order-none 2xl:w-auto 2xl:flex-1">
+        <nav className="order-last flex w-full flex-wrap justify-between gap-x-1 gap-y-1 text-[13px] uppercase tracking-[0.12em] sm:justify-start sm:gap-x-7 2xl:order-none 2xl:w-auto 2xl:flex-1">
           {NAV.map((n) => (
             <Link
               key={n.label}
               href={n.href}
               aria-current={path === n.href || path.startsWith(n.href + "/") ? "page" : undefined}
-              className="text-paper/80 hover:text-paper aria-[current=page]:text-paper"
+              className={NAV_LINK}
             >
               {n.label}
             </Link>
           ))}
+          {!home && <YouLink className={NAV_LINK} />}
           {/* the riddle stands apart from the app: its own item, once SilverRiddle is live */}
           {ADDR.riddle !== ZERO && (
             <>

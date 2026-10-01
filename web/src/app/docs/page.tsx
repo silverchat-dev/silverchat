@@ -114,7 +114,7 @@ export default function DocsPage() {
             not there yet, the table says so.
           </p>
           <div className="space-y-6 sm:hidden">
-            {[...BOOK, ["Ours", "Not in the book.", [], "Paying the people who answer, the $SC token, the split of each payment, and topics."] as (typeof BOOK)[number]].map(([k, book, chapters, here]) => (
+            {[...BOOK, ["Ours", "Not in the book.", [], "Paying the people who answer, the $SC token, the split of each payment, topics, and your own page of polls."] as (typeof BOOK)[number]].map(([k, book, chapters, here]) => (
               <dl key={k} className="space-y-2 border-t border-silver/20 pt-4">
                 <dt className="text-xl">{k}</dt>
                 <dd className="text-paper/80">
@@ -158,7 +158,7 @@ export default function DocsPage() {
                 <tr className="border-b border-silver/15 align-top">
                   <td className="py-4 pr-6 text-lg">Ours</td>
                   <td className="py-4 pr-6 text-paper/60">Not in the book.</td>
-                  <td className="py-4 text-paper/80">Paying the people who answer, the $SC token, the split of each payment, and topics.</td>
+                  <td className="py-4 text-paper/80">Paying the people who answer, the $SC token, the split of each payment, topics, and your own page of polls.</td>
                 </tr>
               </tbody>
             </table>

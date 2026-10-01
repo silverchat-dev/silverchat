@@ -45,3 +45,16 @@ export function loadReceipt(pollId: string, voter: string): Receipt | null {
     return null;
   }
 }
+
+/** Poll ids this browser holds a receipt for, i.e. the polls `voter` answered from here. */
+export function receiptIds(voter: string) {
+  try {
+    const end = `:${voter.toLowerCase()}`;
+    const start = `silverchat:receipt:${CHAIN_ID}:${ADDR.ask.toLowerCase()}:`;
+    return Object.keys(localStorage)
+      .filter((k) => k.startsWith(start) && k.endsWith(end))
+      .map((k) => k.slice(start.length, -end.length));
+  } catch {
+    return [];
+  }
+}
