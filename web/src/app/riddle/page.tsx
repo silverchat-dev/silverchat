@@ -9,7 +9,9 @@ import { short, tokens } from "@/lib/format";
 import { publicClient } from "@/lib/server/chain";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "The riddle · silverchat", description: "One riddle on Silverchat, with a prize in $SC for the first who solves it." };
+// static metadata would ship even with the 404, so it is built only once the riddle is live
+export const generateMetadata = (): Metadata =>
+  ADDR.riddle === ZERO ? {} : { title: "The riddle · silverchat", description: "One riddle on Silverchat, with a prize in $SC for the first who solves it." };
 
 const RIDDLE = {
   title: "The count",

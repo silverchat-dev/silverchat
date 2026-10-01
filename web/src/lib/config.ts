@@ -15,7 +15,7 @@ export const ADDR = {
   ask: (process.env.NEXT_PUBLIC_ASK ?? ZERO) as Address,
   algorithm: (process.env.NEXT_PUBLIC_ALGORITHM ?? ZERO) as Address,
   /** Zero until SilverRiddle is deployed: the riddle page then says it opens soon. */
-  riddle: (process.env.NEXT_PUBLIC_RIDDLE ?? ZERO) as Address,
+  riddle: (process.env.NEXT_PUBLIC_RIDDLE || ZERO) as Address,
   weth: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
   poolManager: "0x000000000004444c5dc75cB358380D2e3dE08A90" as Address,
   stockereumHook: "0x322dcEc4958C14e021A9F1cD49DF11b9457968cC" as Address,
