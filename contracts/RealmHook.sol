@@ -8,6 +8,7 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {FixedPoint96} from "v4-core/src/libraries/FixedPoint96.sol";
 import {FullMath} from "v4-core/src/libraries/FullMath.sol";
+import {SafeCast} from "v4-core/src/libraries/SafeCast.sol";
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
@@ -48,6 +49,8 @@ contract RealmHook is IHooks, IUnlockCallback {
   uint256 public constant LAUNCH_FEE = 990_000;
   uint256 public constant ANTI_SNIPE = 20;
   int24 public constant TICK_SPACING = 200;
+  // the fee a buy paid, from beforeSwap to its afterSwap in the same call
+  uint256 internal constant BUY_FEE_SLOT = uint256(keccak256("silverrealm.buy-fee"));
 
   IPoolManager public immutable POOL_MANAGER;
   address public immutable BURNER;
@@ -134,7 +137,7 @@ contract RealmHook is IHooks, IUnlockCallback {
     (_lower, _upper) = _baseIs0 ? (-_maxUsableTick(), _tick) : (_tick, _maxUsableTick());
     uint160 _a = TickMath.getSqrtPriceAtTick(_lower);
     uint160 _b = TickMath.getSqrtPriceAtTick(_upper);
-    _liquidity = uint128(
+    _liquidity = SafeCast.toUint128(
       _baseIs0
         ? FullMath.mulDiv(_amount, FixedPoint96.Q96, _b - _a)
         : FullMath.mulDiv(_amount, FullMath.mulDiv(_a, _b, FixedPoint96.Q96), _b - _a)
@@ -188,6 +191,10 @@ contract RealmHook is IHooks, IUnlockCallback {
     uint256 _fee = uint256(-_params.amountSpecified) * _consumeRate(_l, _sender) / FEE_DENOMINATOR;
     if (_fee == 0) return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     POOL_MANAGER.mint(BURNER, Currency.wrap(_l.base).toId(), _fee);
+    uint256 _slot = BUY_FEE_SLOT;
+    assembly ("memory-safe") {
+      tstore(_slot, _fee)
+    }
     return (IHooks.beforeSwap.selector, toBeforeSwapDelta(int128(int256(_fee)), 0), 0);
   }
 
@@ -215,7 +222,14 @@ contract RealmHook is IHooks, IUnlockCallback {
     if (_zeroForOne == _is0) {
       // a buy: the pool swapped what was left after the fee
       uint256 _out = uint256(uint128(_is0 ? _delta.amount1() : _delta.amount0()));
-      emit Trade(_id, _sender, true, _in, _out, _in - uint256(uint128(-_baseDelta)));
+      // the fee beforeSwap took, exact even when a price limit filled only part of the swap
+      uint256 _slot = BUY_FEE_SLOT;
+      uint256 _fee;
+      assembly ("memory-safe") {
+        _fee := tload(_slot)
+        tstore(_slot, 0)
+      }
+      emit Trade(_id, _sender, true, _in, _out, _fee);
       return 0;
     }
     uint256 _gross = uint256(uint128(_baseDelta));

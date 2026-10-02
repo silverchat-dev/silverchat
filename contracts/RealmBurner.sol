@@ -30,6 +30,7 @@ contract RealmBurner is IUnlockCallback, Ownable2Step, ReentrancyGuard {
   error NotPoolManager();
   error BadBase();
   error TooLittle();
+  error CannotRenounce();
 
   constructor(IPoolManager _poolManager, address _owner, address _keeper) Ownable(_owner) {
     POOL_MANAGER = _poolManager;
@@ -71,6 +72,11 @@ contract RealmBurner is IUnlockCallback, Ownable2Step, ReentrancyGuard {
     _pm.take(Currency.wrap(RealmPools.ZC), RealmPools.DEAD, _zc);
     emit Burned(_base, _amount, _sc, _zc);
     return "";
+  }
+
+  /// @notice Disabled: without an owner the keeper could never be replaced, and the fees would wait here forever
+  function renounceOwnership() public view override onlyOwner {
+    revert CannotRenounce();
   }
 
   function setKeeper(address _keeper) external onlyOwner {

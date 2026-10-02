@@ -7,7 +7,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract RealmToken is ERC20 {
   uint256 public constant SUPPLY = 1_000_000_000 ether;
 
-  constructor(string memory _name, string memory _symbol, address _pool) ERC20(_name, _symbol) {
-    _mint(_pool, SUPPLY);
+  constructor(string memory _name, string memory _symbol, address _hook) ERC20(_name, _symbol) {
+    _mint(_hook, SUPPLY);
   }
 }
