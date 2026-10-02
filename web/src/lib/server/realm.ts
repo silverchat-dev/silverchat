@@ -97,8 +97,9 @@ export async function onRealmLog(log: RealmLog, at: number) {
       return db.saveRealmTrade({
         id,
         pool_id: String(a.poolId),
-        // the hook sees the router, not the wallet; the wallet is whoever sent the transaction
-        trader: lower(a.sender) === ADDR.stockereumRouter.toLowerCase()
+        // the hook sees the router (or the factory, for a creator's first buy), not the wallet; the wallet is whoever
+        // sent the transaction
+        trader: [ADDR.stockereumRouter, ADDR.realmFactory].some((x) => x.toLowerCase() === lower(a.sender))
           ? lower((await publicClient.getTransaction({ hash: log.transactionHash! }).catch(() => null))?.from ?? a.sender)
           : lower(a.sender),
         buy: Boolean(a.buy),
@@ -275,7 +276,7 @@ export async function feed(limit = 30) {
     .map((r: RealmFeedRow) => ({
       kind: r.kind,
       // trades indexed before the wallet was read show the router; no name beats a wrong one
-      who: r.who === ADDR.stockereumRouter.toLowerCase() ? null : r.who,
+      who: [ADDR.stockereumRouter, ADDR.realmFactory].some((x) => x.toLowerCase() === r.who) ? null : r.who,
       buy: r.buy,
       usd: r.base_amount === null || r.base_usd === null ? null : (Number(r.base_amount) / 1e18) * r.base_usd,
       token: r.token,
