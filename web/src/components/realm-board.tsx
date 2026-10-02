@@ -49,7 +49,7 @@ function Bar({ t }: { t: TokenView }) {
       <span className="block h-1 w-full bg-paper/10">
         <span className="block h-full bg-paper" style={{ width: `${grad(t)}%` }} />
       </span>
-      <span className="flex justify-between font-mono text-[11px] text-silver">
+      <span className="flex justify-between gap-2 font-mono text-[11px] whitespace-nowrap text-silver">
         {t.graduated ? <span className="bg-paper px-1.5 text-developer">Graduated</span> : <span>Graduation {Math.floor(grad(t))}%</span>}
         <span>{baseOf(t.base)?.name ?? "?"} · {feeLabel(t.feePpm)} fee</span>
       </span>
@@ -65,7 +65,7 @@ function Card({ t, now }: { t: TokenView; now: number }) {
         href={`/realm/token/${t.token}`}
         className="flex h-full gap-4 border border-paper/12 p-3 transition-colors hover:border-paper/40 hover:bg-paper/[0.03] focus-visible:border-paper"
       >
-        <Thumb t={t} size="h-24 w-24 sm:h-28 sm:w-28" />
+        <Thumb t={t} size="h-20 w-20 sm:h-28 sm:w-28" />
         <span className="flex min-w-0 flex-1 flex-col justify-between gap-2">
           <span className="min-w-0 space-y-0.5">
             <span className="flex items-baseline justify-between gap-2">
@@ -266,7 +266,7 @@ export function RealmBoard({ first, view: start }: { first: Board; view: View })
               placeholder="Search name, $symbol or address"
               aria-label="Search launches"
               maxLength={64}
-              className="min-w-0 flex-1 border border-paper/20 bg-transparent px-3 py-1.5 text-paper placeholder:text-silver/70 focus:border-paper focus:outline-none sm:w-72 sm:flex-none"
+              className="min-w-0 basis-full border border-paper/20 bg-transparent px-3 py-1.5 text-paper placeholder:text-silver/70 focus:border-paper focus:outline-none sm:w-72 sm:basis-auto"
             />
             <div role="group" aria-label="Paired with" className="flex gap-1">
               {[["", "All"] as const, ...BASES.map((b) => [b.id, b.name.replace("$", "")] as const)].map(([id, label]) => (
