@@ -69,6 +69,7 @@ contract RealmFork is Test {
   address constant ZC = RealmPools.ZC;
   address constant SC = RealmPools.SC;
   address constant DEAD = RealmPools.DEAD;
+  address constant STOCKER = RealmPools.STOCKER;
 
   RealmBurner burner;
   RealmFactory factory;
@@ -91,9 +92,11 @@ contract RealmFork is Test {
     vm.deal(buyer, 100 ether);
     deal(ZC, buyer, 10_000_000 ether);
     deal(SC, buyer, 10_000_000 ether);
+    deal(STOCKER, buyer, 50_000_000_000 ether);
     vm.startPrank(buyer);
     IERC20(ZC).approve(address(ROUTER), type(uint256).max);
     IERC20(SC).approve(address(ROUTER), type(uint256).max);
+    IERC20(STOCKER).approve(address(ROUTER), type(uint256).max);
     vm.stopPrank();
   }
 
@@ -103,6 +106,8 @@ contract RealmFork is Test {
   function _fdv(address _base) internal pure returns (uint256) {
     if (_base == WETH) return 1.5 ether;
     if (_base == ZC) return 270_000 ether;
+    // STOCKER at about 1.0e-6 ETH today: $4,000 is some 1.5 million
+    if (_base == STOCKER) return 1_500_000 ether;
     return 10_000_000 ether;
   }
 
@@ -380,6 +385,35 @@ contract RealmFork is Test {
     burner.setKeeper(buyer);
     burner.setKeeper(buyer);
     assertEq(burner.keeper(), buyer);
+  }
+
+  function test_stocker_pairs_launch_trade_and_burn_their_fees() public {
+    for (uint256 _o; _o < 2; ++_o) {
+      address _c = _creator(STOCKER, _o == 0);
+      uint256 _dead = IERC20(SC).balanceOf(DEAD);
+      vm.recordLogs();
+      (address _token, PoolKey memory _key) = _launch(_c, STOCKER, 10_000, 0.05 ether);
+      assertGt(IERC20(SC).balanceOf(DEAD) - _dead, 1000 ether);
+      // the creator's buy went ETH → STOCKER → token and paid the pool rate
+      (uint256 _in, uint256 _fee) = _devTrade();
+      assertEq(_fee, _in / 100);
+      assertGt(IERC20(_token).balanceOf(_c), 0);
+
+      vm.warp(block.timestamp + 21);
+      uint256 _before = _pending(STOCKER);
+      uint256 _got = _buy(_key, STOCKER, 100_000 ether);
+      assertEq(_pending(STOCKER) - _before, 1000 ether);
+      _sell(_key, _token, STOCKER, _got / 2);
+      assertEq(PM.balanceOf(address(hook), Currency.wrap(STOCKER).toId()), 0);
+    }
+    uint256 _fees = _pending(STOCKER);
+    uint256 _sc = IERC20(SC).balanceOf(DEAD);
+    uint256 _zc = IERC20(ZC).balanceOf(DEAD);
+    burner.convert(STOCKER, _fees, 1, 1);
+    assertEq(_pending(STOCKER), 0);
+    assertGt(IERC20(SC).balanceOf(DEAD), _sc);
+    assertGt(IERC20(ZC).balanceOf(DEAD), _zc);
+    assertEq(IERC20(STOCKER).balanceOf(address(burner)), 0);
   }
 
   function test_a_stale_eth_price_stops_launches() public {

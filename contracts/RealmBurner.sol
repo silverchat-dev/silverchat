@@ -11,8 +11,8 @@ import {RealmPools} from "./RealmPools.sol";
 
 /**
  * @title RealmBurner
- * @notice Every SilverRealm trading fee ends here, as PoolManager claims in ETH (WETH), $ZC or $SC. A conversion turns
- *         them into $ZC, burns 20% of it and buys $SC with the rest to burn it too; fees taken in $SC burn 80% as they
+ * @notice Every SilverRealm trading fee ends here, as PoolManager claims in ETH (WETH), $ZC, $SC or $STOCKER. A conversion turns
+ *         them into $ZC (fees in $STOCKER through WETH first), burns 20% of it and buys $SC with the rest to burn it too; fees taken in $SC burn 80% as they
  *         are and buy $ZC with 20% to burn. Nothing here can be withdrawn or sent anywhere but 0xdEaD.
  * @dev Only the keeper converts, with minimums it reads from recent prices, so nobody can time a conversion against a
  *      moved pool. The routes are fixed in RealmPools. The owner (the Safe) can only change the keeper.
@@ -45,7 +45,7 @@ contract RealmBurner is IUnlockCallback, Ownable2Step, ReentrancyGuard {
   /// @notice Burn `_amount` of the fees held in `_base`, refusing if it would burn less than the minimums
   function convert(address _base, uint256 _amount, uint256 _minSc, uint256 _minZc) external nonReentrant {
     if (msg.sender != keeper) revert NotKeeper();
-    if (_base != RealmPools.WETH && _base != RealmPools.ZC && _base != RealmPools.SC) revert BadBase();
+    if (!RealmPools.isBase(_base)) revert BadBase();
     POOL_MANAGER.unlock(abi.encode(_base, _amount, _minSc, _minZc));
   }
 
@@ -63,7 +63,10 @@ contract RealmBurner is IUnlockCallback, Ownable2Step, ReentrancyGuard {
       _sc = _amount * 80 / 100;
       _zc = RealmPools.swapIn(_pm, RealmPools.scZc(), true, _amount - _sc);
     } else {
-      uint256 _allZc = _base == RealmPools.ZC ? _amount : RealmPools.swapIn(_pm, RealmPools.zcWeth(), false, _amount);
+      // STOCKER is sold for WETH first, then it all goes the WETH way
+      uint256 _in =
+        _base == RealmPools.STOCKER ? RealmPools.swapIn(_pm, RealmPools.stockerWeth(), true, _amount) : _amount;
+      uint256 _allZc = _base == RealmPools.ZC ? _in : RealmPools.swapIn(_pm, RealmPools.zcWeth(), false, _in);
       _zc = _allZc * 20 / 100;
       _sc = RealmPools.swapIn(_pm, RealmPools.scZc(), false, _allZc - _zc);
     }

@@ -29,7 +29,7 @@ interface IChainlinkFeed {
 /**
  * @title RealmFactory
  * @notice Launch a token from your Realm (your wallet's page on Silverchat). Every launch buys $5 of $SC and burns it.
- *         The token trades against ETH, $ZC or $SC at a fee its creator picks, 1%, 2% or 3%, and all of that fee is
+ *         The token trades against ETH, $ZC, $SC or $STOCKER at a fee its creator picks, 1%, 2% or 3%, and all of that fee is
  *         burned as $SC (80%) and $ZC (20%) by RealmBurner. SilverRealm keeps nothing.
  * @dev No owner, no pause, no settings. The hook is created here, so it can only ever serve this factory.
  *      The $5 is priced with Chainlink ETH/USD and bought through the ZC/WETH and SC/ZC pools in the same unlock as the
@@ -110,7 +110,7 @@ contract RealmFactory is IUnlockCallback, ReentrancyGuard {
     nonReentrant
     returns (address _token, PoolKey memory _key)
   {
-    if (_p.base != RealmPools.WETH && _p.base != RealmPools.ZC && _p.base != RealmPools.SC) revert BadBase();
+    if (!RealmPools.isBase(_p.base)) revert BadBase();
     if (_p.feePpm != 10_000 && _p.feePpm != 20_000 && _p.feePpm != 30_000) revert BadFee();
     uint256 _burnEth = ethForBurn();
     if (msg.value < _burnEth + _p.devBuyEth) revert NotEnoughEth();
@@ -161,8 +161,13 @@ contract RealmFactory is IUnlockCallback, ReentrancyGuard {
 
     if (_u.devBuyEth != 0) {
       uint256 _in = _u.devBuyEth;
-      if (_u.base != RealmPools.WETH) _in = RealmPools.swapIn(_pm, RealmPools.zcWeth(), false, _in);
-      if (_u.base == RealmPools.SC) _in = RealmPools.swapIn(_pm, RealmPools.scZc(), false, _in);
+      // ETH → STOCKER on its own pool; ETH → ZC, then → SC for an SC pair
+      if (_u.base == RealmPools.STOCKER) {
+        _in = RealmPools.swapIn(_pm, RealmPools.stockerWeth(), false, _in);
+      } else if (_u.base != RealmPools.WETH) {
+        _in = RealmPools.swapIn(_pm, RealmPools.zcWeth(), false, _in);
+        if (_u.base == RealmPools.SC) _in = RealmPools.swapIn(_pm, RealmPools.scZc(), false, _in);
+      }
       uint256 _out = RealmPools.swapIn(_pm, _u.key, Currency.unwrap(_u.key.currency0) == _u.base, _in);
       if (_out < _u.minTokensOut) revert TooFewTokens();
       _pm.take(Currency.wrap(_u.token), _u.creator, _out);
