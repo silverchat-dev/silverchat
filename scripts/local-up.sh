@@ -36,6 +36,9 @@ RIDDLE=$(python3 -c "import json; print(json.load(open('deployments/local.json')
 OUT=local OWNER=$(addr $OWNER_PK) TREASURY=0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 \
   LOCK_AMOUNT=340000000000000000000000 MIN_STAKE=300000000000000000000 \
   forge script Silverchat.s.sol:DeployPredict --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
+# SilverRealm: the anvil owner stands in for the Safe, the keeper converts fees
+OUT=local OWNER=$(addr $OWNER_PK) KEEPER=$(addr $KEEPER_PK) \
+  forge script Silverchat.s.sol:DeployRealm --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
 
 # ZC for the test wallet, straight out of the v4 PoolManager
 cast rpc anvil_impersonateAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
@@ -58,6 +61,10 @@ NEXT_PUBLIC_SC={sys.argv[5]}
 NEXT_PUBLIC_RIDDLE={d['riddle']}
 NEXT_PUBLIC_PREDICT={d['predict']}
 NEXT_PUBLIC_PREDICT_BLOCK={d['predictBlock']}
+NEXT_PUBLIC_REALM_FACTORY={d['realmFactory']}
+NEXT_PUBLIC_REALM_HOOK={d['realmHook']}
+NEXT_PUBLIC_REALM_BURNER={d['realmBurner']}
+NEXT_PUBLIC_REALM_BLOCK={d['realmBlock']}
 RPC_URL=http://127.0.0.1:8545
 POSTER_PRIVATE_KEY={sys.argv[3]}
 PRICER_PRIVATE_KEY={sys.argv[4]}

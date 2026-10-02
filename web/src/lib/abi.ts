@@ -28,6 +28,13 @@ export const routerAbi = parseAbi([
   "function buyWethPairWithEth(PoolKey key, uint256 minOut, bytes hookData) payable returns (uint256 amountOut)",
   "function buyWithEth(PoolKey key, address quote, uint256 minQuoteOut, uint256 minOut, bytes hookData) payable returns (uint256 amountOut)",
   "function quoteBuyWithEth(PoolKey key, address quote, uint256 ethIn) view returns (uint256 quoteIn, uint256 tokensOut)",
+  "function buy(PoolKey key, address quote, uint256 amountIn, uint256 minOut, bytes hookData) returns (uint256 amountOut)",
+  "function sell(PoolKey key, address token, address quote, uint256 amountIn, uint256 minOut, bytes hookData) returns (uint256 amountOut)",
+  "function sellWethPairForEth(PoolKey key, address token, uint256 amountIn, uint256 minOut, bytes hookData) returns (uint256 amountOut)",
+  "function sellForEth(PoolKey key, address token, address quote, uint256 amountIn, uint256 minQuoteOut, uint256 minEthOut, bytes hookData) returns (uint256 amountOut)",
+  "function quoteBuy(PoolKey key, address quote, uint256 amountIn) view returns (uint256 tokensOut)",
+  "function quoteSell(PoolKey key, address token, uint256 amountIn) view returns (uint256 quoteOut)",
+  "function quoteSellForEth(PoolKey key, address token, address quote, uint256 amountIn) view returns (uint256 quoteOut, uint256 ethOut)",
 ]);
 
 // Stockereum's hook keeps each launch's record; with holder rewards on, its fee recipient is the holders' distributor
@@ -90,4 +97,27 @@ export const riddleAbi = parseAbi([
   "function commits(address solver) view returns (bytes32 hash, uint256 blockNumber)",
   "function commit(bytes32 hash)",
   "function reveal(string answer, bytes32 salt)",
+]);
+
+export const realmFactoryAbi = parseAbi([
+  "struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }",
+  "struct LaunchParams { string name; string symbol; string uri; address base; uint24 feePpm; uint256 openingFdv; uint256 minScBurned; uint256 devBuyEth; uint256 minTokensOut; }",
+  "function launch(LaunchParams p) payable returns (address token, PoolKey key)",
+  "function ethForBurn() view returns (uint256)",
+  "function realmOf(address token) view returns (address)",
+  "event Launched(address indexed token, address indexed realm, address indexed base, bytes32 poolId, uint24 feePpm, int24 openingTick)",
+  "event Metadata(address indexed token, string name, string symbol, string uri)",
+  "event LaunchBurn(address indexed token, uint256 eth, uint256 scBurned)",
+  "event DevBuy(address indexed token, address indexed creator, uint256 eth, uint256 tokens)",
+]);
+
+export const realmHookAbi = parseAbi([
+  "function currentFee(bytes32 poolId) view returns (uint256)",
+  "event Trade(bytes32 indexed poolId, address indexed sender, bool buy, uint256 amountIn, uint256 amountOut, uint256 fee)",
+]);
+
+export const realmBurnerAbi = parseAbi([
+  "function pending(address base) view returns (uint256)",
+  "function convert(address base, uint256 amount, uint256 minSc, uint256 minZc)",
+  "event Burned(address indexed base, uint256 amount, uint256 scBurned, uint256 zcBurned)",
 ]);

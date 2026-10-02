@@ -41,7 +41,7 @@ async function median(token: Address, quote: Address) {
   return (xs[1] + xs[2]) / 2n;
 }
 
-async function ethUsd() {
+export async function ethUsd() {
   const [, answer, , updatedAt] = await publicClient.readContract({ address: ADDR.ethUsdFeed, abi: priceFeedAbi, functionName: "latestRoundData" });
   // the feed updates at least hourly; allow two heartbeats before calling it stale
   if (answer <= 0n || Date.now() / 1000 - Number(updatedAt) > 7200) throw new Error("ETH/USD feed is stale");
