@@ -47,7 +47,7 @@ async function readMeta(uri: string) {
   const m = uri.match(META);
   if (!m) return { image: imageSrc(uri) ? uri : null };
   const stored = await db.realmImage(m[1]);
-  if (!stored || stored.type !== "application/json") return {};
+  if (!stored || stored.type !== "application/json") return { image: null };
   try {
     const j = JSON.parse(stored.data.toString("utf8"));
     const text = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : null);
@@ -62,7 +62,7 @@ async function readMeta(uri: string) {
       image: image && imageSrc(image) ? image : null,
     };
   } catch {
-    return {};
+    return { image: null };
   }
 }
 
@@ -112,7 +112,9 @@ export async function onRealmLog(log: RealmLog, at: number) {
 }
 
 /** Base per token (a float, both 18 decimals) of each pool now, from slot0, in one multicall. */
-async function pricesOf(rows: RealmTokenStats[]) {
+type PoolFields = Pick<RealmTokenStats, "token" | "base" | "pool_id" | "opening_tick">;
+
+async function pricesOf(rows: PoolFields[]) {
   if (!rows.length) return [];
   const slots = rows.map((r) => keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [r.pool_id as Hex, 6n])));
   const raw = await publicClient
@@ -122,13 +124,15 @@ async function pricesOf(rows: RealmTokenStats[]) {
     const res = raw[i];
     if (!res || res.status !== "success") return null;
     const sqrt = Number(BigInt(res.result) & ((1n << 160n) - 1n)) / 2 ** 96;
+    // a pool that is not there (the wrong chain, a bad row) has no price, not an infinite one
+    if (sqrt === 0) return null;
     // slot0 is currency1 per currency0
     return BigInt(r.token) < BigInt(r.base) ? sqrt * sqrt : 1 / (sqrt * sqrt);
   });
 }
 
 /** What the whole supply was worth in the base when the pool opened, from its opening tick. */
-const openingValue = (r: RealmTokenStats) => {
+const openingValue = (r: PoolFields) => {
   const perToken = BigInt(r.base) < BigInt(r.token) ? 1.0001 ** -r.opening_tick : 1.0001 ** r.opening_tick;
   return perToken * 1e9;
 };
@@ -138,7 +142,7 @@ const openingValue = (r: RealmTokenStats) => {
  * opening price and runs to the end of the range, so the tokens left are L/√P and sold = 1 − √(opening / now). Only the
  * price moves it; tokens sent to the PoolManager, donations or claims cannot. 80% sold is a price 25× the opening.
  */
-const soldAt = (t: RealmTokenStats, price: number | null) => (price === null ? null : Math.max(0, 1 - Math.sqrt(openingValue(t) / 1e9 / price)));
+const soldAt = (t: PoolFields, price: number | null) => (price === null ? null : Math.max(0, 1 - Math.sqrt(openingValue(t) / 1e9 / price)));
 
 /**
  * The public shape of launched tokens, prices and pool balances read together. A name or symbol with a refused word is
@@ -219,10 +223,17 @@ export async function candles(t: RealmTokenStats, seconds: number): Promise<Cand
     const tokens = x.buy ? outt : inn;
     put(x.at, (base / tokens) * usd, (base / 1e18) * usd);
   }
-  // a candle for every period up to now, flat where nobody traded, so the chart reads as time and not as a few bars
+  // a candle for every period up to now, flat where nobody traded, so the chart reads as time and not as a few bars;
+  // at most the last 1,500 periods, carried in from the last candle before them
   const end = Math.floor(Date.now() / 1000);
+  const from = end - (end % seconds) - 1499 * seconds;
+  const before = out.filter((c) => c.time < from).at(-1);
+  const recent = out.filter((c) => c.time >= from);
+  if (before && (!recent.length || recent[0].time > from)) {
+    recent.unshift({ time: from, open: before.close, high: before.close, low: before.close, close: before.close, volume: 0 });
+  }
   const filled: Candle[] = [];
-  for (const c of out) {
+  for (const c of recent) {
     const prev = filled.at(-1);
     for (let time = prev ? prev.time + seconds : c.time; prev && time < c.time; time += seconds) {
       filled.push({ time, open: prev.close, high: prev.close, low: prev.close, close: prev.close, volume: 0 });
@@ -248,11 +259,15 @@ const FEE_CAP = parseGwei("10");
 export async function realmTick() {
   if (ADDR.realmFactory === ZERO) return;
   // graduation is a milestone: the first time 80% of a supply is out of its pool, note when
-  const open = await db.realmUngraduated();
-  const rows = (await Promise.all(open.map((x) => db.realmTokens({ token: x.token }, 1)))).flat();
+  const rows = await db.realmUngraduated();
   const spot = await pricesOf(rows);
   for (const [i, x] of rows.entries()) {
     if ((soldAt(x, spot[i]) ?? 0) >= GRADUATION) await db.upsertRealmToken(x.token, { graduated_at: Math.floor(Date.now() / 1000) });
+  }
+  // trades whose dollar price could not be read when indexed get it now, from their own block
+  for (const x of await db.realmTradesWithoutUsd(50)) {
+    const usd = await usdAt(x.base, BigInt(x.block)).catch(() => null);
+    if (usd !== null) await db.setRealmTradeUsd(x.id, usd);
   }
   if (!keeper || ADDR.realmBurner === ZERO) return;
   const [p, eth] = await Promise.all([prices(), ethUsd()]);

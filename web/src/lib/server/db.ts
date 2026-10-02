@@ -696,11 +696,40 @@ export const db = {
     return r.rows.map((x) => ({ ...x, at: Number(x.at) }));
   },
 
-  /** Tokens not graduated yet, for the keeper to check. */
-  async realmUngraduated(): Promise<{ token: string }[]> {
+  /** Tokens not graduated yet, with what the keeper needs to price their pools. */
+  async realmUngraduated(): Promise<Pick<RealmTokenRow, "token" | "base" | "pool_id" | "opening_tick">[]> {
     await init();
-    if (!pool) return [...mem.realmTokens.values()].filter((t) => t.graduated_at == null).map((t) => ({ token: t.token }));
-    return (await pool.query(`select token from realm_tokens where graduated_at is null`)).rows;
+    if (!pool) return [...mem.realmTokens.values()].filter((t) => t.graduated_at == null);
+    return (await pool.query(`select token, base, pool_id, opening_tick from realm_tokens where graduated_at is null`)).rows;
+  },
+
+  /** Trades indexed without a dollar price (the lookup failed then), with their pool's base. */
+  async realmTradesWithoutUsd(limit: number): Promise<{ id: string; block: string; base: string }[]> {
+    await init();
+    if (!pool) {
+      return [...mem.realmTrades.values()]
+        .filter((t) => t.base_usd === null)
+        .slice(0, limit)
+        .flatMap((t) => {
+          const tok = [...mem.realmTokens.values()].find((x) => x.pool_id === t.pool_id);
+          return tok ? [{ id: t.id, block: t.block, base: tok.base }] : [];
+        });
+    }
+    const r = await pool.query(
+      `select x.id, x.block::text, t.base from realm_trades x join realm_tokens t on t.pool_id = x.pool_id where x.base_usd is null limit $1`,
+      [limit],
+    );
+    return r.rows;
+  },
+
+  async setRealmTradeUsd(id: string, usd: number) {
+    await init();
+    if (!pool) {
+      const t = mem.realmTrades.get(id);
+      if (t) t.base_usd = usd;
+      return;
+    }
+    await pool.query(`update realm_trades set base_usd = $2 where id = $1`, [id, usd]);
   },
 
   async realmTrades(poolId: string, limit = 50): Promise<RealmTradeRow[]> {

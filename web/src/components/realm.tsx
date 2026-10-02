@@ -275,6 +275,7 @@ export function LaunchForm() {
 }
 
 const BUY_PRESETS = ["0.1", "0.25", "0.5", "1"];
+const ETH_FOR_GAS = 10n ** 16n;
 const PCT_PRESETS = ["10", "25", "50", "100"];
 
 const PRESETS_EVENT = "silverrealm-presets";
@@ -335,7 +336,8 @@ function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (
         <button
           type="button"
           onClick={() => {
-            onSave(draft.map((x, i) => (Number(x) > 0 ? x : values[i])));
+            // a share is at most the whole balance
+            onSave(draft.map((x, i) => (Number(x) > 0 ? (unit === "%" ? String(Math.min(100, Number(x))) : x) : values[i])));
             setEditing(false);
           }}
           className={chip}
@@ -347,8 +349,8 @@ function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (
   }
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {values.map((v) => (
-        <button key={v} type="button" onClick={() => onPick(v)} className={chip}>
+      {values.map((v, i) => (
+        <button key={i} type="button" onClick={() => onPick(v)} className={chip}>
           {unit === "%" ? (v === "100" ? "Max" : `${v}%`) : `${v} ${unit}`}
         </button>
       ))}
@@ -362,7 +364,7 @@ function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (
         title="Edit the quick amounts"
         className="px-2 py-1.5 font-mono text-xs text-developer/70 hover:text-developer"
       >
-        ✎
+        edit
       </button>
     </div>
   );
@@ -498,7 +500,12 @@ export function TradeBox({ token, base, symbol, poolId }: { token: Address; base
         <span className="flex justify-between font-mono text-xs uppercase tracking-[0.14em]">
           <span>Amount, in {payName}</span>
           {balance !== undefined && (
-            <button type="button" onClick={() => setAmount(formatEther(balance))} className="normal-case tracking-normal text-developer/70 underline-offset-2 hover:underline">
+            <button
+              type="button"
+              // paying in ETH keeps 0.01 back for gas
+              onClick={() => setAmount(formatEther(payCoin ? balance : balance > ETH_FOR_GAS ? balance - ETH_FOR_GAS : 0n))}
+              className="normal-case tracking-normal text-developer/70 underline-offset-2 hover:underline"
+            >
               balance {tokens(balance, 4)}
             </button>
           )}

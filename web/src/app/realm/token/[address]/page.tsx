@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { isAddress, type Address, type Hex } from "viem";
 
 import { TradeBox } from "@/components/realm";
@@ -9,19 +10,28 @@ import { CopyAddress } from "@/components/realm-you";
 import { ADDR, EXPLORER, ZERO } from "@/lib/config";
 import { short, span, tokens, usd } from "@/lib/format";
 import { baseOf, feeLabel, GRADUATION, imageSrc, OPENING_FDV_USD } from "@/lib/realm";
+import { realmBurnerAbi } from "@/lib/abi";
+import { publicClient } from "@/lib/server/chain";
 import { db } from "@/lib/server/db";
 import { displayTime } from "@/lib/server/eligibility";
 import { serializeTokens } from "@/lib/server/realm";
 
 export const dynamic = "force-dynamic";
 
-async function load(address: string) {
+// the page and its metadata ask once per request
+const load = cache(async (address: string) => {
   if (ADDR.realmFactory === ZERO || !isAddress(address)) return null;
   const [row] = await db.realmTokens({ token: address.toLowerCase() }, 1);
   if (!row) return null;
-  const [[t], trades, burned, now] = await Promise.all([serializeTokens([row]), db.realmTrades(row.pool_id, 30), db.realmBurned(), displayTime()]);
-  return { t, trades, burned, now };
-}
+  const [[t], trades, burned, now, pending] = await Promise.all([
+    serializeTokens([row]),
+    db.realmTrades(row.pool_id, 30),
+    db.realmBurned(),
+    displayTime(),
+    publicClient.readContract({ address: ADDR.realmBurner, abi: realmBurnerAbi, functionName: "pending", args: [row.base as Address] }).catch(() => null),
+  ]);
+  return { t, trades, burned, now, pending };
+});
 
 export async function generateMetadata({ params }: PageProps<"/realm/token/[address]">): Promise<Metadata> {
   const data = await load((await params).address);
@@ -37,7 +47,7 @@ const tiny = (n: number | null) => (n === null ? "·" : n >= 0.01 ? usd(n) : `$$
 export default async function TokenPage({ params }: PageProps<"/realm/token/[address]">) {
   const data = await load((await params).address);
   if (!data) notFound();
-  const { t, trades, burned, now } = data;
+  const { t, trades, burned, now, pending } = data;
   const base = baseOf(t.base)!;
   const image = imageSrc(t.image);
   const openingUsd = t.baseUsd === null ? null : t.openingValue * t.baseUsd;
@@ -55,9 +65,9 @@ export default async function TokenPage({ params }: PageProps<"/realm/token/[add
           <div className="flex flex-wrap items-start gap-5">
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={image} alt="" width={96} height={96} referrerPolicy="no-referrer" className="h-24 w-24 rounded-full object-cover text-[0px]" />
+              <img src={image} alt="" width={96} height={96} referrerPolicy="no-referrer" className="h-24 w-24 object-cover text-[0px]" />
             ) : (
-              <span aria-hidden className="grid h-24 w-24 place-items-center rounded-full border border-paper/20 font-mono text-silver">
+              <span aria-hidden className="grid h-24 w-24 place-items-center border border-paper/20 font-mono text-silver">
                 {t.symbol?.slice(0, 4) ?? "?"}
               </span>
             )}
@@ -141,7 +151,7 @@ export default async function TokenPage({ params }: PageProps<"/realm/token/[add
             <ol className="divide-y divide-paper/10 font-mono text-xs">
               {trades.map((x) => (
                 <li key={x.id} className="grid grid-cols-[3rem_1fr_1fr_5rem] gap-3 py-2">
-                  <span className={x.buy ? "text-[#7fb08c]" : "text-[#c4655b]"}>{x.buy ? "Buy" : "Sell"}</span>
+                  <span className={x.buy ? "text-paper" : "text-silver"}>{x.buy ? "Buy" : "Sell"}</span>
                   <span>
                     {tokens(x.buy ? x.amount_out : x.amount_in, 0)} ${t.symbol}
                   </span>
@@ -178,6 +188,10 @@ export default async function TokenPage({ params }: PageProps<"/realm/token/[add
             <div className={stat}>
               <dt className="text-xs uppercase tracking-[0.14em] text-silver">$SC burned at launch</dt>
               <dd>{t.scBurned ? tokens(t.scBurned, 0) : "·"}</dd>
+            </div>
+            <div className={`${stat} col-span-2`}>
+              <dt className="text-xs uppercase tracking-[0.14em] text-silver">Waiting to burn, all {base.name} fees</dt>
+              <dd>{pending === null ? "·" : `${tokens(pending, 4)} ${base.name}`}</dd>
             </div>
             <div className={stat}>
               <dt className="text-xs uppercase tracking-[0.14em] text-silver">SilverRealm $SC burned</dt>

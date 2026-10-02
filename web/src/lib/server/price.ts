@@ -34,8 +34,26 @@ async function spot(token: Address, quote: Address, block: bigint, hook?: Addres
 }
 
 /** Dollars per one base coin of SilverRealm at `block`: ETH from Chainlink, the coins from their pools then. */
-export async function usdAt(base: string, block: bigint) {
-  const [, answer] = await publicClient.readContract({ address: ADDR.ethUsdFeed, abi: priceFeedAbi, functionName: "latestRoundData", blockNumber: block });
+export function usdAt(base: string, block: bigint) {
+  // one answer per coin and block: twenty trades in a block ask the chain once
+  const key = `${base}:${block}`;
+  let hit = usdAtCache.get(key);
+  if (!hit) {
+    hit = readUsdAt(base, block);
+    hit.catch(() => usdAtCache.delete(key));
+    usdAtCache.set(key, hit);
+    if (usdAtCache.size > 2000) usdAtCache.delete(usdAtCache.keys().next().value!);
+  }
+  return hit;
+}
+
+const usdAtCache = new Map<string, Promise<number | null>>();
+
+async function readUsdAt(base: string, block: bigint) {
+  const [, answer, , updatedAt] = await publicClient.readContract({ address: ADDR.ethUsdFeed, abi: priceFeedAbi, functionName: "latestRoundData", blockNumber: block });
+  const { timestamp } = await publicClient.getBlock({ blockNumber: block });
+  // the same guard as ethUsd(): a price, not older than two heartbeats at that block
+  if (answer <= 0n || Number(timestamp) - Number(updatedAt) > 7200) throw new Error("ETH/USD feed was stale at that block");
   const eth = Number(answer) / 1e8;
   if (base === ADDR.weth.toLowerCase()) return eth;
   const zcInEth = Number(await spot(ADDR.zc, ADDR.weth, block)) / 1e18;
