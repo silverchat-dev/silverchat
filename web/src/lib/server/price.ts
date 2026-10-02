@@ -13,7 +13,7 @@ export const USD_PER_PERSON = process.env.PRICE_USD_PER_PERSON ?? "1";
 const WAD = 10n ** 18n;
 const Q192 = 2n ** 192n;
 // Stockereum builds every pool the same way: fee 0 (the hook charges), tick spacing 200
-const poolId = (a: Address, b: Address) => {
+export const poolId = (a: Address, b: Address) => {
   const [c0, c1] = BigInt(a) < BigInt(b) ? [a, b] : [b, a];
   return keccak256(
     encodeAbiParameters(

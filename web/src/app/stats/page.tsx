@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { formatUnits } from "viem";
 
+import { ADDR } from "@/lib/config";
 import { tokens, usd } from "@/lib/format";
 import { prices } from "@/lib/server/price";
 import { stats } from "@/lib/server/stats";
@@ -66,6 +67,35 @@ export default async function StatsPage() {
           </div>
         ))}
       </dl>
+
+      {s.scHolderEarned !== null && s.scHolderPaid !== null && (
+        <div className="space-y-5">
+          <h2 className="text-3xl">Paid to SC holders</h2>
+          <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
+            Every SC trade on Stockereum pays a 1% fee in ZC, and half of it goes to everyone holding SC, in proportion to what
+            they hold. These are Stockereum&apos;s holder rewards, read from its distributor contract.
+          </p>
+          <dl className="divide-y divide-silver/20 border-y border-silver/20 font-mono text-sm">
+            {(
+              [
+                ["Earned by SC holders", `${tokens(s.scHolderEarned, 0)} ZC`, dollars(s.scHolderEarned)],
+                ["Paid out", `${tokens(s.scHolderPaid, 0)} ZC`, dollars(s.scHolderPaid)],
+                ["Ready to pay", `${tokens(s.scHolderEarned - s.scHolderPaid, 0)} ZC`, "claim yours, or pay everyone at once, on Stockereum"],
+                ...(s.scHolders !== null ? [["SC holders", s.scHolders.toLocaleString("en-US"), ""]] : []),
+              ] as [string, string, string][]
+            ).map(([k, v, note]) => (
+              <div key={k} className="grid gap-x-6 gap-y-1 py-3 sm:grid-cols-[14rem_10rem_minmax(0,1fr)]">
+                <dt className="text-silver">{k}</dt>
+                <dd className="tabular-nums text-paper sm:text-right">{v}</dd>
+                <dd className="text-xs text-silver sm:self-center">{note}</dd>
+              </div>
+            ))}
+          </dl>
+          <a href={`https://stockereum.com/t/${ADDR.sc}`} target="_blank" rel="noreferrer" className="inline-block font-mono text-sm text-paper underline underline-offset-4">
+            SC on Stockereum
+          </a>
+        </div>
+      )}
 
       {share !== null && s.burnAddress !== null && s.supply !== null && (
         <div className="space-y-4">
