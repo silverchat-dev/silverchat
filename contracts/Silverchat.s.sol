@@ -8,6 +8,7 @@ import {VmSafe} from "forge-std/Vm.sol";
 import {SilverAlgorithm} from "./SilverAlgorithm.sol";
 import {SilverAsk} from "./SilverAsk.sol";
 import {SilverRiddle} from "./SilverRiddle.sol";
+import {IReality, SilverPredict} from "./SilverPredict.sol";
 
 /**
  * @notice Deploys the Silverchat contracts. The deployer keeps no role: every role goes to the addresses in the env.
@@ -82,6 +83,70 @@ contract DeployRiddle is Script {
     if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
       vm.writeJson(vm.toString(address(_riddle)), _file, ".riddle");
       console.log("riddle", address(_riddle), "added to", _file);
+    } else {
+      console.log("simulated, nothing written");
+    }
+  }
+}
+
+/**
+ * @notice Deploys SilverPredict alone and adds its address to an existing deployments/<OUT>.json. Every setting is a
+ *         constructor argument, so the owner needs no transaction before the first market.
+ *   OWNER TREASURY                       role addresses (the same Safe and treasury as SilverAsk on mainnet)
+ *   LOCK_AMOUNT MIN_STAKE                SC to open a market and the smallest ZC stake, in wei (set from live prices)
+ *   OUT                                  deployment name; deployments/<OUT>.json must exist
+ *   MIN_BOND ARBITRATOR ZC SC REALITY    optional; 0.01 ETH, Kleros General Court and the mainnet addresses by default
+ * Price markets may use Chainlink ETH/USD and BTC/USD, each allowed to be up to 2 hours old at resolve time.
+ */
+contract DeployPredict is Script {
+  address constant MAINNET_ZC = 0x4E67DB19044549fF420860834c91b45BaD298722;
+  address constant MAINNET_SC = 0x3C3959052f60cbddC498b384958841b718112353;
+  address constant REALITY_V3 = 0x5b7dD1E86623548AF054A4985F7fc8Ccbb554E2c;
+  address constant KLEROS_GENERAL = 0xFf32eff53459485074b4Db14633252C9dcA3791A;
+  address constant ETH_USD = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
+  address constant BTC_USD = 0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c;
+
+  function run() external {
+    IERC20 _zc = IERC20(vm.envOr("ZC", MAINNET_ZC));
+    IERC20 _sc = IERC20(vm.envOr("SC", MAINNET_SC));
+    address _reality = vm.envOr("REALITY", REALITY_V3);
+    require(address(_zc).code.length != 0 && address(_sc).code.length != 0, "no ZC or SC on this chain");
+    require(_reality.code.length != 0 && ETH_USD.code.length != 0, "no Reality.eth or Chainlink on this chain");
+    string memory _file = string.concat("./deployments/", vm.envString("OUT"), ".json");
+    require(vm.exists(_file), "deploy SilverAsk first");
+    require(vm.parseJsonUint(vm.readFile(_file), ".chainId") == block.chainid, "OUT is for another chain");
+
+    address[] memory _feeds = new address[](2);
+    (_feeds[0], _feeds[1]) = (ETH_USD, BTC_USD);
+    uint256[] memory _stale = new uint256[](2);
+    (_stale[0], _stale[1]) = (2 hours, 2 hours);
+    console.log("owner      ", vm.envAddress("OWNER"));
+    console.log("treasury   ", vm.envAddress("TREASURY"));
+    console.log("lock (SC)  ", vm.envUint("LOCK_AMOUNT"));
+    console.log("min stake  ", vm.envUint("MIN_STAKE"));
+
+    vm.startBroadcast();
+    SilverPredict _predict = new SilverPredict(
+      _zc,
+      _sc,
+      IReality(_reality),
+      vm.envAddress("TREASURY"),
+      vm.envAddress("OWNER"),
+      vm.envUint("LOCK_AMOUNT"),
+      vm.envUint("MIN_STAKE"),
+      vm.envOr("MIN_BOND", uint256(0.01 ether)),
+      vm.envOr("ARBITRATOR", KLEROS_GENERAL),
+      _feeds,
+      _stale
+    );
+    vm.stopBroadcast();
+
+    // only on a real broadcast, so a simulation never records an address that was not deployed; only the new keys,
+    // SilverAsk and SilverAlgorithm keep theirs
+    if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+      vm.writeJson(vm.toString(address(_predict)), _file, ".predict");
+      vm.writeJson(vm.toString(block.number), _file, ".predictBlock");
+      console.log("predict", address(_predict), "added to", _file);
     } else {
       console.log("simulated, nothing written");
     }

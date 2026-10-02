@@ -2,10 +2,11 @@ import "server-only";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { askAbi } from "@/lib/abi";
-import { ADDR, CHAIN_ID, DEPLOY_BLOCK, ZERO } from "@/lib/config";
+import { ADDR, CHAIN_ID, DEPLOY_BLOCK, PREDICT_BLOCK, ZERO } from "@/lib/config";
 
 import { publicClient } from "./chain";
 import { db } from "./db";
+import { onPredictLog, PREDICT_EVENTS, syncMarkets } from "./predict";
 import { prices, tokensFor } from "./price";
 
 // the RPC's free plan answers eth_getLogs for at most 10 blocks at a time
@@ -33,14 +34,29 @@ async function run() {
   const head = (await publicClient.getBlockNumber()) - (CHAIN_ID === 1 ? 2n : 0n);
   const saved = await db.get("indexer");
   let from = saved ? BigInt(saved) + 1n : DEPLOY_BLOCK;
+  // SilverPredict goes live after SilverAsk: the first time it is on, read its logs from its own deploy block
+  const predictOn = ADDR.predict !== ZERO && PREDICT_BLOCK > 0n;
+  // keyed by address, so a new SilverPredict is read from its own deploy block too
+  const rewind = predictOn && !(await db.get(`indexer:predict:${ADDR.predict.toLowerCase()}`));
+  if (rewind && PREDICT_BLOCK < from) from = PREDICT_BLOCK;
   if (from > head - TAIL) from = head - TAIL;
   if (from < DEPLOY_BLOCK) from = DEPLOY_BLOCK;
 
   while (from <= head) {
     const to = from + CHUNK - 1n < head ? from + CHUNK - 1n : head;
-    const logs = await publicClient.getLogs({ address: ADDR.ask, events: EVENTS, fromBlock: from, toBlock: to });
+    // one request for both contracts: the free plan's 10-block chunks make every extra call count
+    const predict = ADDR.predict !== ZERO;
+    const logs = await publicClient.getLogs({
+      address: predict ? [ADDR.ask, ADDR.predict] : ADDR.ask,
+      events: predict ? [...EVENTS, ...PREDICT_EVENTS] : EVENTS,
+      fromBlock: from,
+      toBlock: to,
+    });
+    const touched = new Set<string>();
     for (const log of logs) {
-      if (log.eventName === "Asked") {
+      if (predict && log.address.toLowerCase() === ADDR.predict.toLowerCase()) {
+        touched.add(await onPredictLog(log as Parameters<typeof onPredictLog>[0]));
+      } else if (log.eventName === "Asked") {
         const p = await prices();
         await db.upsertAsked({
           id: String(log.args.id),
@@ -70,8 +86,10 @@ async function run() {
         await db.setRefunded(String(log.args.id));
       }
     }
+    await syncMarkets(touched);
     await db.set("indexer", String(to));
     from = to + 1n;
   }
+  if (rewind) await db.set(`indexer:predict:${ADDR.predict.toLowerCase()}`, "1");
   await db.pruneDrafts();
 }

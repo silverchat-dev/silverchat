@@ -16,6 +16,9 @@ export const ADDR = {
   algorithm: (process.env.NEXT_PUBLIC_ALGORITHM ?? ZERO) as Address,
   /** Zero until SilverRiddle is deployed: until then /riddle is a 404 and nothing links to it. */
   riddle: (process.env.NEXT_PUBLIC_RIDDLE || ZERO) as Address,
+  /** Zero until SilverPredict is deployed: the Predict tab and its keeper stay off. */
+  predict: (process.env.NEXT_PUBLIC_PREDICT || ZERO) as Address,
+  reality: "0x5b7dD1E86623548AF054A4985F7fc8Ccbb554E2c" as Address,
   weth: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
   poolManager: "0x000000000004444c5dc75cB358380D2e3dE08A90" as Address,
   stockereumHook: "0x322dcEc4958C14e021A9F1cD49DF11b9457968cC" as Address,
@@ -24,6 +27,7 @@ export const ADDR = {
 };
 
 export const DEPLOY_BLOCK = BigInt(process.env.NEXT_PUBLIC_DEPLOY_BLOCK ?? "0");
+export const PREDICT_BLOCK = BigInt(process.env.NEXT_PUBLIC_PREDICT_BLOCK ?? "0");
 
 export const EXPLORER = "https://etherscan.io";
 export const BOOK_URL = "https://vitalik.eth.limo/snowmoon/html/";

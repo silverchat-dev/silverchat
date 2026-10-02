@@ -17,6 +17,7 @@ DEPLOYER_PK=0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6
 OWNER_PK=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 POSTER_PK=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 PRICER_PK=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+KEEPER_PK=0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
 addr() { cast wallet address --private-key "$1"; }
 WALLET=${WALLET:-0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc}
 
@@ -31,15 +32,20 @@ OUT=local OWNER=$(addr $OWNER_PK) TREASURY=0x15d34AAf54267DB7D7c367839AAf71A00a2
 OUT=local SAFE=$(addr $OWNER_PK) ANSWER_HASH=$(echo "$RIDDLE_ANSWER" | (cd "$ROOT/web" && npx -y tsx scripts/riddle-hash.mts 2>/dev/null)) \
   forge script Silverchat.s.sol:DeployRiddle --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
 RIDDLE=$(python3 -c "import json; print(json.load(open('deployments/local.json'))['riddle'])")
+# Predict: 340k SC (about $100) to open a market, 300 ZC (about $5) the smallest stake
+OUT=local OWNER=$(addr $OWNER_PK) TREASURY=0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 \
+  LOCK_AMOUNT=340000000000000000000000 MIN_STAKE=300000000000000000000 \
+  forge script Silverchat.s.sol:DeployPredict --rpc-url $RPC --broadcast --private-key "$DEPLOYER_PK" --slow >/dev/null
 
 # ZC for the test wallet, straight out of the v4 PoolManager
 cast rpc anvil_impersonateAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 cast rpc anvil_setBalance $POOL_MANAGER 0x56BC75E2D63100000 --rpc-url $RPC >/dev/null
 cast send $ZC "transfer(address,uint256)" "$WALLET" 5000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
 cast send $SC "transfer(address,uint256)" "$RIDDLE" 1000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
+cast send $SC "transfer(address,uint256)" "$WALLET" 5000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
 cast rpc anvil_stopImpersonatingAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 
-python3 - "$ROOT/contracts/deployments/local.json" "$ROOT/web/.env.local" "$POSTER_PK" "$PRICER_PK" "$SC" <<'PY'
+python3 - "$ROOT/contracts/deployments/local.json" "$ROOT/web/.env.local" "$POSTER_PK" "$PRICER_PK" "$SC" "$KEEPER_PK" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 open(sys.argv[2], "w").write(f"""# local anvil fork of mainnet (anvil default test keys only)
@@ -50,12 +56,15 @@ NEXT_PUBLIC_ALGORITHM={d['algorithm']}
 NEXT_PUBLIC_DEPLOY_BLOCK={d['deployBlock']}
 NEXT_PUBLIC_SC={sys.argv[5]}
 NEXT_PUBLIC_RIDDLE={d['riddle']}
+NEXT_PUBLIC_PREDICT={d['predict']}
+NEXT_PUBLIC_PREDICT_BLOCK={d['predictBlock']}
 RPC_URL=http://127.0.0.1:8545
 POSTER_PRIVATE_KEY={sys.argv[3]}
 PRICER_PRIVATE_KEY={sys.argv[4]}
+KEEPER_PRIVATE_KEY={sys.argv[6]}
 PRICE_USD_PER_PERSON=1
 ENABLE_WORKERS=1
 """)
 print(json.dumps(d, indent=2))
 PY
-echo "funded $WALLET with 5,000,000 ZC"
+echo "funded $WALLET with 5,000,000 ZC and 5,000,000 SC"

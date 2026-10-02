@@ -24,10 +24,16 @@ if python3 -c "import json,sys; sys.exit('riddle' not in json.load(open('$out'))
   has_code "$(get riddle)" || { echo "no contract at riddle $(get riddle), or the RPC failed" >&2; exit 1; }
   riddle=("NEXT_PUBLIC_RIDDLE=$(get riddle)")
 fi
+# SilverPredict only once it is deployed; until then the Predict tab and its keeper stay off
+predict=()
+if python3 -c "import json,sys; sys.exit('predict' not in json.load(open('$out')))"; then
+  has_code "$(get predict)" || { echo "no contract at predict $(get predict), or the RPC failed" >&2; exit 1; }
+  predict=("NEXT_PUBLIC_PREDICT=$(get predict)" "NEXT_PUBLIC_PREDICT_BLOCK=$(get predictBlock)")
+fi
 
 "$railway" variable set --service web --skip-deploys \
   "NEXT_PUBLIC_ASK=$(get ask)" "NEXT_PUBLIC_ALGORITHM=$(get algorithm)" \
-  "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$commit" ${riddle[@]+"${riddle[@]}"}
+  "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$commit" ${riddle[@]+"${riddle[@]}"} ${predict[@]+"${predict[@]}"}
 
 tmp=$(mktemp -d)
 git archive "$commit" web | tar -x -C "$tmp"
