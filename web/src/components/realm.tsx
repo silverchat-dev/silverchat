@@ -20,7 +20,8 @@ import { useAccount, usePublicClient, useReadContract, useSwitchChain, useWriteC
 import { priceFeedAbi, realmFactoryAbi, routerAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { tokens } from "@/lib/format";
-import { BASES, FEES, feeLabel, imageSrc, OPENING_FDV_USD, realmKey } from "@/lib/realm";
+import { refused } from "@/lib/moderation";
+import { BASES, FEES, feeLabel, imageSrc, OPENING_FDV_USD, realmKey, SUPPLY } from "@/lib/realm";
 
 import { Choice, Pill } from "./ask-form";
 
@@ -65,6 +66,8 @@ export function LaunchForm() {
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [uri, setUri] = useState("");
+  // kept so the image is sent again right before the launch: an upload nobody launches with is dropped after a day
+  const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [base, setBase] = useState<(typeof BASES)[number]["id"]>("eth");
   const [fee, setFee] = useState<number>(10_000);
@@ -85,6 +88,7 @@ export function LaunchForm() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `upload failed (${res.status})`);
       setUri(body.uri);
+      setFile(file);
     } catch (e) {
       setError(`The image did not upload: ${e instanceof Error ? e.message : String(e)}.`);
     } finally {
@@ -93,13 +97,15 @@ export function LaunchForm() {
   }
 
   async function launch() {
-    if (!client || !address || burnEth.data === undefined) return;
+    if (!client || !address) return;
     setError(null);
     if (name.trim().length < 2 || name.trim().length > 32) return setError("Give it a name of 2 to 32 characters.");
     if (!/^[A-Z0-9]{2,10}$/.test(symbol)) return setError("A symbol is 2 to 10 capital letters or digits.");
-    // our own uploads, any https link, or ipfs
-    if (uri && !imageSrc(uri) && !/^ipfs:\/\/\S{3,280}$/.test(uri)) return setError("The image link must start with https:// or ipfs://.");
-    if (!baseUsd || !usd.eth || !usd.sc) return setError("Prices are still loading; try again in a moment.");
+    const word = refused({ v: 1, questions: [{ q: `${name} ${symbol}`, options: [] }] });
+    if (word) return setError(`Silverchat does not show tokens with "${word}" in the name or symbol.`);
+    // our own uploads or any https link: those are what the token page can show
+    if (uri && !imageSrc(uri)) return setError("The image link must start with https://.");
+    if (!baseUsd || !usd.eth || !usd.sc || burnEth.data === undefined) return setError("Prices are still loading; try again in a moment.");
     let dev = 0n;
     try {
       dev = devBuy ? parseEther(devBuy) : 0n;
@@ -111,17 +117,31 @@ export function LaunchForm() {
     const openingFdv = parseUnits((OPENING_FDV_USD / baseUsd).toFixed(6), 18);
     // the $5 buys SC through two 1% pools; refuse less than 90% of that
     const minScBurned = parseUnits(((5 / usd.sc) * 0.98 * 0.9).toFixed(6), 18);
+    // the first buy on a ZC or SC pair goes through one or two other pools, where a moved price could take it: the
+    // fresh pool is a constant product of the supply and the opening value, so expect that and refuse under 90%
+    const hops = base === "eth" ? 0 : base === "zc" ? 1 : 2;
+    const net = (Number(formatEther(dev)) * usd.eth * 0.99 ** hops * (1 - fee / 1e6)) / baseUsd;
+    const netWei = parseUnits(net.toFixed(12), 18);
+    const minTokensOut = dev === 0n ? 0n : (((SUPPLY * netWei) / (openingFdv + netWei)) * 9n) / 10n;
     // a little over today's price for the burn; what is not used comes back in the same transaction
     const value = (burnEth.data * 102n) / 100n + dev;
     setBusy(true);
     try {
+      if (file) {
+        setNote("Sending the image…");
+        const res = await fetch("/api/realm/image", { method: "POST", body: file });
+        if (!res.ok) throw new Error("the image could not be stored; try again");
+      } else if (uri.includes("/api/realm/image/")) {
+        const own = await fetch(imageSrc(uri)!, { method: "HEAD" }).catch(() => null);
+        if (!own?.ok) throw new Error("that image is no longer stored here; upload it again");
+      }
       setNote("Confirm the launch in your wallet…");
       const { request } = await client.simulateContract({
         account: address,
         address: ADDR.realmFactory,
         abi: realmFactoryAbi,
         functionName: "launch",
-        args: [{ name: name.trim(), symbol, uri, base: b.address, feePpm: fee, openingFdv, minScBurned, devBuyEth: dev, minTokensOut: 0n }],
+        args: [{ name: name.trim(), symbol, uri, base: b.address, feePpm: fee, openingFdv, minScBurned, devBuyEth: dev, minTokensOut }],
         value,
       });
       const tx = await writeContractAsync({ ...request, chainId: CHAIN_ID });
@@ -167,7 +187,10 @@ export function LaunchForm() {
             </label>
           </div>
           <span className="block text-sm text-developer/70">PNG, JPEG, GIF or WebP, up to 512 KB. Or paste a link:</span>
-          <input value={uri} maxLength={300} onChange={(e) => setUri(e.target.value.trim())} placeholder="https://… or ipfs://…" className={field} />
+          <input value={uri} maxLength={300} onChange={(e) => {
+              setUri(e.target.value.trim());
+              setFile(null);
+            }} placeholder="https://…" className={field} />
         </div>
         <Choice legend="Trades against" hint="The coin people pay in, and the one its fees are taken in">
           {BASES.map((b) => (

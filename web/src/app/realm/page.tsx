@@ -7,7 +7,7 @@ import { ADDR, ZERO } from "@/lib/config";
 import { tokens } from "@/lib/format";
 import { db } from "@/lib/server/db";
 
-import { serializeToken } from "@/lib/server/realm";
+import { serializeTokens } from "@/lib/server/realm";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default async function RealmPage() {
   if (ADDR.realmFactory === ZERO) notFound();
   const [rows, burned] = await Promise.all([db.realmTokens({}, 60), db.realmBurned()]);
-  const list = await Promise.all(rows.map(serializeToken));
+  const list = await serializeTokens(rows);
   return (
     <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
       <header className="max-w-2xl space-y-4">

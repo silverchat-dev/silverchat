@@ -1,6 +1,6 @@
 import "server-only";
 
-import { encodeAbiParameters, keccak256, parseGwei, type Address, type Hex, type Log } from "viem";
+import { encodeAbiParameters, keccak256, parseGwei, type Hex, type Log } from "viem";
 
 import { poolManagerAbi, realmBurnerAbi, realmFactoryAbi, realmHookAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID, ZERO } from "@/lib/config";
@@ -57,43 +57,63 @@ export async function onRealmLog(log: RealmLog, at: number) {
   }
 }
 
-/** Base per token (a float, both 18 decimals) from the pool's slot0 now. */
-export async function priceOf(poolId: Hex, token: Address, base: Address) {
-  const slot = keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [poolId, 6n]));
-  const raw = await publicClient.readContract({ address: ADDR.poolManager, abi: poolManagerAbi, functionName: "extsload", args: [slot] });
-  const sqrt = Number(BigInt(raw) & ((1n << 160n) - 1n)) / 2 ** 96;
-  // slot0 is currency1 per currency0
-  return BigInt(token) < BigInt(base) ? sqrt * sqrt : 1 / (sqrt * sqrt);
+/** Base per token (a float, both 18 decimals) of each pool now, from slot0, in one multicall. */
+async function pricesOf(rows: RealmTokenStats[]) {
+  if (!rows.length) return [];
+  const slots = rows.map((r) => keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [r.pool_id as Hex, 6n])));
+  const raw = await publicClient
+    .multicall({ contracts: slots.map((s) => ({ address: ADDR.poolManager, abi: poolManagerAbi, functionName: "extsload", args: [s] }) as const) })
+    .catch(() => rows.map(() => null));
+  return rows.map((r, i) => {
+    const res = raw[i];
+    if (!res || res.status !== "success") return null;
+    const sqrt = Number(BigInt(res.result) & ((1n << 160n) - 1n)) / 2 ** 96;
+    // slot0 is currency1 per currency0
+    return BigInt(r.token) < BigInt(r.base) ? sqrt * sqrt : 1 / (sqrt * sqrt);
+  });
 }
 
-/** The public shape of a launched token. A name or symbol with a refused word is not shown, like a removed poll. */
-export async function serializeToken(t: RealmTokenStats) {
-  const hidden = !!refused({ v: 1, questions: [{ q: `${t.name ?? ""} ${t.symbol ?? ""}`, options: [] }] });
-  const price = await priceOf(t.pool_id as Hex, t.token as Address, t.base as Address).catch(() => null);
-  return {
-    token: t.token,
-    realm: t.realm,
-    base: t.base,
-    feePpm: t.fee_ppm,
-    poolId: t.pool_id,
-    name: hidden ? null : t.name,
-    symbol: hidden ? null : t.symbol,
-    uri: hidden ? null : t.uri,
-    hidden,
-    price,
-    scBurned: t.sc_burned,
-    devBuy: t.dev_buy,
-    trades: t.trades,
-    fees: t.fees,
-    at: t.at,
-    tx: t.tx,
-  };
+/** What the whole supply was worth in the base when the pool opened, from its opening tick. */
+const openingValue = (r: RealmTokenStats) => {
+  const perToken = BigInt(r.base) < BigInt(r.token) ? 1.0001 ** -r.opening_tick : 1.0001 ** r.opening_tick;
+  return perToken * 1e9;
+};
+
+/**
+ * The public shape of launched tokens, prices read together. A name or symbol with a refused word is not shown, like
+ * a removed poll.
+ */
+export async function serializeTokens(rows: RealmTokenStats[]) {
+  const prices = await pricesOf(rows);
+  return rows.map((t, i) => {
+    const hidden = !!refused({ v: 1, questions: [{ q: `${t.name ?? ""} ${t.symbol ?? ""}`, options: [] }] });
+    return {
+      token: t.token,
+      realm: t.realm,
+      base: t.base,
+      feePpm: t.fee_ppm,
+      poolId: t.pool_id,
+      name: hidden ? null : t.name,
+      symbol: hidden ? null : t.symbol,
+      uri: hidden ? null : t.uri,
+      hidden,
+      price: prices[i],
+      openingValue: openingValue(t),
+      scBurned: t.sc_burned,
+      devBuy: t.dev_buy,
+      trades: t.trades,
+      fees: t.fees,
+      at: t.at,
+      tx: t.tx,
+    };
+  });
 }
 
 // ---- keeper: turns the burner's fees into burned SC and ZC
 
 const keeper = walletFor(process.env.KEEPER_PRIVATE_KEY);
 const MIN_USD = 20;
+const MAX_USD = 500;
 const AT_LEAST_EVERY = 7 * 86_400_000;
 // minimums 5% under what recent prices say, after the pools' 1% fees
 const SLACK = 0.95;
@@ -107,11 +127,15 @@ export async function realmTick() {
   const zcUsd = usd[ADDR.zc.toLowerCase()];
   const scUsd = usd[ADDR.sc.toLowerCase()];
   for (const b of BASES) {
-    const amount = (await publicClient.readContract({ address: ADDR.realmBurner, abi: realmBurnerAbi, functionName: "pending", args: [b.address] })) as bigint;
+    let amount = (await publicClient.readContract({ address: ADDR.realmBurner, abi: realmBurnerAbi, functionName: "pending", args: [b.address] })) as bigint;
     if (amount === 0n) continue;
     const value = (Number(amount) / 1e18) * usd[b.address.toLowerCase()];
+    // not worth the gas
+    if (value < 1) continue;
     const last = Number((await db.get(`realm:convert:${b.id}`)) ?? "0");
     if (value < MIN_USD && Date.now() - last < AT_LEAST_EVERY) continue;
+    // at most $500 a time, so a backlog never asks the pools for more than their minimums allow; the rest goes next tick
+    if (value > MAX_USD) amount = (amount * BigInt(Math.floor((MAX_USD / value) * 1e6))) / 1_000_000n;
 
     const units = Number(amount) / 1e18;
     let sc: number;

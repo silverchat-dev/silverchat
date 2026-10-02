@@ -5,18 +5,33 @@ import { isAddress, type Address } from "viem";
 
 import { TradeBox } from "@/components/realm";
 import { ADDR, EXPLORER, ZERO } from "@/lib/config";
-import { short, tokens } from "@/lib/format";
-import { baseOf, feeLabel, imageSrc } from "@/lib/realm";
+import { short, tokens, usd } from "@/lib/format";
+import { baseOf, feeLabel, imageSrc, OPENING_FDV_USD } from "@/lib/realm";
 import { db } from "@/lib/server/db";
+import { ethUsd, prices } from "@/lib/server/price";
 
-import { serializeToken } from "@/lib/server/realm";
+import { serializeTokens } from "@/lib/server/realm";
 
 export const dynamic = "force-dynamic";
 
 async function load(address: string) {
   if (ADDR.realmFactory === ZERO || !isAddress(address)) return null;
   const [row] = await db.realmTokens({ token: address.toLowerCase() }, 1);
-  return row ? { t: await serializeToken(row), trades: await db.realmTrades(row.pool_id, 30) } : null;
+  if (!row) return null;
+  const [[t], trades, baseUsd] = await Promise.all([serializeTokens([row]), db.realmTrades(row.pool_id, 30), usdOf(row.base)]);
+  return { t, trades, openingUsd: baseUsd === null ? null : t.openingValue * baseUsd };
+}
+
+/** Dollars per base coin, or null when a price cannot be read. */
+async function usdOf(base: string) {
+  try {
+    if (base === ADDR.weth.toLowerCase()) return Number(await ethUsd()) / 1e18;
+    const p = await prices();
+    const v = base === ADDR.zc.toLowerCase() ? p.zc : p.sc;
+    return v === null ? null : Number(v) / 1e18;
+  } catch {
+    return null;
+  }
 }
 
 export async function generateMetadata({ params }: PageProps<"/realm/token/[address]">): Promise<Metadata> {
@@ -27,7 +42,9 @@ export async function generateMetadata({ params }: PageProps<"/realm/token/[addr
 export default async function TokenPage({ params }: PageProps<"/realm/token/[address]">) {
   const data = await load((await params).address);
   if (!data) notFound();
-  const { t, trades } = data;
+  const { t, trades, openingUsd } = data;
+  // the app opens every launch at $4,000; one opened far from that was launched some other way
+  const odd = openingUsd !== null && (openingUsd < OPENING_FDV_USD / 2 || openingUsd > OPENING_FDV_USD * 2);
   const base = baseOf(t.base);
   const image = imageSrc(t.uri);
   return (
@@ -69,7 +86,12 @@ export default async function TokenPage({ params }: PageProps<"/realm/token/[add
             </dd>
           </div>
         </dl>
-        {t.devBuy && <p className="text-sm text-paper/80">The creator bought {tokens(t.devBuy, 0)} at launch, in the same transaction, at the trading fee.</p>}
+        <p className="text-sm text-paper/80">
+          Opened at a {openingUsd === null ? "·" : usd(openingUsd)} valuation
+          {odd && <strong className="text-paper"> (far from the usual {usd(OPENING_FDV_USD)}: check before you trade)</strong>}.
+          {t.devBuy &&
+            ` The creator bought ${tokens(t.devBuy, 0)}, ${((Number(t.devBuy) / 1e27) * 100).toFixed(2)}% of the supply, in the launch transaction at the trading fee.`}
+        </p>
         <section className="space-y-3">
           <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Latest trades</h2>
           {!trades.length ? (

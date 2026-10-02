@@ -23,6 +23,8 @@ const fail = (error: string, status = 400) => Response.json({ error }, { status,
 export async function POST(req: Request) {
   if (ADDR.realmFactory === ZERO) return fail("SilverRealm is not live", 404);
   if (limited(`realm-image:${clientIp(req)}`, 10, 3_600_000)) return fail("too many uploads; try again in an hour", 429);
+  // and everyone together: unused images wait a day before they are dropped, so storage needs a ceiling
+  if (limited("realm-image", 100, 3_600_000)) return fail("too many uploads right now; try again later", 503);
   if (Number(req.headers.get("content-length") ?? Infinity) > MAX_IMAGE) return fail("the image must be 512 KB or less", 413);
   const data = Buffer.from(await req.arrayBuffer());
   if (data.length > MAX_IMAGE) return fail("the image must be 512 KB or less", 413);

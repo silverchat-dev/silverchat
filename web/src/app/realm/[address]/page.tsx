@@ -10,7 +10,7 @@ import { ADDR, EXPLORER, ZERO } from "@/lib/config";
 import { short } from "@/lib/format";
 import { db } from "@/lib/server/db";
 
-import { serializeToken } from "@/lib/server/realm";
+import { serializeTokens } from "@/lib/server/realm";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export default async function RealmOf({ params }: PageProps<"/realm/[address]">)
   const { address } = await params;
   if (!isAddress(address)) notFound();
   const realm = address.toLowerCase();
-  const list = await Promise.all((await db.realmTokens({ realm }, 60)).map(serializeToken));
+  const list = await serializeTokens(await db.realmTokens({ realm }, 60));
   return (
     <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
       <header className="space-y-3">

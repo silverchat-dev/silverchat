@@ -603,7 +603,8 @@ export const db = {
     if (!pool) return void mem.realmTrades.set(row.id, row);
     await pool.query(
       `insert into realm_trades (id, pool_id, trader, buy, amount_in, amount_out, fee, block, at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       on conflict (id) do nothing`,
+       on conflict (id) do update set pool_id = excluded.pool_id, trader = excluded.trader, buy = excluded.buy,
+         amount_in = excluded.amount_in, amount_out = excluded.amount_out, fee = excluded.fee, at = excluded.at`,
       [row.id, row.pool_id, row.trader, row.buy, row.amount_in, row.amount_out, row.fee, row.block, row.at],
     );
   },
@@ -612,7 +613,9 @@ export const db = {
     await init();
     if (!pool) return void mem.realmBurns.set(row.id, row);
     await pool.query(
-      `insert into realm_burns (id, base, amount, sc_burned, zc_burned, block, at) values ($1, $2, $3, $4, $5, $6, $7) on conflict (id) do nothing`,
+      `insert into realm_burns (id, base, amount, sc_burned, zc_burned, block, at) values ($1, $2, $3, $4, $5, $6, $7)
+       on conflict (id) do update set base = excluded.base, amount = excluded.amount, sc_burned = excluded.sc_burned,
+         zc_burned = excluded.zc_burned, at = excluded.at`,
       [row.id, row.base, row.amount, row.sc_burned, row.zc_burned, row.block, row.at],
     );
   },
@@ -644,10 +647,17 @@ export const db = {
 
   async realmTrades(poolId: string, limit = 50): Promise<RealmTradeRow[]> {
     await init();
-    if (!pool) return [...mem.realmTrades.values()].filter((t) => t.pool_id === poolId).sort((a, b) => b.at - a.at).slice(0, limit);
+    // newest first: by block, then by the log's place in it (the id is "block:logIndex")
+    const order = (t: RealmTradeRow) => t.id.split(":").map(Number);
+    if (!pool) {
+      return [...mem.realmTrades.values()]
+        .filter((t) => t.pool_id === poolId)
+        .sort((a, b) => order(b)[0] - order(a)[0] || order(b)[1] - order(a)[1])
+        .slice(0, limit);
+    }
     const r = await pool.query(
       `select id, pool_id, trader, buy, amount_in::text, amount_out::text, fee::text, block::text, at from realm_trades
-       where pool_id = $1 order by block desc, id desc limit $2`,
+       where pool_id = $1 order by block desc, split_part(id, ':', 2)::int desc limit $2`,
       [poolId, limit],
     );
     return r.rows.map((x) => ({ ...x, at: Number(x.at) }));
@@ -657,7 +667,8 @@ export const db = {
   async saveRealmImage(hash: string, type: string, data: Buffer) {
     await init();
     if (!pool) return void mem.realmImages.set(hash, { type, data, at: Date.now() });
-    await pool.query(`insert into realm_images (hash, type, data) values ($1, $2, $3) on conflict (hash) do nothing`, [hash, type, data]);
+    // sending the same image again counts as using it now, so a launch right after keeps it
+    await pool.query(`insert into realm_images (hash, type, data) values ($1, $2, $3) on conflict (hash) do update set created_at = now()`, [hash, type, data]);
   },
 
   async realmImage(hash: string): Promise<{ type: string; data: Buffer } | null> {
