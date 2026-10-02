@@ -30,6 +30,16 @@ export const routerAbi = parseAbi([
   "function quoteBuyWithEth(PoolKey key, address quote, uint256 ethIn) view returns (uint256 quoteIn, uint256 tokensOut)",
 ]);
 
+// Stockereum's hook keeps each launch's record; with holder rewards on, its fee recipient is the holders' distributor
+export const launchHookAbi = parseAbi([
+  "function getLaunch(bytes32 id) view returns ((address token, address feeRecipient, address quote, uint40 openedAt, uint24 feePpm, bool quoteIsCurrency0, bool pendingDevBuy, bool feesToHolders, address devBuyer, int24 tickLower, int24 tickUpper, uint128 liquidity))",
+]);
+export const distributorAbi = parseAbi([
+  "function totalNotified() view returns (uint128)",
+  "function totalDistributed() view returns (uint256)",
+  "function holderCount() view returns (uint256)",
+]);
+
 export const poolManagerAbi = parseAbi(["function extsload(bytes32 slot) view returns (bytes32)"]);
 
 export const priceFeedAbi = parseAbi([

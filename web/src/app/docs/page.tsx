@@ -230,7 +230,7 @@ export default function DocsPage() {
               ["GET /api/export", "every poll, for your own copy"],
               ["GET /api/receipt?poll={id}&leaf={leaf}", "proof that one answer is in a fixed result"],
               ["GET /api/health", "head block, indexed block, ZC price and the dollar price per person"],
-              ["GET /api/stats", "ZC spent, earned by answerers, returned, treasury, burned, and the burn address, and the last 24 hours (answers, ZC paid in, ZC burned)"],
+              ["GET /api/stats", "ZC spent, earned by answerers, returned, treasury, burned, the burn address, the last 24 hours (answers, ZC paid in, ZC burned), and SC holder rewards"],
               ["POST /api/polls", "publish a question and get its hash before you pay: { v: 2, topic, questions }"],
               ["POST /api/answer", "a signed answer"],
               ["GET /api/markets", "Predict markets, with revealed sides once they close"],
