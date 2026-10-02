@@ -20,7 +20,7 @@ import { useAccount, usePublicClient, useReadContract, useSwitchChain, useWriteC
 import { priceFeedAbi, realmFactoryAbi, routerAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { tokens } from "@/lib/format";
-import { BASES, FEES, feeLabel, OPENING_FDV_USD, realmKey } from "@/lib/realm";
+import { BASES, FEES, feeLabel, imageSrc, OPENING_FDV_USD, realmKey } from "@/lib/realm";
 
 import { Choice, Pill } from "./ask-form";
 
@@ -65,6 +65,7 @@ export function LaunchForm() {
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
   const [uri, setUri] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [base, setBase] = useState<(typeof BASES)[number]["id"]>("eth");
   const [fee, setFee] = useState<number>(10_000);
   const [devBuy, setDevBuy] = useState("");
@@ -74,12 +75,30 @@ export function LaunchForm() {
 
   const baseUsd = base === "eth" ? usd.eth : base === "zc" ? usd.zc : usd.sc;
 
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    if (file.size > 512 * 1024) return setError("The image must be 512 KB or less.");
+    setUploading(true);
+    try {
+      const res = await fetch("/api/realm/image", { method: "POST", body: file });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `upload failed (${res.status})`);
+      setUri(body.uri);
+    } catch (e) {
+      setError(`The image did not upload: ${e instanceof Error ? e.message : String(e)}.`);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function launch() {
     if (!client || !address || burnEth.data === undefined) return;
     setError(null);
     if (name.trim().length < 2 || name.trim().length > 32) return setError("Give it a name of 2 to 32 characters.");
     if (!/^[A-Z0-9]{2,10}$/.test(symbol)) return setError("A symbol is 2 to 10 capital letters or digits.");
-    if (uri && !/^(https|ipfs):\/\/\S{3,280}$/.test(uri)) return setError("The image link must start with https:// or ipfs://.");
+    // our own uploads, any https link, or ipfs
+    if (uri && !imageSrc(uri) && !/^ipfs:\/\/\S{3,280}$/.test(uri)) return setError("The image link must start with https:// or ipfs://.");
     if (!baseUsd || !usd.eth || !usd.sc) return setError("Prices are still loading; try again in a moment.");
     let dev = 0n;
     try {
@@ -135,10 +154,21 @@ export function LaunchForm() {
             <input value={symbol} maxLength={10} onChange={(e) => setSymbol(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="MOON" className={field} />
           </label>
         </div>
-        <label className="block space-y-2">
-          <span className="block font-mono text-xs uppercase tracking-[0.14em]">Image link · optional</span>
+        <div className="space-y-2">
+          <span className="block font-mono text-xs uppercase tracking-[0.14em]">Image · optional</span>
+          <div className="flex items-center gap-4">
+            {imageSrc(uri) && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imageSrc(uri)!} alt="" width={64} height={64} className="h-16 w-16 shrink-0 object-cover" />
+            )}
+            <label className="cursor-pointer border border-developer/50 px-4 py-2 font-mono text-sm">
+              {uploading ? "Uploading…" : uri ? "Change image" : "Upload an image"}
+              <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" onChange={(e) => upload(e.target.files?.[0])} />
+            </label>
+          </div>
+          <span className="block text-sm text-developer/70">PNG, JPEG, GIF or WebP, up to 512 KB. Or paste a link:</span>
           <input value={uri} maxLength={300} onChange={(e) => setUri(e.target.value.trim())} placeholder="https://… or ipfs://…" className={field} />
-        </label>
+        </div>
         <Choice legend="Trades against" hint="The coin people pay in, and the one its fees are taken in">
           {BASES.map((b) => (
             <Pill key={b.id} name="base" checked={base === b.id} onChange={() => setBase(b.id)}>
@@ -176,7 +206,7 @@ export function LaunchForm() {
             Switch to Ethereum
           </button>
         ) : (
-          <button type="button" onClick={launch} disabled={busy} className={button}>
+          <button type="button" onClick={launch} disabled={busy || uploading} className={button}>
             {busy ? note : "Burn $5 of SC and launch"}
           </button>
         )}

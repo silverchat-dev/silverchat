@@ -5,8 +5,8 @@ import { ADDR, ZERO } from "@/lib/config";
 import { publicClient } from "@/lib/server/chain";
 import { db } from "@/lib/server/db";
 import { clientIp, limited } from "@/lib/server/rate";
+import { serializeToken } from "@/lib/server/realm";
 
-import { serializeToken } from "../../route";
 
 export const dynamic = "force-dynamic";
 

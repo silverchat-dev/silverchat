@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { short, tokens } from "@/lib/format";
-import { baseOf, feeLabel } from "@/lib/realm";
+import { baseOf, feeLabel, imageSrc } from "@/lib/realm";
 
 export type TokenView = {
   token: string;
@@ -10,6 +10,7 @@ export type TokenView = {
   feePpm: number;
   name: string | null;
   symbol: string | null;
+  uri: string | null;
   price: number | null;
   trades: number;
   fees: string;
@@ -27,6 +28,10 @@ export function TokenGrid({ list }: { list: TokenView[] }) {
           <li key={t.token} className="film">
             <Link href={`/realm/token/${t.token}`} className="flex h-full min-h-40 flex-col justify-between gap-6 bg-paper p-5 text-developer hover:brightness-[1.04]">
               <span className="space-y-1">
+                {imageSrc(t.uri) && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={imageSrc(t.uri)!} alt="" width={48} height={48} loading="lazy" referrerPolicy="no-referrer" className="mb-2 h-12 w-12 object-cover" />
+                )}
                 <span className="block text-2xl leading-snug wrap-anywhere">{t.name ?? "Name not shown"}</span>
                 <span className="block font-mono text-xs text-developer/70">
                   ${t.symbol ?? "?"} · {base?.name ?? "?"} pair · {feeLabel(t.feePpm)} fee

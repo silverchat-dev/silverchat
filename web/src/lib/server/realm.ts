@@ -4,10 +4,11 @@ import { encodeAbiParameters, keccak256, parseGwei, type Address, type Hex, type
 
 import { poolManagerAbi, realmBurnerAbi, realmFactoryAbi, realmHookAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID, ZERO } from "@/lib/config";
+import { refused } from "@/lib/moderation";
 import { BASES } from "@/lib/realm";
 
 import { publicClient, send, walletFor } from "./chain";
-import { db } from "./db";
+import { db, type RealmTokenStats } from "./db";
 import { ethUsd, prices } from "./price";
 
 export const REALM_EVENTS = [...realmFactoryAbi, ...realmHookAbi, ...realmBurnerAbi].filter((x) => x.type === "event");
@@ -63,6 +64,30 @@ export async function priceOf(poolId: Hex, token: Address, base: Address) {
   const sqrt = Number(BigInt(raw) & ((1n << 160n) - 1n)) / 2 ** 96;
   // slot0 is currency1 per currency0
   return BigInt(token) < BigInt(base) ? sqrt * sqrt : 1 / (sqrt * sqrt);
+}
+
+/** The public shape of a launched token. A name or symbol with a refused word is not shown, like a removed poll. */
+export async function serializeToken(t: RealmTokenStats) {
+  const hidden = !!refused({ v: 1, questions: [{ q: `${t.name ?? ""} ${t.symbol ?? ""}`, options: [] }] });
+  const price = await priceOf(t.pool_id as Hex, t.token as Address, t.base as Address).catch(() => null);
+  return {
+    token: t.token,
+    realm: t.realm,
+    base: t.base,
+    feePpm: t.fee_ppm,
+    poolId: t.pool_id,
+    name: hidden ? null : t.name,
+    symbol: hidden ? null : t.symbol,
+    uri: hidden ? null : t.uri,
+    hidden,
+    price,
+    scBurned: t.sc_burned,
+    devBuy: t.dev_buy,
+    trades: t.trades,
+    fees: t.fees,
+    at: t.at,
+    tx: t.tx,
+  };
 }
 
 // ---- keeper: turns the burner's fees into burned SC and ZC

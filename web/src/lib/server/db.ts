@@ -62,6 +62,7 @@ const g = globalThis as typeof globalThis & {
     realmTokens: Map<string, RealmTokenRow>;
     realmTrades: Map<string, RealmTradeRow>;
     realmBurns: Map<string, RealmBurnRow>;
+    realmImages: Map<string, { type: string; data: Buffer; at: number }>;
   };
 };
 const mem = (g.silverchatMem ??= {
@@ -76,6 +77,7 @@ const mem = (g.silverchatMem ??= {
   realmTokens: new Map(),
   realmTrades: new Map(),
   realmBurns: new Map(),
+  realmImages: new Map(),
 });
 mem.profiles ??= new Map();
 mem.markets ??= new Map();
@@ -84,6 +86,7 @@ mem.seals ??= new Map();
 mem.realmTokens ??= new Map();
 mem.realmTrades ??= new Map();
 mem.realmBurns ??= new Map();
+mem.realmImages ??= new Map();
 
 /** A token launched on SilverRealm, as its logs said. */
 export type RealmTokenRow = {
@@ -202,7 +205,9 @@ function init() {
        create index if not exists realm_trades_pool on realm_trades (pool_id, block desc);
        create table if not exists realm_burns (
          id text primary key, base text not null, amount numeric not null, sc_burned numeric not null,
-         zc_burned numeric not null, block numeric not null, at bigint not null);`,
+         zc_burned numeric not null, block numeric not null, at bigint not null);
+       create table if not exists realm_images (
+         hash text primary key, type text not null, data bytea not null, created_at timestamptz not null default now());`,
     )
     .then(() => undefined);
   return ready;
@@ -646,6 +651,30 @@ export const db = {
       [poolId, limit],
     );
     return r.rows.map((x) => ({ ...x, at: Number(x.at) }));
+  },
+
+  /** An uploaded token image, stored under the sha-256 of its bytes, so the link to it can never show anything else. */
+  async saveRealmImage(hash: string, type: string, data: Buffer) {
+    await init();
+    if (!pool) return void mem.realmImages.set(hash, { type, data, at: Date.now() });
+    await pool.query(`insert into realm_images (hash, type, data) values ($1, $2, $3) on conflict (hash) do nothing`, [hash, type, data]);
+  },
+
+  async realmImage(hash: string): Promise<{ type: string; data: Buffer } | null> {
+    await init();
+    if (!pool) return mem.realmImages.get(hash) ?? null;
+    const r = await pool.query(`select type, data from realm_images where hash = $1`, [hash]);
+    return r.rows[0] ?? null;
+  },
+
+  /** Images no launch used within a day are dropped, like drafts nobody paid for. */
+  async pruneRealmImages() {
+    await init();
+    if (!pool) return;
+    await pool.query(
+      `delete from realm_images i where created_at < now() - interval '1 day'
+       and not exists (select 1 from realm_tokens t where t.uri like '%/api/realm/image/' || i.hash)`,
+    );
   },
 
   /** Everything SilverRealm has burned: the $5 of each launch and every converted fee. */

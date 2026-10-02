@@ -6,10 +6,10 @@ import { isAddress, type Address } from "viem";
 import { TradeBox } from "@/components/realm";
 import { ADDR, EXPLORER, ZERO } from "@/lib/config";
 import { short, tokens } from "@/lib/format";
-import { baseOf, feeLabel } from "@/lib/realm";
+import { baseOf, feeLabel, imageSrc } from "@/lib/realm";
 import { db } from "@/lib/server/db";
 
-import { serializeToken } from "../../../api/realm/route";
+import { serializeToken } from "@/lib/server/realm";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export default async function TokenPage({ params }: PageProps<"/realm/token/[add
   if (!data) notFound();
   const { t, trades } = data;
   const base = baseOf(t.base);
-  const image = t.uri && /^https:\/\//.test(t.uri) ? t.uri : null;
+  const image = imageSrc(t.uri);
   return (
     <section className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 md:py-14 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="space-y-8">

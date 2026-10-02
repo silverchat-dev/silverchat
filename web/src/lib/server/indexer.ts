@@ -103,4 +103,5 @@ async function run() {
   if (rewind) await db.set(`indexer:predict:${ADDR.predict.toLowerCase()}`, "1");
   if (rewindRealm) await db.set(`indexer:realm:${ADDR.realmFactory.toLowerCase()}`, "1");
   await db.pruneDrafts();
+  await db.pruneRealmImages();
 }

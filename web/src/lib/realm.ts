@@ -22,3 +22,11 @@ export const realmKey = (token: Address, base: Address) => {
 };
 
 export const feeLabel = (ppm: number) => `${ppm / 10_000}%`;
+
+/** Where to show a token's image from: our own uploads by their path (so any copy of the site serves them), other https links as they are. */
+export function imageSrc(uri: string | null) {
+  if (!uri) return null;
+  const own = uri.match(/\/api\/realm\/image\/([0-9a-f]{64})$/);
+  if (own) return `/api/realm/image/${own[1]}`;
+  return /^https:\/\/\S+$/.test(uri) ? uri : null;
+}

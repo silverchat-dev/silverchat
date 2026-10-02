@@ -7,7 +7,7 @@ import { ADDR, ZERO } from "@/lib/config";
 import { tokens } from "@/lib/format";
 import { db } from "@/lib/server/db";
 
-import { serializeToken } from "../api/realm/route";
+import { serializeToken } from "@/lib/server/realm";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
