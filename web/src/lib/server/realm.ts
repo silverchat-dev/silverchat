@@ -6,7 +6,7 @@ import { poolManagerAbi, realmBurnerAbi, realmFactoryAbi, realmHookAbi } from "@
 import { ADDR, CHAIN_ID, ZERO } from "@/lib/config";
 import { busy } from "@/lib/server/rate";
 import { refused } from "@/lib/moderation";
-import { BASES, GRADUATION, imageSrc } from "@/lib/realm";
+import { BASES, GRADUATION, imageSrc, PAGE } from "@/lib/realm";
 
 import { publicClient, send, walletFor } from "./chain";
 import { db, type RealmFeedRow, type RealmTokenStats } from "./db";
@@ -218,7 +218,6 @@ export type TokenView = Awaited<ReturnType<typeof serializeTokens>>[number];
 
 export const SORTS = ["trending", "new", "cap", "close", "graduated"] as const;
 export type Sort = (typeof SORTS)[number];
-export const PAGE = 60;
 
 /**
  * The board's order and filters over every launch: trending is the last day's volume, then the latest trade; close is
@@ -250,14 +249,18 @@ export function arrange(list: TokenView[], o: { sort: Sort; q?: string; base?: s
   return { tokens: out.slice(page * PAGE, (page + 1) * PAGE), total: out.length };
 }
 
-// ponytail: every launch is read and priced in one go, cached 10 s; fine to about 1,000 launches, then keep the price
-// and the share sold in realm_tokens (the keeper's tick reads them already) and sort in SQL
+// every launch is read and priced in one go, cached 10 s; fine to about 1,000 launches, then keep the price and the
+// share sold in realm_tokens (the keeper's tick reads them already) and sort in SQL
 let everything: { at: number; list: Promise<TokenView[]> } | null = null;
 
 export function allTokens() {
   if (!everything || Date.now() - everything.at > 10_000) {
     // only a refresh reads the chain, so only a refresh counts against the shared budget; a busy minute serves the last one
-    if (everything && busy()) return everything.list;
+    if (everything && busy()) {
+      // and the next try waits another 10 s, so a busy minute is not kept busy by the board itself
+      everything.at = Date.now();
+      return everything.list;
+    }
     const list = db.realmTokens({}, 1000).then(serializeTokens);
     everything = { at: Date.now(), list };
     list.catch(() => (everything = null));
@@ -266,7 +269,11 @@ export function allTokens() {
 }
 
 /** The board's featured token: the biggest that has not graduated and traded in the last day, or the newest. */
-export const featured = (list: TokenView[]) => arrange(list, { sort: "cap" }).tokens.find((t) => !t.graduated && t.trades24h > 0) ?? arrange(list, { sort: "new" }).tokens[0] ?? null;
+export function featured(list: TokenView[]) {
+  const shown = list.filter((t) => !t.hidden);
+  const live = shown.filter((t) => !t.graduated && t.trades24h > 0).sort((a, b) => (b.marketCapUsd ?? 0) - (a.marketCapUsd ?? 0));
+  return live[0] ?? shown.reduce<TokenView | null>((n, t) => (!n || t.at > n.at ? t : n), null);
+}
 
 /** The ticker's rows in dollars, hidden tokens left out. */
 export async function feed(limit = 30) {

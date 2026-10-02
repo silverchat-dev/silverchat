@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 
 import { short, tokens } from "@/lib/format";
-import { BASES, baseOf, feeLabel, GRADUATION, imageSrc } from "@/lib/realm";
+import { BASES, baseOf, feeLabel, GRADUATION, imageSrc, PAGE } from "@/lib/realm";
 import type { Board, FeedItem, Sort, TokenView } from "@/lib/server/realm";
 
 const TABS: [Sort, string][] = [
@@ -209,7 +209,7 @@ export function RealmBoard({ first, view: start }: { first: Board; view: View })
       return (await r.json()) as Board;
     },
     initialPageParam: 0,
-    getNextPageParam: (last, all) => (all.length * 60 < last.total ? all.length : undefined),
+    getNextPageParam: (last, all) => (all.length * PAGE < last.total ? all.length : undefined),
     initialData: same ? { pages: [first], pageParams: [0] } : undefined,
     placeholderData: keepPreviousData,
     refetchInterval: 15_000,

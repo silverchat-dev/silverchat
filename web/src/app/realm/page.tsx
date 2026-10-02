@@ -21,7 +21,8 @@ export default async function RealmPage({ searchParams }: PageProps<"/realm">) {
   const view = { sort: first.sort, q: one(sp.q).trim().slice(0, 64), base: first.base };
   return (
     <section className="mx-auto max-w-7xl px-5 py-10 sm:px-8 md:py-14">
-      <RealmBoard first={first} view={view} />
+      {/* a new view in the address (the header's link, back and forward) starts the board again from it */}
+      <RealmBoard key={`${view.sort}|${view.q}|${view.base}`} first={first} view={view} />
     </section>
   );
 }
