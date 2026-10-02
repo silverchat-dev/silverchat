@@ -443,6 +443,63 @@ contract SilverPredictTest is Test {
     assertEq(sc.balanceOf(opener), 10_000 ether);
   }
 
+  function test_the_owner_sweeps_only_what_is_not_owed() public {
+    uint256 _id = _openPrice(4000e8);
+    uint256 _refunded = _openPrice(4000e8);
+    _stake(_id, alice, 100 ether, 1);
+    _stake(_id, bob, 300 ether, 1);
+    _stake(_id, carol, 200 ether, 2);
+    _stake(_refunded, alice, 10 ether, 1);
+    // rewards SC's hook pays to the locks, and tokens sent by mistake
+    Token _other = new Token();
+    zc.mint(address(predict), 50 ether);
+    sc.mint(address(predict), 7 ether);
+    _other.mint(address(predict), 9 ether);
+
+    vm.expectRevert();
+    predict.sweep(IERC20(address(zc)));
+    vm.startPrank(owner);
+    predict.sweep(IERC20(address(zc)));
+    predict.sweep(IERC20(address(sc)));
+    predict.sweep(IERC20(address(_other)));
+    vm.expectRevert(SilverPredict.NothingToSweep.selector);
+    predict.sweep(IERC20(address(zc)));
+    vm.stopPrank();
+    assertEq(zc.balanceOf(treasury), 50 ether);
+    assertEq(sc.balanceOf(treasury), 7 ether);
+    assertEq(_other.balanceOf(treasury), 9 ether);
+
+    vm.warp(closesAt);
+    _reveal(_id, alice, 1);
+    _reveal(_id, bob, 1);
+    _reveal(_id, carol, 2);
+    _bracket(4100e8);
+    _toSettle();
+    predict.settlePrice(_id, R);
+    predict.settlePrice(_refunded, R);
+    // after the fee, before any claim
+    zc.mint(address(predict), 5 ether);
+    vm.prank(owner);
+    predict.sweep(IERC20(address(zc)));
+    assertEq(zc.balanceOf(treasury), 50 ether + 6 ether + 5 ether);
+
+    vm.startPrank(alice);
+    predict.claim(_id);
+    predict.claim(_refunded);
+    vm.stopPrank();
+    vm.prank(bob);
+    predict.claim(_id);
+    predict.claimLock(_id);
+    predict.claimLock(_refunded);
+    assertEq(zc.balanceOf(alice), 1000 ether - 100 ether + 147 ether);
+    assertEq(zc.balanceOf(bob), 700 ether + 441 ether);
+    assertEq(sc.balanceOf(opener), 10_000 ether);
+    assertEq(predict.zcOwed(), 0);
+    assertEq(predict.scLocked(), 0);
+    assertEq(zc.balanceOf(address(predict)), 0);
+    assertEq(sc.balanceOf(address(predict)), 0);
+  }
+
   function test_unanswered_event_voids_after_30_days_and_refunds_everyone() public {
     uint256 _id = _openEvent();
     _stake(_id, alice, 100 ether, 1);

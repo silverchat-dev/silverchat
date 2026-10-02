@@ -86,6 +86,11 @@ contract SilverPredictFork is Test {
     assertEq(predict.market(_id).lock, 1000 ether);
     _seal(_id, alice, 1);
     _seal(_id, bob, 2);
+    // ZC that no stake accounts for goes to the treasury, and the claims below still pay in full
+    vm.prank(POOL_MANAGER);
+    ZC.transfer(address(predict), 3 ether);
+    predict.sweep(ZC);
+    assertGe(ZC.balanceOf(treasury), 3 ether);
 
     // stakes are in; open the reveal window now, then pretend the market resolved a day ago
     uint32 _t = uint32(_now - 1 days);

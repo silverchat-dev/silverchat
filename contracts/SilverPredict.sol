@@ -35,8 +35,10 @@ interface IReality {
  *      as lost. Price markets settle on a Chainlink feed, event markets on Reality.eth with a Kleros arbitrator.
  *      Winners share the whole pool less 2% (1% burned, 1% to the treasury). With no revealed winner, no loser, or a
  *      void market, every stake comes back in full and nothing is charged.
- *      ZC is a plain ERC20. SC transfers run a third-party hook, so SC only moves when a market is opened and in
- *      `claimLock`, never on the path that pays out ZC.
+ *      ZC is a plain ERC20. SC transfers run a third-party hook, so SC only moves when a market is opened, in
+ *      `claimLock` and in `sweep`, never on the path that pays out ZC. The hook also pays ZC rewards to every SC
+ *      holder, this contract included; the contract counts the ZC it owes and the SC it holds as locks, and `sweep`
+ *      sends anything above that to the treasury, so those rewards are not stuck here.
  */
 contract SilverPredict is Ownable2Step, ReentrancyGuard {
   using SafeERC20 for IERC20;
@@ -108,6 +110,10 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
   mapping(address => uint256) public maxStale;
 
   uint256 public count;
+  /// @notice ZC owed to stakers: every stake, less the fees taken out and the claims paid
+  uint256 public zcOwed;
+  /// @notice SC held as the locks of markets whose lock is not yet returned
+  uint256 public scLocked;
   mapping(uint256 => Market) internal markets;
   mapping(uint256 => mapping(address => Stake)) public stakes;
 
@@ -132,6 +138,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
   event MinBondSet(uint256 minBond);
   event ArbitratorSet(address arbitrator);
   event FeedSet(address indexed feed, uint256 maxStale);
+  event Swept(address indexed token, uint256 amount);
 
   error ZeroAddress();
   error BadTimes();
@@ -154,6 +161,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
   error NotSettled();
   error NothingToClaim();
   error AlreadyClaimed();
+  error NothingToSweep();
 
   constructor(
     IERC20 _zc,
@@ -236,6 +244,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     _s.amount = _amount;
     _s.commitment = _commitment;
     _m.pool += _amount;
+    zcOwed += _amount;
     ZC.safeTransferFrom(msg.sender, address(this), _amount);
     emit Staked(_id, msg.sender, _amount, _commitment);
   }
@@ -344,6 +353,8 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
       _amount = (_s.amount * _m.payout) / (_won == YES ? _m.yes : _m.no);
     }
     _s.claimed = true;
+    // the rounding dust a market leaves behind stays counted as owed, so it is never swept
+    zcOwed -= _amount;
     ZC.safeTransfer(msg.sender, _amount);
     emit Claimed(_id, msg.sender, _amount);
   }
@@ -354,9 +365,19 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     if (_m.status == Status.None || _m.status == Status.Open) revert NotSettled();
     if (_m.lockClaimed) revert AlreadyClaimed();
     _m.lockClaimed = true;
+    scLocked -= _m.lock;
     address _to = _m.invalid ? TREASURY : _m.opener;
     SC.safeTransfer(_to, _m.lock);
     emit LockClaimed(_id, _to, _m.lock);
+  }
+
+  /// @notice Send to the treasury what the contract does not owe: ZC rewards paid to its SC locks, or any token sent here
+  function sweep(IERC20 _token) external onlyOwner nonReentrant {
+    uint256 _keep = (_token == ZC ? zcOwed : 0) + (_token == SC ? scLocked : 0);
+    uint256 _amount = _token.balanceOf(address(this)) - _keep;
+    if (_amount == 0) revert NothingToSweep();
+    _token.safeTransfer(TREASURY, _amount);
+    emit Swept(address(_token), _amount);
   }
 
   function market(uint256 _id) external view returns (Market memory) {
@@ -405,6 +426,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     uint256 _received = SC.balanceOf(address(this)) - _before;
     if (_received == 0) revert NothingLocked();
     _m.lock = _received;
+    scLocked += _received;
     emit Opened(_id, msg.sender, _kind, _contentHash, _closesAt, _resolvesAt, _received);
   }
 
@@ -434,6 +456,7 @@ contract SilverPredict is Ownable2Step, ReentrancyGuard {
     }
     uint256 _cut = _m.pool / 100;
     _m.payout = _m.pool - 2 * _cut;
+    zcOwed -= 2 * _cut;
     ZC.safeTransfer(BURN, _cut);
     ZC.safeTransfer(TREASURY, _cut);
     emit Settled(_id, _status, false, _m.payout, 2 * _cut);
