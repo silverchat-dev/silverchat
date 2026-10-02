@@ -22,9 +22,19 @@ export type Stats = {
   inContract: bigint | null;
   burnAddress: bigint | null;
   supply: bigint | null;
+  /** Answers signed in the last 24 hours. */
+  dayAnswers: number;
+  /** ZC paid into polls asked in the last DAY_BLOCKS blocks; null while the head block cannot be read. */
+  daySpent: bigint | null;
+  /** ZC burned by polls fixed in the last 24 hours. */
+  dayBurned: bigint;
 };
 
+/** About a day of Ethereum blocks, at 12 seconds each. */
+export const DAY_BLOCKS = 7_200n;
+
 let cached: { at: number; stats: Stats } | null = null;
+let head: bigint | null = null;
 
 /**
  * Where the ZC paid into Silverchat went. Each fixed poll is split with SilverAsk.finalize's own integer math, poll by
@@ -32,20 +42,29 @@ let cached: { at: number; stats: Stats } | null = null;
  */
 export async function stats(): Promise<Stats> {
   if (cached && Date.now() - cached.at < 60_000) return cached.stats;
-  const [{ polls, answers }, chain] = await Promise.all([
+  const [{ polls, answers, dayAnswers }, chain] = await Promise.all([
     db.ledger(),
     Promise.all([
       ADDR.ask === ZERO ? null : publicClient.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "balanceOf", args: [ADDR.ask] }),
       publicClient.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "balanceOf", args: [BURN] }),
       publicClient.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "totalSupply" }),
+      publicClient.getBlockNumber(),
     // one failed read keeps the last good numbers instead of blanking them for a minute
-    ]).catch(() => [cached?.stats.inContract ?? null, cached?.stats.burnAddress ?? null, cached?.stats.supply ?? null] as const),
+    ]).catch(() => [cached?.stats.inContract ?? null, cached?.stats.burnAddress ?? null, cached?.stats.supply ?? null, head] as const),
   ]);
 
-  const s: Stats = { polls: polls.length, answers, spent: 0n, earned: 0n, returned: 0n, treasury: 0n, burned: 0n, open: 0n, inContract: chain[0], burnAddress: chain[1], supply: chain[2] };
+  head = chain[3];
+  const dayAgo = Math.floor(Date.now() / 1000) - 86_400;
+  const s: Stats = {
+    polls: polls.length, answers, spent: 0n, earned: 0n, returned: 0n, treasury: 0n, burned: 0n, open: 0n,
+    inContract: chain[0], burnAddress: chain[1], supply: chain[2],
+    dayAnswers, daySpent: null, dayBurned: 0n,
+  };
+  let daySpent = 0n;
   for (const p of polls) {
     const cost = BigInt(p.cost);
     s.spent += cost;
+    if (head !== null && BigInt(p.block) > head - DAY_BLOCKS) daySpent += cost;
     if (p.status === "open") s.open += cost;
     else if (p.status === "refunded") s.returned += cost;
     else {
@@ -56,8 +75,10 @@ export async function stats(): Promise<Stats> {
       s.returned += pool - earned;
       s.treasury += treasury;
       s.burned += cost - pool - treasury;
+      if ((p.finalize_at ?? 0) >= dayAgo) s.dayBurned += cost - pool - treasury;
     }
   }
+  if (head !== null) s.daySpent = daySpent;
   cached = { at: Date.now(), stats: s };
   return s;
 }

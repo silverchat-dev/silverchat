@@ -7,6 +7,8 @@ import { AnswerPanel } from "@/components/answer-panel";
 import { Print } from "@/components/print";
 import { Proof } from "@/components/proof";
 import { RefundButton } from "@/components/refund-button";
+import { SaveButton } from "@/components/you";
+import { topicOf } from "@/lib/content";
 import { people, span, tokens } from "@/lib/format";
 import { db } from "@/lib/server/db";
 import { displayTime } from "@/lib/server/eligibility";
@@ -38,13 +40,15 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
   const developing = poll.status === "open" && !open;
   const refundable = developing && now > poll.closesAt + REFUND_AFTER;
   const { content } = poll;
+  const topic = topicOf(content);
 
   return (
     <section className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 md:py-14 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="min-w-0 space-y-10">
         <header className="space-y-5">
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-            Poll No. {poll.id} · {people(poll.breadth)} people · {tokens(poll.cost)} ZC
+            Poll No. {poll.id}
+            {topic && ` · ${topic}`} · {people(poll.breadth)} people · {tokens(poll.cost)} ZC
           </p>
           {content ? (
             <>
@@ -69,14 +73,17 @@ export default async function PollPage({ params }: PageProps<"/poll/[id]">) {
               <p className="break-all font-mono text-xs text-silver">Its hash on Ethereum: {poll.contentHash}</p>
             </>
           )}
-          <p className="font-mono text-sm text-paper/80">
-            {open
-              ? `${poll.answers.toLocaleString("en-US")} of ${people(poll.breadth)} answered · closes in ${span(poll.closesAt - now)}`
-              : poll.status === "final"
-                ? "Fixed on Ethereum"
-                : poll.status === "refunded"
-                  ? "Refunded to the asker"
-                  : `Closed · ${poll.answers.toLocaleString("en-US")} answers · developing`}
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm text-paper/80">
+            <span>
+              {open
+                ? `${poll.answers.toLocaleString("en-US")} of ${people(poll.breadth)} answered · closes in ${span(poll.closesAt - now)}`
+                : poll.status === "final"
+                  ? "Fixed on Ethereum"
+                  : poll.status === "refunded"
+                    ? "Refunded to the asker"
+                    : `Closed · ${poll.answers.toLocaleString("en-US")} answers · developing`}
+            </span>
+            <SaveButton id={poll.id} />
           </p>
         </header>
 

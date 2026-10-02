@@ -44,13 +44,25 @@ export type PollRow = {
   answers?: number;
 };
 
+export type Ledger = { status: PollRow["status"]; cost: string; reward_total: string | null; block: string; finalize_at: number | null };
+
 // on globalThis so the background loops and the route handlers share one copy in dev
-export type AnswerRow = { poll_id: string; voter: Address; choices: number[]; region: string; age: string; salt: string; signature: string };
+export type AnswerRow = { poll_id: string; voter: Address; choices: number[]; region: string; age: string; salt: string; signature: string; at?: number };
 
 const g = globalThis as typeof globalThis & {
-  silverchatMem?: { drafts: Map<string, string>; polls: Map<string, PollRow>; answers: Map<string, AnswerRow>; kv: Map<string, string> };
+  silverchatMem?: {
+    drafts: Map<string, string>;
+    polls: Map<string, PollRow>;
+    answers: Map<string, AnswerRow>;
+    kv: Map<string, string>;
+    profiles: Map<string, Profile>;
+  };
 };
-const mem = (g.silverchatMem ??= { drafts: new Map(), polls: new Map(), answers: new Map(), kv: new Map() });
+const mem = (g.silverchatMem ??= { drafts: new Map(), polls: new Map(), answers: new Map(), kv: new Map(), profiles: new Map() });
+mem.profiles ??= new Map();
+
+/** A wallet's public profile switch and the time of the signature that last set it. */
+export type Profile = { public: boolean; signed_at: number };
 
 let ready: Promise<void> | null = null;
 function init() {
@@ -73,7 +85,8 @@ function init() {
          poll_id numeric not null, voter text not null, choices jsonb not null, region text not null, age text not null,
          salt text not null, signature text not null, created_at timestamptz not null default now(), primary key (poll_id, voter));
        create index if not exists answers_voter on answers (voter);
-       create table if not exists kv (key text primary key, value text not null);`,
+       create table if not exists kv (key text primary key, value text not null);
+       create table if not exists profiles (address text primary key, public boolean not null, signed_at bigint not null);`,
     )
     .then(() => undefined);
   return ready;
@@ -141,13 +154,16 @@ export const db = {
   },
 
   /** From the Finalized log: the chain's roots and tx win over whatever the finalizer saved before sending. */
-  async setFinalized(id: string, resultRoot: string, rewardRoot: string, rewardTotal: string, tx: string) {
+  async setFinalized(id: string, resultRoot: string, rewardRoot: string, rewardTotal: string, tx: string, at: number) {
     await init();
     const f = { status: "final" as const, result_root: resultRoot, reward_root: rewardRoot, reward_total: rewardTotal, finalize_tx: tx };
-    if (!pool) return void Object.assign(mem.polls.get(id) ?? {}, f);
+    if (!pool) {
+      const p = mem.polls.get(id);
+      return void (p && Object.assign(p, f, { finalize_at: p.finalize_at ?? at }));
+    }
     await pool.query(
-      `update polls set status = 'final', result_root = $2, reward_root = $3, reward_total = $4, finalize_tx = $5 where id = $1`,
-      [id, resultRoot, rewardRoot, rewardTotal, tx],
+      `update polls set status = 'final', result_root = $2, reward_root = $3, reward_total = $4, finalize_tx = $5, finalize_at = coalesce(finalize_at, $6) where id = $1`,
+      [id, resultRoot, rewardRoot, rewardTotal, tx, at],
     );
   },
 
@@ -238,12 +254,14 @@ export const db = {
       const count = (id: string) => [...mem.answers.values()].filter((a) => a.poll_id === id).length;
       return [...mem.polls.values()]
         .filter((p) => (!status || p.status === status) && !isHidden(p.id))
-        .sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)))
+        .sort((a, b) => (status === "final" ? (b.finalize_at ?? 0) - (a.finalize_at ?? 0) : 0) || Number(BigInt(b.id) - BigInt(a.id)))
         .slice(0, limit)
         .map((p) => ({ ...p, answers: count(p.id) }));
     }
     const cols = `p.*, (select count(*) from answers a where a.poll_id = p.id)::int as answers`;
-    const r = await pool.query(`select ${cols} from polls p where ($1::text is null or status = $1) and id <> all($2::numeric[]) order by id desc limit $3`, [
+    // fixed results come newest fixed first: a long poll asked early can be fixed after short ones asked later
+    const order = status === "final" ? "finalize_at desc nulls last, id desc" : "id desc";
+    const r = await pool.query(`select ${cols} from polls p where ($1::text is null or status = $1) and id <> all($2::numeric[]) order by ${order} limit $3`, [
       status ?? null,
       HIDDEN,
       limit,
@@ -257,7 +275,7 @@ export const db = {
     if (!pool) {
       const k = `${a.poll_id}:${a.voter}`;
       if (mem.answers.has(k)) return false;
-      mem.answers.set(k, a);
+      mem.answers.set(k, { ...a, at: Date.now() });
       return true;
     }
     // only while the poll is still open in the database, so nothing slips in after the finalizer has read the answers
@@ -270,15 +288,25 @@ export const db = {
     return r.rowCount === 1;
   },
 
-  /** Every poll's money fields and the total answer count, hidden polls included (they are paid like any other). */
-  async ledger(): Promise<{ polls: { status: PollRow["status"]; cost: string; reward_total: string | null }[]; answers: number }> {
+  /**
+   * Every poll's money fields and when it was asked and fixed, the total answer count and the answers of the last 24
+   * hours, hidden polls included (they are paid like any other).
+   */
+  async ledger(): Promise<{ polls: Ledger[]; answers: number; dayAnswers: number }> {
     await init();
-    if (!pool) return { polls: [...mem.polls.values()].map((p) => ({ status: p.status, cost: p.cost, reward_total: p.reward_total })), answers: mem.answers.size };
+    if (!pool) {
+      const since = Date.now() - 86_400_000;
+      return {
+        polls: [...mem.polls.values()].map((p) => ({ status: p.status, cost: p.cost, reward_total: p.reward_total, block: p.block, finalize_at: p.finalize_at ?? null })),
+        answers: mem.answers.size,
+        dayAnswers: [...mem.answers.values()].filter((a) => (a.at ?? 0) >= since).length,
+      };
+    }
     const [p, a] = await Promise.all([
-      pool.query(`select status, cost::text as cost, reward_total::text as reward_total from polls`),
-      pool.query(`select count(*)::int as n from answers`),
+      pool.query(`select status, cost::text as cost, reward_total::text as reward_total, block::text as block, finalize_at::float8 as finalize_at from polls`),
+      pool.query(`select count(*)::int as n, (count(*) filter (where created_at > now() - interval '1 day'))::int as day from answers`),
     ]);
-    return { polls: p.rows, answers: a.rows[0].n };
+    return { polls: p.rows, answers: a.rows[0].n, dayAnswers: a.rows[0].day };
   },
 
   async answerCount(pollId: string) {
@@ -293,6 +321,37 @@ export const db = {
     if (!pool) return [...mem.answers.values()].filter((a) => a.poll_id === pollId);
     const r = await pool.query(`select * from answers where poll_id = $1`, [pollId]);
     return r.rows.map((a) => ({ ...a, poll_id: String(a.poll_id) }));
+  },
+
+  /** Polls asked by `address`, newest first, hidden ones left out. */
+  async askedBy(address: string): Promise<PollRow[]> {
+    await init();
+    if (!pool) return [...mem.polls.values()].filter((p) => p.asker === address && !isHidden(p.id)).sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)));
+    const r = await pool.query(`select * from polls where asker = $1 and id <> all($2::numeric[]) order by id desc`, [address, HIDDEN]);
+    return r.rows.map(text);
+  },
+
+  async profile(address: string): Promise<Profile | null> {
+    await init();
+    if (!pool) return mem.profiles.get(address) ?? null;
+    const r = await pool.query(`select public, signed_at::float8 as signed_at from profiles where address = $1`, [address]);
+    return r.rows[0] ?? null;
+  },
+
+  /** False when a signature at least as new already set it, so an old "show" cannot undo a later "hide". */
+  async setProfile(address: string, on: boolean, at: number) {
+    await init();
+    if (!pool) {
+      if ((mem.profiles.get(address)?.signed_at ?? -1) >= at) return false;
+      mem.profiles.set(address, { public: on, signed_at: at });
+      return true;
+    }
+    const r = await pool.query(
+      `insert into profiles (address, public, signed_at) values ($1, $2, $3)
+       on conflict (address) do update set public = excluded.public, signed_at = excluded.signed_at where profiles.signed_at < excluded.signed_at`,
+      [address, on, at],
+    );
+    return r.rowCount === 1;
   },
 
   async get(key: string) {

@@ -70,7 +70,7 @@ for (const v of VOTERS) {
 }
 await rpc("anvil_stopImpersonatingAccount", [POOL_MANAGER]);
 
-const content = { v: 1, questions: [{ q: `End to end check ${Date.now()}`, options: ["Yes", "No"] }] };
+const content = { v: 2, topic: "Other", questions: [{ q: `End to end check ${Date.now()}`, options: ["Yes", "No"] }] };
 const text = JSON.stringify(content);
 const hash = keccak256(stringToBytes(text));
 const draft = await (await fetch(`${APP}/api/polls`, { method: "POST", headers: { "content-type": "application/json" }, body: text })).json();
