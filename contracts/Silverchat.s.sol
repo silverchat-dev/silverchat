@@ -9,6 +9,10 @@ import {SilverAlgorithm} from "./SilverAlgorithm.sol";
 import {SilverAsk} from "./SilverAsk.sol";
 import {SilverRiddle} from "./SilverRiddle.sol";
 import {IReality, SilverPredict} from "./SilverPredict.sol";
+import {RealmBurner} from "./RealmBurner.sol";
+import {RealmFactory} from "./RealmFactory.sol";
+import {RealmHook} from "./RealmHook.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 
 /**
  * @notice Deploys the Silverchat contracts. The deployer keeps no role: every role goes to the addresses in the env.
@@ -150,5 +154,54 @@ contract DeployPredict is Script {
     } else {
       console.log("simulated, nothing written");
     }
+  }
+}
+
+/**
+ * @notice Deploys SilverRealm (burner, then the factory, which creates the hook) and adds the addresses to an existing
+ *         deployments/<OUT>.json.
+ *   OWNER    the Safe: it can only change the burner's keeper
+ *   KEEPER   the keeper address that converts fees into burned SC and ZC
+ *   OUT      deployment name; deployments/<OUT>.json must exist
+ * The hook's address must end in its permission bits (0x28CC). The factory is the deployer's next-but-one contract, so
+ * its address is known before it exists, and the hook's salt is mined for it here. Send nothing else from the deployer
+ * between the two.
+ */
+contract DeployRealm is Script {
+  IPoolManager constant POOL_MANAGER = IPoolManager(0x000000000004444c5dc75cB358380D2e3dE08A90);
+
+  function run() external {
+    require(address(POOL_MANAGER).code.length != 0, "no Uniswap v4 on this chain");
+    string memory _file = string.concat("./deployments/", vm.envString("OUT"), ".json");
+    require(vm.exists(_file), "deploy SilverAsk first");
+    require(vm.parseJsonUint(vm.readFile(_file), ".chainId") == block.chainid, "OUT is for another chain");
+    address _owner = vm.envAddress("OWNER");
+    address _keeper = vm.envAddress("KEEPER");
+    if (block.chainid == 1) require(_owner.code.length != 0, "OWNER is not a contract");
+
+    vm.startBroadcast();
+    (, address _deployer,) = vm.readCallers();
+    uint256 _nonce = vm.getNonce(_deployer);
+    address _burnerAt = vm.computeCreateAddress(_deployer, _nonce);
+    address _factoryAt = vm.computeCreateAddress(_deployer, _nonce + 1);
+    bytes32 _init = keccak256(abi.encodePacked(type(RealmHook).creationCode, abi.encode(POOL_MANAGER, _burnerAt)));
+    bytes32 _salt;
+    for (uint256 _i;; ++_i) {
+      _salt = bytes32(_i);
+      if (uint160(vm.computeCreate2Address(_salt, _init, _factoryAt)) & 0x3FFF == 0x28CC) break;
+    }
+    RealmBurner _burner = new RealmBurner(POOL_MANAGER, _owner, _keeper);
+    RealmFactory _factory = new RealmFactory(POOL_MANAGER, address(_burner), _salt);
+    vm.stopBroadcast();
+    require(address(_burner) == _burnerAt && address(_factory) == _factoryAt, "addresses moved");
+    console.log("burner ", address(_burner));
+    console.log("factory", address(_factory));
+    console.log("hook   ", address(_factory.HOOK()));
+
+    if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) return console.log("simulated, nothing written");
+    vm.writeJson(vm.toString(address(_factory)), _file, ".realmFactory");
+    vm.writeJson(vm.toString(address(_factory.HOOK())), _file, ".realmHook");
+    vm.writeJson(vm.toString(address(_burner)), _file, ".realmBurner");
+    vm.writeJson(vm.toString(block.number), _file, ".realmBlock");
   }
 }
