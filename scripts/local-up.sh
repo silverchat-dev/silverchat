@@ -36,7 +36,7 @@ RIDDLE=$(python3 -c "import json; print(json.load(open('deployments/local.json')
 cast rpc anvil_impersonateAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 cast rpc anvil_setBalance $POOL_MANAGER 0x56BC75E2D63100000 --rpc-url $RPC >/dev/null
 cast send $ZC "transfer(address,uint256)" "$WALLET" 5000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
-cast send $SC "transfer(address,uint256)" "$RIDDLE" 2000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
+cast send $SC "transfer(address,uint256)" "$RIDDLE" 1000000000000000000000000 --from $POOL_MANAGER --unlocked --rpc-url $RPC >/dev/null
 cast rpc anvil_stopImpersonatingAccount $POOL_MANAGER --rpc-url $RPC >/dev/null
 
 python3 - "$ROOT/contracts/deployments/local.json" "$ROOT/web/.env.local" "$POSTER_PK" "$PRICER_PK" "$SC" <<'PY'
