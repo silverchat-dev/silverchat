@@ -55,7 +55,7 @@ export default async function TokenPage({ params }: PageProps<"/realm/token/[add
           <div className="flex flex-wrap items-start gap-5">
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={image} alt="" width={96} height={96} referrerPolicy="no-referrer" className="h-24 w-24 rounded-full object-cover" />
+              <img src={image} alt="" width={96} height={96} referrerPolicy="no-referrer" className="h-24 w-24 rounded-full object-cover text-[0px]" />
             ) : (
               <span aria-hidden className="grid h-24 w-24 place-items-center rounded-full border border-paper/20 font-mono text-silver">
                 {t.symbol?.slice(0, 4) ?? "?"}
@@ -131,7 +131,7 @@ export default async function TokenPage({ params }: PageProps<"/realm/token/[add
           </p>
         </header>
 
-        <RealmChart token={t.token} symbol={t.symbol ?? "?"} />
+        <RealmChart token={t.token} symbol={t.symbol ?? "?"} trades={t.trades} age={age} />
 
         <section className="space-y-3 border border-paper/15 p-5">
           <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Latest trades</h2>

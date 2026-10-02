@@ -219,7 +219,20 @@ export async function candles(t: RealmTokenStats, seconds: number): Promise<Cand
     const tokens = x.buy ? outt : inn;
     put(x.at, (base / tokens) * usd, (base / 1e18) * usd);
   }
-  return out;
+  // a candle for every period up to now, flat where nobody traded, so the chart reads as time and not as a few bars
+  const end = Math.floor(Date.now() / 1000);
+  const filled: Candle[] = [];
+  for (const c of out) {
+    const prev = filled.at(-1);
+    for (let time = prev ? prev.time + seconds : c.time; prev && time < c.time; time += seconds) {
+      filled.push({ time, open: prev.close, high: prev.close, low: prev.close, close: prev.close, volume: 0 });
+    }
+    filled.push(c);
+  }
+  for (let c = filled.at(-1); c && c.time + seconds <= end; c = filled.at(-1)) {
+    filled.push({ time: c.time + seconds, open: c.close, high: c.close, low: c.close, close: c.close, volume: 0 });
+  }
+  return filled.slice(-1500);
 }
 
 // ---- keeper: turns the burner's fees into burned SC and ZC

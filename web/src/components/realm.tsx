@@ -3,7 +3,7 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   BaseError,
   ContractFunctionRevertedError,
@@ -211,7 +211,7 @@ export function LaunchForm() {
           <input value={uri} maxLength={300} onChange={(e) => {
               setUri(e.target.value.trim());
               setFile(null);
-            }} placeholder="https://…" className={field} />
+            }} placeholder="https://… link to an image" className={field} />
         </div>
         <label className="block space-y-2">
           <span className="block font-mono text-xs uppercase tracking-[0.14em]">Description · optional</span>
@@ -274,6 +274,100 @@ export function LaunchForm() {
   );
 }
 
+const BUY_PRESETS = ["0.1", "0.25", "0.5", "1"];
+const PCT_PRESETS = ["10", "25", "50", "100"];
+
+const PRESETS_EVENT = "silverrealm-presets";
+const onPresets = (cb: () => void) => {
+  window.addEventListener("storage", cb);
+  window.addEventListener(PRESETS_EVENT, cb);
+  return () => {
+    window.removeEventListener("storage", cb);
+    window.removeEventListener(PRESETS_EVENT, cb);
+  };
+};
+
+/** Quick amounts, each person's own, kept in this browser; storage that fails (private mode) falls back to the defaults. */
+function usePresets(key: string, defaults: string[]) {
+  const raw = useSyncExternalStore(
+    onPresets,
+    () => {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    () => null,
+  );
+  let list = defaults;
+  try {
+    const saved = JSON.parse(raw ?? "null");
+    if (Array.isArray(saved) && saved.length === defaults.length && saved.every((x) => typeof x === "string")) list = saved;
+  } catch {}
+  const save = (next: string[]) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(new Event(PRESETS_EVENT));
+    } catch {}
+  };
+  return [list, save] as const;
+}
+
+/** A row of quick amounts with an edit button that turns them into inputs. */
+function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (v: string) => void; onSave: (v: string[]) => void; unit: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(values);
+  const chip = "border border-developer/40 px-2.5 py-1.5 font-mono text-xs hover:bg-developer hover:text-paper";
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {draft.map((v, i) => (
+          <input
+            key={i}
+            value={v}
+            inputMode="decimal"
+            aria-label={`Quick amount ${i + 1}`}
+            onChange={(e) => setDraft(draft.map((x, j) => (j === i ? e.target.value.replace(/[^0-9.]/g, "") : x)))}
+            className="w-16 border border-developer/50 bg-transparent px-2 py-1.5 font-mono text-xs"
+          />
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            onSave(draft.map((x, i) => (Number(x) > 0 ? x : values[i])));
+            setEditing(false);
+          }}
+          className={chip}
+        >
+          Save
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {values.map((v) => (
+        <button key={v} type="button" onClick={() => onPick(v)} className={chip}>
+          {unit === "%" ? (v === "100" ? "Max" : `${v}%`) : `${v} ${unit}`}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(values);
+          setEditing(true);
+        }}
+        aria-label="Edit the quick amounts"
+        title="Edit the quick amounts"
+        className="px-2 py-1.5 font-mono text-xs text-developer/70 hover:text-developer"
+      >
+        ✎
+      </button>
+    </div>
+  );
+}
+
 /**
  * Buy or sell a SilverRealm token through Stockereum's router. ETH pairs trade in ETH; ZC and STOCKER pairs in ETH (the
  * router buys the coin on the way) or in the coin itself; SC pairs in SC, which has no ETH route on the router.
@@ -306,6 +400,15 @@ export function TradeBox({ token, base, symbol, poolId }: { token: Address; base
   const payCoin = side === "sell" ? token : eth ? null : base;
   const coinBal = useReadContract({ address: payCoin ?? token, abi: erc20Abi, functionName: "balanceOf", args: address ? [address] : undefined, query: { enabled: !!address && !!payCoin } });
   const balance = payCoin ? coinBal.data : ethBal.data?.value;
+  const [buyPresets, saveBuyPresets] = usePresets("silverrealm:buy-eth", BUY_PRESETS);
+  const [buyPct, saveBuyPct] = usePresets("silverrealm:buy-pct", PCT_PRESETS);
+  const [sellPct, saveSellPct] = usePresets("silverrealm:sell-pct", PCT_PRESETS);
+  // a share of what you hold: the token when selling, the coin when buying with it
+  const pickPct = (v: string) => {
+    if (balance === undefined) return;
+    const part = v === "100" ? balance : (balance * BigInt(Math.round(Number(v) * 100))) / 10_000n;
+    setAmount(formatEther(part));
+  };
 
   let wei = 0n;
   try {
@@ -402,6 +505,11 @@ export function TradeBox({ token, base, symbol, poolId }: { token: Address; base
         </span>
         <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.0" className={field} />
       </label>
+      {side === "buy" && eth ? (
+        <Presets key="eth" values={buyPresets} onPick={setAmount} onSave={saveBuyPresets} unit="ETH" />
+      ) : (
+        <Presets key={side} values={side === "sell" ? sellPct : buyPct} onPick={pickPct} onSave={side === "sell" ? saveSellPct : saveBuyPct} unit="%" />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
         <span className="flex items-center gap-1">
           <span className="mr-1 text-developer/70">Slippage</span>
