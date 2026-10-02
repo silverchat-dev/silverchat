@@ -35,6 +35,12 @@ export type Stats = {
   scHolderEarned: bigint | null;
   scHolderPaid: bigint | null;
   scHolders: number | null;
+  /** ZC burned by settled Predict markets. */
+  predictBurned: bigint;
+  /** What SilverRealm has burned: $SC (the $5 of each launch and 80% of fees) and $ZC (20% of fees), and its launches. */
+  realmScBurned: bigint;
+  realmZcBurned: bigint;
+  launches: number;
 };
 
 // SC's distributor, found once through its launch record: null when SC is unset or holder rewards are off
@@ -66,7 +72,7 @@ let head: bigint | null = null;
  */
 export async function stats(): Promise<Stats> {
   if (cached && Date.now() - cached.at < 60_000) return cached.stats;
-  const [{ polls, answers, dayAnswers }, chain, rewards] = await Promise.all([
+  const [{ polls, answers, dayAnswers }, chain, rewards, predictBurned, realm] = await Promise.all([
     db.ledger(),
     Promise.all([
       ADDR.ask === ZERO ? null : publicClient.readContract({ address: ADDR.zc, abi: erc20Abi, functionName: "balanceOf", args: [ADDR.ask] }),
@@ -76,6 +82,8 @@ export async function stats(): Promise<Stats> {
     // one failed read keeps the last good numbers instead of blanking them for a minute
     ]).catch(() => [cached?.stats.inContract ?? null, cached?.stats.burnAddress ?? null, cached?.stats.supply ?? null, head] as const),
     holderRewards().catch(() => null),
+    db.predictBurned(),
+    db.realmBurned(),
   ]);
 
   head = chain[3];
@@ -88,6 +96,10 @@ export async function stats(): Promise<Stats> {
     scHolderEarned: rewards?.earned ?? cached?.stats.scHolderEarned ?? null,
     scHolderPaid: rewards?.paid ?? cached?.stats.scHolderPaid ?? null,
     scHolders: rewards?.holders ?? cached?.stats.scHolders ?? null,
+    predictBurned: BigInt(predictBurned),
+    realmScBurned: BigInt(realm.sc),
+    realmZcBurned: BigInt(realm.zc),
+    launches: realm.launches,
   };
   let daySpent = 0n;
   for (const p of polls) {

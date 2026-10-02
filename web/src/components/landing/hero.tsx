@@ -6,9 +6,10 @@ import { Darkroom } from "./darkroom";
 import { Negatives } from "./negatives";
 
 const MECHANICS = [
-  ["Pay to ask", "You pay $ZC to ask. More ZC reaches more people."],
-  ["Answer and earn", `Holders of $${MIN_HOLD_USD} of ZC or SC answer with a free signature and share up to ${Number(SPLIT[0][1]) / 100}% of what you paid.`],
-  ["Fixed on-chain", "The result goes on Ethereum. After that nobody can change it, not even us."],
+  ["Pay to ask", "Pay $ZC to ask. More ZC reaches more people."],
+  ["Answer and earn", `Hold $${MIN_HOLD_USD} of ZC or SC, answer with a free signature, share up to ${Number(SPLIT[0][1]) / 100}%.`],
+  ["Predict", "Stake $ZC on YES or NO, sealed until the market closes."],
+  ["Launch", "Launch a token from your Realm. Every fee is burned."],
 ];
 
 export function Hero() {
@@ -30,7 +31,7 @@ export function Hero() {
               <span className="block">Ask the network.</span>
               <span className="block">Watch the answer develop.</span>
             </p>
-            <p className="max-w-sm text-lg leading-relaxed text-paper/80">The polling network from Snowmoon, <span className="whitespace-nowrap">ch. 27</span>. Now on Ethereum.</p>
+            <p className="max-w-sm text-lg leading-relaxed text-paper/80">The network from Snowmoon, <span className="whitespace-nowrap">ch. 27</span>. Ask it, bet on it, launch on it. Now on Ethereum.</p>
           </div>
 
           <div className="space-y-10 lg:col-start-2 lg:row-span-2 lg:row-start-1">
@@ -48,9 +49,9 @@ export function Hero() {
             </p>
           </div>
 
-          <dl className="grid gap-px bg-silver/20 sm:grid-cols-3 lg:col-start-1 lg:row-start-2 lg:block lg:max-w-xs lg:divide-y lg:divide-silver/20 lg:self-start lg:border-t lg:border-silver/20 lg:bg-transparent">
+          <dl className="grid gap-px bg-silver/20 sm:grid-cols-2 lg:col-start-1 lg:row-start-2 lg:block lg:max-w-xs lg:divide-y lg:divide-silver/20 lg:self-start lg:border-t lg:border-silver/20 lg:bg-transparent">
             {MECHANICS.map(([k, v]) => (
-              <div key={k} className="space-y-1 bg-developer py-4 sm:px-4 lg:bg-transparent lg:px-0">
+              <div key={k} className="space-y-1 bg-developer py-4 sm:px-4 lg:bg-transparent lg:px-0 lg:py-3">
                 <dt className="font-mono text-[11px] uppercase tracking-[0.2em] text-paper/90">{k}</dt>
                 <dd className="text-sm leading-snug text-silver">{v}</dd>
               </div>

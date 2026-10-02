@@ -12,6 +12,8 @@ export const BASES = [
 
 /** A token graduates once this share of its supply has left the pool, as on Stockereum: a milestone, nothing moves. */
 export const GRADUATION = 0.8;
+/** Launches per page of the board. */
+export const PAGE = 60;
 export const baseOf = (address: string) => BASES.find((b) => b.address.toLowerCase() === address.toLowerCase()) ?? null;
 
 export const FEES = [10_000, 20_000, 30_000] as const;

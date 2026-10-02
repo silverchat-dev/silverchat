@@ -124,8 +124,32 @@ export type RealmTradeRow = {
   // what one base coin was worth in dollars when the trade was indexed
   base_usd: number | null;
 };
+export type RealmFeedRow = Pick<RealmTokenRow, "token" | "base" | "name" | "symbol" | "uri" | "image" | "description"> & {
+  kind: "trade" | "launch";
+  who: string;
+  buy: boolean | null;
+  // base coins in or out of the pool, before the fee
+  base_amount: string | null;
+  base_usd: number | null;
+  at: number;
+};
 export type RealmBurnRow = { id: string; base: string; amount: string; sc_burned: string; zc_burned: string; block: string; at: number };
-export type RealmTokenStats = RealmTokenRow & { trades: number; fees: string; volume_usd: number };
+/**
+ * A launch with what its trades add up to. `p24_*` is the last trade at or before a day ago, so the price then can be
+ * read from it; null when there was none (the price was still the opening one).
+ */
+export type RealmTokenStats = RealmTokenRow & {
+  trades: number;
+  fees: string;
+  volume_usd: number;
+  trades_24h: number;
+  volume_24h: number;
+  last_trade_at: number | null;
+  p24_buy: boolean | null;
+  p24_in: string | null;
+  p24_out: string | null;
+  p24_fee: string | null;
+};
 
 /** A Predict market as SilverPredict holds it, plus what its logs said when it opened. Status 1 open, 2 yes, 3 no, 4 void. */
 export type MarketRow = {
@@ -220,6 +244,8 @@ function init() {
          id text primary key, pool_id text not null, trader text not null, buy boolean not null, amount_in numeric not null,
          amount_out numeric not null, fee numeric not null, block numeric not null, at bigint not null);
        create index if not exists realm_trades_pool on realm_trades (pool_id, block desc);
+       create index if not exists realm_trades_block on realm_trades (block desc);
+       create index if not exists realm_tokens_at on realm_tokens (at desc);
        create table if not exists realm_burns (
          id text primary key, base text not null, amount numeric not null, sc_burned numeric not null,
          zc_burned numeric not null, block numeric not null, at bigint not null);
@@ -648,29 +674,95 @@ export const db = {
   /** Launched tokens, newest first: all, one Realm's (`realm`), or one (`token`), with trade counts and fees. */
   async realmTokens(filter: { realm?: string; token?: string } = {}, limit = 100): Promise<RealmTokenStats[]> {
     await init();
+    const day = Math.floor(Date.now() / 1000) - 86_400;
+    const usdOf = (t: RealmTradeRow) => (Number(t.buy ? t.amount_in : t.amount_out) / 1e18) * (t.base_usd ?? 0);
     if (!pool) {
       const trades = [...mem.realmTrades.values()];
+      const order = (t: RealmTradeRow) => t.id.split(":").map(Number);
       return [...mem.realmTokens.values()]
         .filter((x) => (!filter.realm || x.realm === filter.realm) && (!filter.token || x.token === filter.token))
         .sort((a, b) => b.at - a.at)
         .slice(0, limit)
         .map((x) => {
-          const mine = trades.filter((t) => t.pool_id === x.pool_id);
-          const volume = mine.reduce((s, t) => s + (Number(t.buy ? t.amount_in : t.amount_out) / 1e18) * (t.base_usd ?? 0), 0);
-          return { ...x, trades: mine.length, fees: String(mine.reduce((s, t) => s + BigInt(t.fee), 0n)), volume_usd: volume };
+          const mine = trades.filter((t) => t.pool_id === x.pool_id).sort((a, b) => order(a)[0] - order(b)[0] || order(a)[1] - order(b)[1]);
+          const recent = mine.filter((t) => t.at > day);
+          const then = mine.filter((t) => t.at <= day).at(-1);
+          return {
+            ...x,
+            trades: mine.length,
+            fees: String(mine.reduce((s, t) => s + BigInt(t.fee), 0n)),
+            volume_usd: mine.reduce((s, t) => s + usdOf(t), 0),
+            trades_24h: recent.length,
+            volume_24h: recent.reduce((s, t) => s + usdOf(t), 0),
+            last_trade_at: mine.at(-1)?.at ?? null,
+            p24_buy: then?.buy ?? null,
+            p24_in: then?.amount_in ?? null,
+            p24_out: then?.amount_out ?? null,
+            p24_fee: then?.fee ?? null,
+          };
         });
     }
-    const where = filter.realm ? "where t.realm = $2" : filter.token ? "where t.token = $2" : "";
+    const where = filter.realm ? "where t.realm = $3" : filter.token ? "where t.token = $3" : "";
+    // one pass over the trades of the tokens asked for, and the last trade before a day ago of each
     const r = await pool.query(
-      `select t.*, t.sc_burned::text as sc_burned, t.dev_buy::text as dev_buy, t.block::text as block,
-         (select count(*) from realm_trades x where x.pool_id = t.pool_id)::int as trades,
-         coalesce((select sum(fee) from realm_trades x where x.pool_id = t.pool_id), 0)::text as fees,
-         coalesce((select sum((case when x.buy then x.amount_in else x.amount_out end) / 1e18 * coalesce(x.base_usd, 0))
-           from realm_trades x where x.pool_id = t.pool_id), 0)::float8 as volume_usd
-       from realm_tokens t ${where} order by t.at desc limit $1`,
-      where ? [limit, filter.realm ?? filter.token] : [limit],
+      `with t as (select * from realm_tokens t ${where} order by t.at desc limit $1),
+       s as (
+         select x.pool_id, count(*)::int as trades, sum(x.fee)::text as fees,
+           sum(x.usd)::float8 as volume_usd, coalesce(sum(x.usd) filter (where x.at > $2), 0)::float8 as volume_24h,
+           (count(*) filter (where x.at > $2))::int as trades_24h, max(x.at) as last_trade_at
+         from (select pool_id, fee, at, (case when buy then amount_in else amount_out end) / 1e18 * coalesce(base_usd, 0) as usd
+               from realm_trades where pool_id in (select pool_id from t)) x
+         group by x.pool_id),
+       p as (
+         select distinct on (pool_id) pool_id, buy, amount_in::text, amount_out::text, fee::text from realm_trades
+         where pool_id in (select pool_id from t) and at <= $2
+         order by pool_id, block desc, split_part(id, ':', 2)::int desc)
+       select t.*, t.sc_burned::text as sc_burned, t.dev_buy::text as dev_buy, t.block::text as block,
+         coalesce(s.trades, 0) as trades, coalesce(s.fees, '0') as fees, coalesce(s.volume_usd, 0) as volume_usd,
+         coalesce(s.trades_24h, 0) as trades_24h, coalesce(s.volume_24h, 0) as volume_24h, s.last_trade_at,
+         p.buy as p24_buy, p.amount_in as p24_in, p.amount_out as p24_out, p.fee as p24_fee
+       from t left join s on s.pool_id = t.pool_id left join p on p.pool_id = t.pool_id order by t.at desc`,
+      where ? [limit, day, filter.realm ?? filter.token] : [limit, day],
     );
-    return r.rows.map((x) => ({ ...x, at: Number(x.at), graduated_at: x.graduated_at == null ? null : Number(x.graduated_at) }));
+    const num = (v: unknown) => (v == null ? null : Number(v));
+    return r.rows.map((x) => ({ ...x, at: Number(x.at), graduated_at: num(x.graduated_at), last_trade_at: num(x.last_trade_at) }));
+  },
+
+  /** The newest trades and launches across every SilverRealm token, newest first, for the board's ticker. */
+  async realmFeed(limit = 30): Promise<RealmFeedRow[]> {
+    await init();
+    const launches = async (): Promise<RealmFeedRow[]> => {
+      const rows = pool
+        ? (await pool.query(`select token, realm, base, name, symbol, uri, image, description, at from realm_tokens order by at desc limit $1`, [limit])).rows
+        : [...mem.realmTokens.values()].sort((a, b) => b.at - a.at).slice(0, limit);
+      return rows.map((t) => ({ kind: "launch", who: t.realm, buy: null, base_amount: null, base_usd: null, ...pick(t), at: Number(t.at) }));
+    };
+    const pick = (t: Pick<RealmTokenRow, "token" | "base" | "name" | "symbol" | "uri" | "image" | "description">) =>
+      ({ token: t.token, base: t.base, name: t.name, symbol: t.symbol, uri: t.uri, image: t.image, description: t.description });
+    let trades: RealmFeedRow[];
+    if (!pool) {
+      const byPool = new Map([...mem.realmTokens.values()].map((t) => [t.pool_id, t]));
+      const order = (t: RealmTradeRow) => t.id.split(":").map(Number);
+      trades = [...mem.realmTrades.values()]
+        .sort((a, b) => order(b)[0] - order(a)[0] || order(b)[1] - order(a)[1])
+        .slice(0, limit)
+        .flatMap((x) => {
+          const t = byPool.get(x.pool_id);
+          if (!t) return [];
+          const base = x.buy ? BigInt(x.amount_in) - BigInt(x.fee) : BigInt(x.amount_out) + BigInt(x.fee);
+          return [{ kind: "trade" as const, who: x.trader, buy: x.buy, base_amount: String(base), base_usd: x.base_usd, ...pick(t), at: x.at }];
+        });
+    } else {
+      const r = await pool.query(
+        `select x.trader as who, x.buy, (case when x.buy then x.amount_in - x.fee else x.amount_out + x.fee end)::text as base_amount,
+           x.base_usd, x.at, t.token, t.base, t.name, t.symbol, t.uri, t.image, t.description
+         from realm_trades x join realm_tokens t on t.pool_id = x.pool_id
+         order by x.block desc, split_part(x.id, ':', 2)::int desc limit $1`,
+        [limit],
+      );
+      trades = r.rows.map((x) => ({ kind: "trade", ...x, at: Number(x.at) }));
+    }
+    return [...trades, ...(await launches())].sort((a, b) => b.at - a.at).slice(0, limit);
   },
 
   /** The base coin of a SilverRealm pool, from its launch row. */
@@ -774,6 +866,14 @@ export const db = {
       `delete from realm_images i where created_at < now() - interval '7 days'
        and not exists (select 1 from realm_tokens t where t.uri like '%/' || i.hash or t.image like '%/' || i.hash)`,
     );
+  },
+
+  /** ZC burned by settled Predict markets: 1% of each pool, as SilverPredict._finish sends it, none for a refund. */
+  async predictBurned(): Promise<string> {
+    await init();
+    if (!pool) return String([...mem.markets.values()].filter((m) => (m.status === 2 || m.status === 3) && !m.refund).reduce((s, m) => s + BigInt(m.pool) / 100n, 0n));
+    const r = await pool.query(`select coalesce(sum(floor(pool / 100)), 0)::text as zc from markets where status in (2, 3) and not refund`);
+    return r.rows[0].zc;
   },
 
   /** Everything SilverRealm has burned: the $5 of each launch and every converted fee. */
