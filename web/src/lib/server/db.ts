@@ -868,6 +868,14 @@ export const db = {
     );
   },
 
+  /** ZC burned by settled Predict markets: 1% of each pool, as SilverPredict._finish sends it, none for a refund. */
+  async predictBurned(): Promise<string> {
+    await init();
+    if (!pool) return String([...mem.markets.values()].filter((m) => (m.status === 2 || m.status === 3) && !m.refund).reduce((s, m) => s + BigInt(m.pool) / 100n, 0n));
+    const r = await pool.query(`select coalesce(sum(floor(pool / 100)), 0)::text as zc from markets where status in (2, 3) and not refund`);
+    return r.rows[0].zc;
+  },
+
   /** Everything SilverRealm has burned: the $5 of each launch and every converted fee. */
   async realmBurned(): Promise<{ sc: string; zc: string; launches: number }> {
     await init();

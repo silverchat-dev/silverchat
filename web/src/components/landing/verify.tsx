@@ -19,6 +19,14 @@ export function Verify() {
   const stamps: [string, ReactNode][] = [
     ["SilverAsk", address(ADDR.ask)],
     ["SilverAlgorithm", address(ADDR.algorithm)],
+    ...(ADDR.predict === ZERO ? [] : ([["SilverPredict", address(ADDR.predict)]] as [string, ReactNode][])),
+    ...(ADDR.realmFactory === ZERO
+      ? []
+      : ([
+          ["RealmFactory", address(ADDR.realmFactory)],
+          ["RealmHook", address(ADDR.realmHook)],
+          ["RealmBurner", address(ADDR.realmBurner)],
+        ] as [string, ReactNode][])),
     ["$ZC", address(ADDR.zc)],
     ...(ADDR.sc === ZERO ? [] : ([["$SC", address(ADDR.sc)]] as [string, ReactNode][])),
     [
@@ -50,7 +58,7 @@ export function Verify() {
             Don&apos;t trust this page. Verify it.
           </h2>
           <p className="max-w-md text-lg leading-relaxed text-paper/75">
-            Payments, splits, refunds and every result root live on Ethereum. The contracts are not audited and the tokens
+            Payments, splits, refunds, every result root, every stake and every burn live on Ethereum. The contracts are not audited and the tokens
             are volatile. Read the code before you put in more than you can lose.
           </p>
         </div>

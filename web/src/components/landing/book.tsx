@@ -5,6 +5,7 @@ const PAIRS = [
   ["Clients check the proofs and reject any update that breaks the rules.", "Each result root goes on Ethereum. Your browser recounts it."],
   ["A new algorithm hash only counts after a twenty-day delay.", "SilverAlgorithm holds the rules hash, with the same twenty days."],
   ["Votes are anonymous. Results split by what people say about themselves.", "Answers are published without addresses. Region and age are optional."],
+  ["Silverchat Predict lets people, or bots, bet on future events.", "Predict: stake $ZC on YES or NO, sealed until the market closes."],
 ];
 
 /** What chapter 27 describes, next to what is built here. */
@@ -50,7 +51,7 @@ export function Book() {
             ))}
           </ol>
           <p className="mt-7 max-w-xl text-base leading-relaxed text-paper/70">
-            Ours, not the book&apos;s: paying the people who answer, the $SC token, and the split of every payment.
+            Ours, not the book&apos;s: paying the people who answer, the $SC token, SilverRealm, and where every payment and fee goes.
           </p>
         </div>
       </div>

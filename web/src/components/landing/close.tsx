@@ -13,7 +13,13 @@ export function Close() {
             Launch app
           </Link>
           <Link href="/pulse" className="font-mono text-sm text-paper underline-offset-4 hover:underline">
-            Or answer a poll and earn →
+            Answer a poll and earn →
+          </Link>
+          <Link href="/predict" className="font-mono text-sm text-paper underline-offset-4 hover:underline">
+            Bet on what comes next →
+          </Link>
+          <Link href="/realm" className="font-mono text-sm text-paper underline-offset-4 hover:underline">
+            Launch a token →
           </Link>
         </div>
       </div>
