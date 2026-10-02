@@ -14,14 +14,15 @@ import {
   parseUnits,
   UserRejectedRequestError,
   type Address,
+  type Hex,
 } from "viem";
-import { useAccount, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
+import { useAccount, useBalance, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
 
-import { priceFeedAbi, realmFactoryAbi, routerAbi } from "@/lib/abi";
+import { priceFeedAbi, realmFactoryAbi, realmHookAbi, routerAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { tokens } from "@/lib/format";
 import { refused } from "@/lib/moderation";
-import { BASES, FEES, feeLabel, imageSrc, OPENING_FDV_USD, realmKey, SUPPLY } from "@/lib/realm";
+import { baseOf, BASES, FEES, feeLabel, imageSrc, OPENING_FDV_USD, realmKey, SUPPLY } from "@/lib/realm";
 
 import { Choice, Pill } from "./ask-form";
 
@@ -45,12 +46,12 @@ function usePrices() {
     queryKey: ["coinUsd"],
     queryFn: async () => {
       const h = await (await fetch("/api/health")).json();
-      return { zc: Number(h.zcUsd) || null, sc: Number(h.scUsd) || null };
+      return { zc: Number(h.zcUsd) || null, sc: Number(h.scUsd) || null, stocker: Number(h.stockerUsd) || null };
     },
     refetchInterval: 60_000,
   });
   const ethUsd = eth.data ? Number(eth.data[1]) / 1e8 : null;
-  return { eth: ethUsd, zc: coins.data?.zc ?? null, sc: coins.data?.sc ?? null };
+  return { eth: ethUsd, zc: coins.data?.zc ?? null, sc: coins.data?.sc ?? null, stocker: coins.data?.stocker ?? null };
 }
 
 /** Launch a token from your own Realm. */
@@ -68,6 +69,9 @@ export function LaunchForm() {
   const [uri, setUri] = useState("");
   // kept so the image is sent again right before the launch: an upload nobody launches with is dropped after a day
   const [file, setFile] = useState<File | null>(null);
+  const [description, setDescription] = useState("");
+  const [website, setWebsite] = useState("");
+  const [xHandle, setXHandle] = useState("");
   const [uploading, setUploading] = useState(false);
   const [base, setBase] = useState<(typeof BASES)[number]["id"]>("eth");
   const [fee, setFee] = useState<number>(10_000);
@@ -76,7 +80,7 @@ export function LaunchForm() {
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const baseUsd = base === "eth" ? usd.eth : base === "zc" ? usd.zc : usd.sc;
+  const baseUsd = { eth: usd.eth, zc: usd.zc, sc: usd.sc, stocker: usd.stocker }[base];
 
   async function upload(file: File | undefined) {
     if (!file) return;
@@ -101,10 +105,13 @@ export function LaunchForm() {
     setError(null);
     if (name.trim().length < 2 || name.trim().length > 32) return setError("Give it a name of 2 to 32 characters.");
     if (!/^[A-Z0-9]{2,10}$/.test(symbol)) return setError("A symbol is 2 to 10 capital letters or digits.");
-    const word = refused({ v: 1, questions: [{ q: `${name} ${symbol}`, options: [] }] });
+    const word = refused({ v: 1, questions: [{ q: `${name} ${symbol} ${description}`, options: [] }] });
     if (word) return setError(`Silverchat does not show tokens with "${word}" in the name or symbol.`);
     // our own uploads or any https link: those are what the token page can show
     if (uri && !imageSrc(uri)) return setError("The image link must start with https://.");
+    if (website && !/^https:\/\/\S{3,200}$/.test(website)) return setError("The website must be an https link.");
+    const handle = xHandle.trim().replace(/^@/, "").replace(/^https:\/\/(www\.)?(x|twitter)\.com\//, "").replace(/\/$/, "");
+    if (handle && !/^[A-Za-z0-9_]{1,15}$/.test(handle)) return setError("Write the X account as its handle, like @silverchat.");
     if (!baseUsd || !usd.eth || !usd.sc || burnEth.data === undefined) return setError("Prices are still loading; try again in a moment.");
     let dev = 0n;
     try {
@@ -119,7 +126,8 @@ export function LaunchForm() {
     const minScBurned = parseUnits(((5 / usd.sc) * 0.98 * 0.9).toFixed(6), 18);
     // the first buy on a ZC or SC pair goes through one or two other pools, where a moved price could take it: the
     // fresh pool is a constant product of the supply and the opening value, so expect that and refuse under 90%
-    const hops = base === "eth" ? 0 : base === "zc" ? 1 : 2;
+    // ETH→ZC, ETH→STOCKER: one pool; ETH→ZC→SC: two
+    const hops = base === "eth" ? 0 : base === "sc" ? 2 : 1;
     const net = (Number(formatEther(dev)) * usd.eth * 0.99 ** hops * (1 - fee / 1e6)) / baseUsd;
     const netWei = parseUnits(net.toFixed(12), 18);
     const minTokensOut = dev === 0n ? 0n : (((SUPPLY * netWei) / (openingFdv + netWei)) * 9n) / 10n;
@@ -135,13 +143,26 @@ export function LaunchForm() {
         const own = await fetch(imageSrc(uri)!, { method: "HEAD" }).catch(() => null);
         if (!own?.ok) throw new Error("that image is no longer stored here; upload it again");
       }
+      // the image, description and links go on-chain as one link to their JSON, stored here under its own hash
+      let launchUri = uri;
+      if (description.trim() || website || handle) {
+        setNote("Saving the description…");
+        const res = await fetch("/api/realm/meta", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ image: uri || null, description: description.trim() || null, website: website || null, x: handle || null }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? "the description could not be saved");
+        launchUri = body.uri;
+      }
       setNote("Confirm the launch in your wallet…");
       const { request } = await client.simulateContract({
         account: address,
         address: ADDR.realmFactory,
         abi: realmFactoryAbi,
         functionName: "launch",
-        args: [{ name: name.trim(), symbol, uri, base: b.address, feePpm: fee, openingFdv, minScBurned, devBuyEth: dev, minTokensOut }],
+        args: [{ name: name.trim(), symbol, uri: launchUri, base: b.address, feePpm: fee, openingFdv, minScBurned, devBuyEth: dev, minTokensOut }],
         value,
       });
       const tx = await writeContractAsync({ ...request, chainId: CHAIN_ID });
@@ -192,6 +213,20 @@ export function LaunchForm() {
               setFile(null);
             }} placeholder="https://…" className={field} />
         </div>
+        <label className="block space-y-2">
+          <span className="block font-mono text-xs uppercase tracking-[0.14em]">Description · optional</span>
+          <textarea value={description} maxLength={280} rows={3} onChange={(e) => setDescription(e.target.value)} placeholder="What it is, in a sentence or two." className={`${field} resize-none`} />
+        </label>
+        <div className="grid gap-7 sm:grid-cols-2">
+          <label className="space-y-2">
+            <span className="block font-mono text-xs uppercase tracking-[0.14em]">Website · optional</span>
+            <input value={website} maxLength={200} onChange={(e) => setWebsite(e.target.value.trim())} placeholder="https://…" className={field} />
+          </label>
+          <label className="space-y-2">
+            <span className="block font-mono text-xs uppercase tracking-[0.14em]">X account · optional</span>
+            <input value={xHandle} maxLength={40} onChange={(e) => setXHandle(e.target.value.trim())} placeholder="@handle" className={field} />
+          </label>
+        </div>
         <Choice legend="Trades against" hint="The coin people pay in, and the one its fees are taken in">
           {BASES.map((b) => (
             <Pill key={b.id} name="base" checked={base === b.id} onChange={() => setBase(b.id)}>
@@ -239,25 +274,38 @@ export function LaunchForm() {
   );
 }
 
-/** Buy or sell a SilverRealm token through Stockereum's router: ETH for ETH and ZC pairs, $SC for SC pairs. */
-export function TradeBox({ token, base, symbol }: { token: Address; base: Address; symbol: string }) {
+/**
+ * Buy or sell a SilverRealm token through Stockereum's router. ETH pairs trade in ETH; ZC and STOCKER pairs in ETH (the
+ * router buys the coin on the way) or in the coin itself; SC pairs in SC, which has no ETH route on the router.
+ */
+export function TradeBox({ token, base, symbol, poolId }: { token: Address; base: Address; symbol: string; poolId: Hex }) {
   const { address, chainId } = useAccount();
   const { switchChain } = useSwitchChain();
   const client = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const router = useRouter();
+  const b = baseOf(base)!;
+  const ethPair = b.id === "eth";
+  const ethRoute = b.id === "zc" || b.id === "stocker";
   const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [withEth, setWithEth] = useState(b.id !== "sc");
+  const [slippage, setSlippage] = useState(2);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const key = realmKey(token, base);
-  const isWeth = base.toLowerCase() === ADDR.weth.toLowerCase();
-  const isSc = base.toLowerCase() === ADDR.sc.toLowerCase();
-  // SC has no ETH route on the router: SC pairs are bought and sold in SC
-  const payName = side === "sell" ? symbol : isSc ? "$SC" : "ETH";
-  const getName = side === "buy" ? symbol : isSc ? "$SC" : "ETH";
+  const eth = withEth || ethPair;
+  const coinName = eth ? "ETH" : b.name;
+  const payName = side === "buy" ? coinName : symbol;
+  const getName = side === "buy" ? symbol : coinName;
+
+  const fee = useReadContract({ address: ADDR.realmHook, abi: realmHookAbi, functionName: "currentFee", args: [poolId], query: { refetchInterval: 5000 } });
+  const ethBal = useBalance({ address, query: { enabled: !!address } });
+  const payCoin = side === "sell" ? token : eth ? null : base;
+  const coinBal = useReadContract({ address: payCoin ?? token, abi: erc20Abi, functionName: "balanceOf", args: address ? [address] : undefined, query: { enabled: !!address && !!payCoin } });
+  const balance = payCoin ? coinBal.data : ethBal.data?.value;
 
   let wei = 0n;
   try {
@@ -265,15 +313,15 @@ export function TradeBox({ token, base, symbol }: { token: Address; base: Addres
   } catch {}
 
   const quote = useQuery({
-    queryKey: ["realmQuote", token, side, wei.toString()],
+    queryKey: ["realmQuote", token, side, eth, wei.toString()],
     enabled: !!client && wei > 0n,
     queryFn: async () => {
       const r = ADDR.stockereumRouter;
       if (side === "buy") {
-        if (isSc) return client!.readContract({ address: r, abi: routerAbi, functionName: "quoteBuy", args: [key, base, wei] });
+        if (!eth) return client!.readContract({ address: r, abi: routerAbi, functionName: "quoteBuy", args: [key, base, wei] });
         return (await client!.readContract({ address: r, abi: routerAbi, functionName: "quoteBuyWithEth", args: [key, base, wei] }))[1];
       }
-      if (isSc) return client!.readContract({ address: r, abi: routerAbi, functionName: "quoteSell", args: [key, token, wei] });
+      if (!eth) return client!.readContract({ address: r, abi: routerAbi, functionName: "quoteSell", args: [key, token, wei] });
       return (await client!.readContract({ address: r, abi: routerAbi, functionName: "quoteSellForEth", args: [key, token, base, wei] }))[1];
     },
     refetchInterval: 15_000,
@@ -291,25 +339,25 @@ export function TradeBox({ token, base, symbol }: { token: Address; base: Addres
     if (!client || !address || wei === 0n || quote.data === undefined) return;
     setBusy(true);
     setError(null);
-    // 3% below the quote: a moved price refuses the trade rather than fill it worse
-    const minOut = (quote.data * 97n) / 100n;
-    const r = ADDR.stockereumRouter;
+    // a moved price refuses the trade rather than fill it worse than the slippage you chose
+    const minOut = (quote.data * BigInt(100 - slippage)) / 100n;
     try {
       let call;
       if (side === "buy") {
-        if (isSc) {
+        if (ethPair) call = { functionName: "buyWethPairWithEth", args: [key, minOut, "0x"], value: wei } as const;
+        else if (eth) call = { functionName: "buyWithEth", args: [key, base, 0n, minOut, "0x"], value: wei } as const;
+        else {
           await approve(base);
           call = { functionName: "buy", args: [key, base, wei, minOut, "0x"] } as const;
-        } else if (isWeth) call = { functionName: "buyWethPairWithEth", args: [key, minOut, "0x"], value: wei } as const;
-        else call = { functionName: "buyWithEth", args: [key, base, 0n, minOut, "0x"], value: wei } as const;
+        }
       } else {
         await approve(token);
-        if (isSc) call = { functionName: "sell", args: [key, token, base, wei, minOut, "0x"] } as const;
-        else if (isWeth) call = { functionName: "sellWethPairForEth", args: [key, token, wei, minOut, "0x"] } as const;
-        else call = { functionName: "sellForEth", args: [key, token, base, wei, 0n, minOut, "0x"] } as const;
+        if (ethPair) call = { functionName: "sellWethPairForEth", args: [key, token, wei, minOut, "0x"] } as const;
+        else if (eth) call = { functionName: "sellForEth", args: [key, token, base, wei, 0n, minOut, "0x"] } as const;
+        else call = { functionName: "sell", args: [key, token, base, wei, minOut, "0x"] } as const;
       }
       setNote("Confirm the trade in your wallet…");
-      const { request } = await client.simulateContract({ account: address, address: r, abi: routerAbi, ...call } as never);
+      const { request } = await client.simulateContract({ account: address, address: ADDR.stockereumRouter, abi: routerAbi, ...call } as never);
       const tx = await writeContractAsync({ ...(request as object), chainId: CHAIN_ID } as never);
       if ((await client.waitForTransactionReceipt({ hash: tx })).status !== "success") throw new Error("the transaction reverted");
       setAmount("");
@@ -322,20 +370,49 @@ export function TradeBox({ token, base, symbol }: { token: Address; base: Addres
     }
   }
 
+  const tab = "border border-developer/40 px-3 py-1.5 font-mono text-xs aria-pressed:bg-developer aria-pressed:text-paper";
   return (
     <div className="space-y-5 bg-paper px-5 py-6 text-developer sm:px-7">
-      <Choice legend="Trade" hint="Through Stockereum's router, exact amount in">
-        <Pill name="side" checked={side === "buy"} onChange={() => setSide("buy")}>
-          Buy
-        </Pill>
-        <Pill name="side" checked={side === "sell"} onChange={() => setSide("sell")}>
-          Sell
-        </Pill>
-      </Choice>
+      <div className="flex gap-1">
+        {(["buy", "sell"] as const).map((s) => (
+          <button key={s} type="button" aria-pressed={side === s} onClick={() => setSide(s)} className={`${tab} px-5 py-2 text-sm`}>
+            {s === "buy" ? "Buy" : "Sell"}
+          </button>
+        ))}
+      </div>
+      {ethRoute && (
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <span className="text-developer/70">{side === "buy" ? "Pay with" : "Receive"}</span>
+          <button type="button" aria-pressed={withEth} onClick={() => setWithEth(true)} className={tab}>
+            ETH
+          </button>
+          <button type="button" aria-pressed={!withEth} onClick={() => setWithEth(false)} className={tab}>
+            {b.name}
+          </button>
+        </div>
+      )}
       <label className="block space-y-2">
-        <span className="block font-mono text-xs uppercase tracking-[0.14em]">You pay, in {payName}</span>
+        <span className="flex justify-between font-mono text-xs uppercase tracking-[0.14em]">
+          <span>Amount, in {payName}</span>
+          {balance !== undefined && (
+            <button type="button" onClick={() => setAmount(formatEther(balance))} className="normal-case tracking-normal text-developer/70 underline-offset-2 hover:underline">
+              balance {tokens(balance, 4)}
+            </button>
+          )}
+        </span>
         <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.0" className={field} />
       </label>
+      <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
+        <span className="flex items-center gap-1">
+          <span className="mr-1 text-developer/70">Slippage</span>
+          {[1, 2, 5].map((s) => (
+            <button key={s} type="button" aria-pressed={slippage === s} onClick={() => setSlippage(s)} className={tab}>
+              {s}%
+            </button>
+          ))}
+        </span>
+        <span className="text-developer/70">Fee {fee.data !== undefined ? `${Number(fee.data) / 10_000}%` : "·"}, all burned</span>
+      </div>
       <p className="font-mono text-sm">
         You get about {quote.data !== undefined ? tokens(quote.data, 4) : "…"} {getName}
       </p>
@@ -346,11 +423,15 @@ export function TradeBox({ token, base, symbol }: { token: Address; base: Addres
           Switch to Ethereum
         </button>
       ) : (
-        <button type="button" onClick={trade} disabled={busy || wei === 0n || quote.data === undefined} className={button}>
+        <button type="button" onClick={trade} disabled={busy || wei === 0n || quote.data === undefined} className={`${button} w-full`}>
           {busy ? note : side === "buy" ? `Buy ${symbol}` : `Sell ${symbol}`}
         </button>
       )}
-      {error && <p role="alert" className="text-sm">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

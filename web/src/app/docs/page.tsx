@@ -230,8 +230,9 @@ export default function DocsPage() {
             <ol className="space-y-6">
               {[
                 ["Your Realm", "Every wallet has a Realm: its page on Silverchat, free to open. Only the Realm's own wallet can launch from it, so you can always see who launched a token."],
-                ["Launch", "Pick a name, a symbol, the coin it trades against (ETH, $ZC or $SC) and a trading fee of 1%, 2% or 3%. Launching buys $5 of $SC and burns it. All one billion tokens go into the pool at a $4,000 valuation, and nobody can take that liquidity out, not even us."],
+                ["Launch", "Pick a name, a symbol, the coin it trades against (ETH, $ZC, $SC or $STOCKER) and a trading fee of 1%, 2% or 3%. Launching buys $5 of $SC and burns it. All one billion tokens go into the pool at a $4,000 valuation, and nobody can take that liquidity out, not even us."],
                 ["Fair start", "For the first 20 seconds a trade pays a fee that starts at 99% and falls to the pool's rate, so bots buying in the launch block pay almost everything. Your own first buy, in the launch transaction, pays the normal rate."],
+                ["Graduation", "A token graduates when 80% of its supply has been bought, which on its curve is a price 25 times the opening one (about a $100,000 valuation). Nothing moves: the pool is a Uniswap pool from the first block and its liquidity stays locked. Graduation is a milestone, as on Stockereum."],
                 ["Every fee is burned", "Fees go to the RealmBurner contract. It buys $ZC with them, burns 20%, buys $SC with the rest and burns that. Nothing in it can be withdrawn or sent anywhere else; the team's Safe can only change who runs the conversion. SilverRealm keeps nothing."],
               ].map(([k, v], i) => (
                 <li key={k} className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4">

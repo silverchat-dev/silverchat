@@ -101,14 +101,31 @@ export type RealmTokenRow = {
   uri: string | null;
   sc_burned: string | null;
   dev_buy: string | null;
+  description: string | null;
+  website: string | null;
+  x: string | null;
+  image: string | null;
+  graduated_at: number | null;
   block: string;
   tx: string;
   at: number;
 };
 /** One swap on a SilverRealm pool, keyed by where its log sits, so reading a block twice adds nothing. */
-export type RealmTradeRow = { id: string; pool_id: string; trader: string; buy: boolean; amount_in: string; amount_out: string; fee: string; block: string; at: number };
+export type RealmTradeRow = {
+  id: string;
+  pool_id: string;
+  trader: string;
+  buy: boolean;
+  amount_in: string;
+  amount_out: string;
+  fee: string;
+  block: string;
+  at: number;
+  // what one base coin was worth in dollars when the trade was indexed
+  base_usd: number | null;
+};
 export type RealmBurnRow = { id: string; base: string; amount: string; sc_burned: string; zc_burned: string; block: string; at: number };
-export type RealmTokenStats = RealmTokenRow & { trades: number; fees: string };
+export type RealmTokenStats = RealmTokenRow & { trades: number; fees: string; volume_usd: number };
 
 /** A Predict market as SilverPredict holds it, plus what its logs said when it opened. Status 1 open, 2 yes, 3 no, 4 void. */
 export type MarketRow = {
@@ -206,6 +223,12 @@ function init() {
        create table if not exists realm_burns (
          id text primary key, base text not null, amount numeric not null, sc_burned numeric not null,
          zc_burned numeric not null, block numeric not null, at bigint not null);
+       alter table realm_tokens add column if not exists description text;
+       alter table realm_tokens add column if not exists website text;
+       alter table realm_tokens add column if not exists x text;
+       alter table realm_tokens add column if not exists image text;
+       alter table realm_tokens add column if not exists graduated_at bigint;
+       alter table realm_trades add column if not exists base_usd double precision;
        create table if not exists realm_images (
          hash text primary key, type text not null, data bytea not null, created_at timestamptz not null default now());`,
     )
@@ -582,7 +605,8 @@ export const db = {
     if (!pool) {
       const old = mem.realmTokens.get(token);
       if (!old && !("realm" in fields)) return void console.error(`[indexer] realm token ${token} has no Launched row yet`);
-      return void mem.realmTokens.set(token, { name: null, symbol: null, uri: null, sc_burned: null, dev_buy: null, ...old, ...fields, token } as RealmTokenRow);
+      const empty = { name: null, symbol: null, uri: null, sc_burned: null, dev_buy: null, description: null, website: null, x: null, image: null, graduated_at: null };
+      return void mem.realmTokens.set(token, { ...empty, ...old, ...fields, token } as RealmTokenRow);
     }
     const cols = Object.keys(fields);
     const vals = Object.values(fields);
@@ -602,10 +626,11 @@ export const db = {
     await init();
     if (!pool) return void mem.realmTrades.set(row.id, row);
     await pool.query(
-      `insert into realm_trades (id, pool_id, trader, buy, amount_in, amount_out, fee, block, at) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `insert into realm_trades (id, pool_id, trader, buy, amount_in, amount_out, fee, block, at, base_usd) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        on conflict (id) do update set pool_id = excluded.pool_id, trader = excluded.trader, buy = excluded.buy,
-         amount_in = excluded.amount_in, amount_out = excluded.amount_out, fee = excluded.fee, at = excluded.at`,
-      [row.id, row.pool_id, row.trader, row.buy, row.amount_in, row.amount_out, row.fee, row.block, row.at],
+         amount_in = excluded.amount_in, amount_out = excluded.amount_out, fee = excluded.fee, at = excluded.at,
+         base_usd = coalesce(realm_trades.base_usd, excluded.base_usd)`,
+      [row.id, row.pool_id, row.trader, row.buy, row.amount_in, row.amount_out, row.fee, row.block, row.at, row.base_usd],
     );
   },
 
@@ -631,18 +656,51 @@ export const db = {
         .slice(0, limit)
         .map((x) => {
           const mine = trades.filter((t) => t.pool_id === x.pool_id);
-          return { ...x, trades: mine.length, fees: String(mine.reduce((s, t) => s + BigInt(t.fee), 0n)) };
+          const volume = mine.reduce((s, t) => s + (Number(t.buy ? t.amount_in : t.amount_out) / 1e18) * (t.base_usd ?? 0), 0);
+          return { ...x, trades: mine.length, fees: String(mine.reduce((s, t) => s + BigInt(t.fee), 0n)), volume_usd: volume };
         });
     }
     const where = filter.realm ? "where t.realm = $2" : filter.token ? "where t.token = $2" : "";
     const r = await pool.query(
       `select t.*, t.sc_burned::text as sc_burned, t.dev_buy::text as dev_buy, t.block::text as block,
          (select count(*) from realm_trades x where x.pool_id = t.pool_id)::int as trades,
-         coalesce((select sum(fee) from realm_trades x where x.pool_id = t.pool_id), 0)::text as fees
+         coalesce((select sum(fee) from realm_trades x where x.pool_id = t.pool_id), 0)::text as fees,
+         coalesce((select sum((case when x.buy then x.amount_in else x.amount_out end) / 1e18 * coalesce(x.base_usd, 0))
+           from realm_trades x where x.pool_id = t.pool_id), 0)::float8 as volume_usd
        from realm_tokens t ${where} order by t.at desc limit $1`,
       where ? [limit, filter.realm ?? filter.token] : [limit],
     );
+    return r.rows.map((x) => ({ ...x, at: Number(x.at), graduated_at: x.graduated_at == null ? null : Number(x.graduated_at) }));
+  },
+
+  /** The base coin of a SilverRealm pool, from its launch row. */
+  async realmBaseOf(poolId: string): Promise<string | null> {
+    await init();
+    if (!pool) return [...mem.realmTokens.values()].find((t) => t.pool_id === poolId)?.base ?? null;
+    return (await pool.query(`select base from realm_tokens where pool_id = $1`, [poolId])).rows[0]?.base ?? null;
+  },
+
+  /** Every trade of a pool, oldest first, for its chart. */
+  async realmChartTrades(poolId: string, limit = 20_000): Promise<RealmTradeRow[]> {
+    await init();
+    if (!pool) {
+      const order = (t: RealmTradeRow) => t.id.split(":").map(Number);
+      return [...mem.realmTrades.values()].filter((t) => t.pool_id === poolId).sort((a, b) => order(a)[0] - order(b)[0] || order(a)[1] - order(b)[1]).slice(-limit);
+    }
+    const r = await pool.query(
+      `select * from (select id, pool_id, trader, buy, amount_in::text, amount_out::text, fee::text, block::text, at, base_usd
+         from realm_trades where pool_id = $1 order by block desc, split_part(id, ':', 2)::int desc limit $2) x
+       order by block asc, split_part(id, ':', 2)::int asc`,
+      [poolId, limit],
+    );
     return r.rows.map((x) => ({ ...x, at: Number(x.at) }));
+  },
+
+  /** Tokens not graduated yet, for the keeper to check. */
+  async realmUngraduated(): Promise<{ token: string }[]> {
+    await init();
+    if (!pool) return [...mem.realmTokens.values()].filter((t) => t.graduated_at == null).map((t) => ({ token: t.token }));
+    return (await pool.query(`select token from realm_tokens where graduated_at is null`)).rows;
   },
 
   async realmTrades(poolId: string, limit = 50): Promise<RealmTradeRow[]> {
@@ -656,7 +714,7 @@ export const db = {
         .slice(0, limit);
     }
     const r = await pool.query(
-      `select id, pool_id, trader, buy, amount_in::text, amount_out::text, fee::text, block::text, at from realm_trades
+      `select id, pool_id, trader, buy, amount_in::text, amount_out::text, fee::text, block::text, at, base_usd from realm_trades
        where pool_id = $1 order by block desc, split_part(id, ':', 2)::int desc limit $2`,
       [poolId, limit],
     );
@@ -678,13 +736,14 @@ export const db = {
     return r.rows[0] ?? null;
   },
 
-  /** Images no launch used within a day are dropped, like drafts nobody paid for. */
+  /** Images and metadata no launch used within a week are dropped; the week covers an indexer that fell behind. */
   async pruneRealmImages() {
     await init();
     if (!pool) return;
+    // a launch keeps its metadata (the uri) and the image the metadata names
     await pool.query(
-      `delete from realm_images i where created_at < now() - interval '1 day'
-       and not exists (select 1 from realm_tokens t where t.uri like '%/api/realm/image/' || i.hash)`,
+      `delete from realm_images i where created_at < now() - interval '7 days'
+       and not exists (select 1 from realm_tokens t where t.uri like '%/' || i.hash or t.image like '%/' || i.hash)`,
     );
   },
 

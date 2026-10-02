@@ -7,7 +7,11 @@ export const BASES = [
   { id: "eth", name: "ETH", address: ADDR.weth },
   { id: "zc", name: "$ZC", address: ADDR.zc },
   { id: "sc", name: "$SC", address: ADDR.sc },
+  { id: "stocker", name: "$STOCKER", address: ADDR.stocker },
 ] as const;
+
+/** A token graduates once this share of its supply has left the pool, as on Stockereum: a milestone, nothing moves. */
+export const GRADUATION = 0.8;
 export const baseOf = (address: string) => BASES.find((b) => b.address.toLowerCase() === address.toLowerCase()) ?? null;
 
 export const FEES = [10_000, 20_000, 30_000] as const;

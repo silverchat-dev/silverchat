@@ -44,6 +44,12 @@ export default async function RealmPage() {
           <dd className="text-3xl">{tokens(burned.zc, 0)}</dd>
         </div>
       </dl>
+      {list.some((t) => t.graduated) && (
+        <section className="space-y-4">
+          <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Graduated · 80% of the supply bought</h2>
+          <TokenGrid list={list.filter((t) => t.graduated)} />
+        </section>
+      )}
       <section className="space-y-4">
         <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Newest launches</h2>
         <TokenGrid list={list} />

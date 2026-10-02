@@ -26,6 +26,9 @@ export const ADDR = {
   weth: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
   poolManager: "0x000000000004444c5dc75cB358380D2e3dE08A90" as Address,
   stockereumHook: "0x322dcEc4958C14e021A9F1cD49DF11b9457968cC" as Address,
+  /** Stockereum's first hook, where $STOCKER trades against WETH */
+  stockereumOldHook: "0xAFeD2c6e0d906520ca17143a8918Ce6d54b128Cc" as Address,
+  stocker: "0x75E2Fc69Ff2ac12aF65Ba7D321bBf4f878c535d2" as Address,
   stockereumRouter: "0xcdf832D2C11DA16055bb6C6145cF38EDD7233767" as Address,
   ethUsdFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419" as Address,
 };

@@ -5,11 +5,11 @@ import { encodeAbiParameters, keccak256, parseGwei, type Hex, type Log } from "v
 import { poolManagerAbi, realmBurnerAbi, realmFactoryAbi, realmHookAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID, ZERO } from "@/lib/config";
 import { refused } from "@/lib/moderation";
-import { BASES } from "@/lib/realm";
+import { BASES, GRADUATION, imageSrc } from "@/lib/realm";
 
 import { publicClient, send, walletFor } from "./chain";
 import { db, type RealmTokenStats } from "./db";
-import { ethUsd, prices } from "./price";
+import { ethUsd, prices, usdAt } from "./price";
 
 export const REALM_EVENTS = [...realmFactoryAbi, ...realmHookAbi, ...realmBurnerAbi].filter((x) => x.type === "event");
 export const REALM_ADDRESSES = () => (ADDR.realmFactory === ZERO ? [] : [ADDR.realmFactory, ADDR.realmHook, ADDR.realmBurner]);
@@ -17,6 +17,54 @@ export const REALM_ADDRESSES = () => (ADDR.realmFactory === ZERO ? [] : [ADDR.re
 type RealmLog = Log & { eventName: string; args: Record<string, unknown> };
 
 const lower = (x: unknown) => String(x).toLowerCase();
+
+/** Dollars per one base coin now, or null when it cannot be read. */
+export async function baseUsd(base: string): Promise<number | null> {
+  const p = await prices().catch(() => null);
+  if (!p) return null;
+  const wad = base === ADDR.weth.toLowerCase() ? p.eth : base === ADDR.zc.toLowerCase() ? p.zc : base === ADDR.sc.toLowerCase() ? p.sc : base === ADDR.stocker.toLowerCase() ? p.stocker : null;
+  return wad === null ? null : Number(wad) / 1e18;
+}
+
+/** An https link with no user info, or null. */
+export function safeUrl(s: string | null) {
+  if (!s) return null;
+  try {
+    const u = new URL(s);
+    return u.protocol === "https:" && !u.username && !u.password ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+const META = /\/api\/realm\/meta\/([0-9a-f]{64})$/;
+
+/**
+ * The description, links and image a launch's metadata names, when the uri is our own content-addressed metadata.
+ * Everything is checked again here: the JSON was written by whoever launched.
+ */
+async function readMeta(uri: string) {
+  const m = uri.match(META);
+  if (!m) return { image: imageSrc(uri) ? uri : null };
+  const stored = await db.realmImage(m[1]);
+  if (!stored || stored.type !== "application/json") return {};
+  try {
+    const j = JSON.parse(stored.data.toString("utf8"));
+    const text = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : null);
+    const website = safeUrl(text(j.website, 200));
+    const x = text(j.x, 15);
+    const image = text(j.image, 300);
+    return {
+      // no control, format or invisible characters (right-to-left overrides, zero-width tricks)
+      description: text(j.description, 280)?.replace(/\p{C}/gu, "") ?? null,
+      website,
+      x: x && /^[A-Za-z0-9_]{1,15}$/.test(x) ? x : null,
+      image: image && imageSrc(image) ? image : null,
+    };
+  } catch {
+    return {};
+  }
+}
 
 /** Store one SilverRealm log. `at` is its block's time. */
 export async function onRealmLog(log: RealmLog, at: number) {
@@ -34,13 +82,16 @@ export async function onRealmLog(log: RealmLog, at: number) {
         tx: log.transactionHash!,
         at,
       });
-    case "Metadata":
-      return db.upsertRealmToken(lower(a.token), { name: String(a.name).slice(0, 64), symbol: String(a.symbol).slice(0, 16), uri: String(a.uri).slice(0, 300) });
+    case "Metadata": {
+      const uri = String(a.uri).slice(0, 300);
+      return db.upsertRealmToken(lower(a.token), { name: String(a.name).slice(0, 64), symbol: String(a.symbol).slice(0, 16), uri, ...(await readMeta(uri)) });
+    }
     case "LaunchBurn":
       return db.upsertRealmToken(lower(a.token), { sc_burned: String(a.scBurned) });
     case "DevBuy":
       return db.upsertRealmToken(lower(a.token), { dev_buy: String(a.tokens) });
-    case "Trade":
+    case "Trade": {
+      const base = await db.realmBaseOf(String(a.poolId));
       return db.saveRealmTrade({
         id,
         pool_id: String(a.poolId),
@@ -51,7 +102,10 @@ export async function onRealmLog(log: RealmLog, at: number) {
         fee: String(a.fee),
         block: String(log.blockNumber),
         at,
+        // what the base was worth in that block, so a late or rebuilt index still prices it right
+        base_usd: base ? await usdAt(base, log.blockNumber!).catch(() => null) : null,
       });
+    }
     case "Burned":
       return db.saveRealmBurn({ id, base: lower(a.base), amount: String(a.amount), sc_burned: String(a.scBurned), zc_burned: String(a.zcBurned), block: String(log.blockNumber), at });
   }
@@ -80,13 +134,25 @@ const openingValue = (r: RealmTokenStats) => {
 };
 
 /**
- * The public shape of launched tokens, prices read together. A name or symbol with a refused word is not shown, like
- * a removed poll.
+ * The share of a token's supply bought out of its pool, from the pool's own curve: the locked range starts at the
+ * opening price and runs to the end of the range, so the tokens left are L/√P and sold = 1 − √(opening / now). Only the
+ * price moves it; tokens sent to the PoolManager, donations or claims cannot. 80% sold is a price 25× the opening.
+ */
+const soldAt = (t: RealmTokenStats, price: number | null) => (price === null ? null : Math.max(0, 1 - Math.sqrt(openingValue(t) / 1e9 / price)));
+
+/**
+ * The public shape of launched tokens, prices and pool balances read together. A name or symbol with a refused word is
+ * not shown, like a removed poll.
  */
 export async function serializeTokens(rows: RealmTokenStats[]) {
-  const prices = await pricesOf(rows);
+  const [prices, usd] = await Promise.all([pricesOf(rows), Promise.all([...new Set(rows.map((r) => r.base))].map(async (b) => [b, await baseUsd(b)] as const))]);
+  const sold = rows.map((r, i) => soldAt(r, prices[i]));
+  const usdOf = new Map(usd);
   return rows.map((t, i) => {
-    const hidden = !!refused({ v: 1, questions: [{ q: `${t.name ?? ""} ${t.symbol ?? ""}`, options: [] }] });
+    const hidden = !!refused({ v: 1, questions: [{ q: `${t.name ?? ""} ${t.symbol ?? ""} ${t.description ?? ""}`, options: [] }] });
+    const baseUsd = usdOf.get(t.base) ?? null;
+    const price = prices[i];
+    const priceUsd = price !== null && baseUsd !== null ? price * baseUsd : null;
     return {
       token: t.token,
       realm: t.realm,
@@ -96,9 +162,20 @@ export async function serializeTokens(rows: RealmTokenStats[]) {
       name: hidden ? null : t.name,
       symbol: hidden ? null : t.symbol,
       uri: hidden ? null : t.uri,
+      image: hidden ? null : (t.image ?? (imageSrc(t.uri) ? t.uri : null)),
+      description: hidden ? null : t.description,
+      website: hidden ? null : t.website,
+      x: hidden ? null : t.x,
       hidden,
-      price: prices[i],
+      price,
+      baseUsd,
+      priceUsd,
+      marketCapUsd: priceUsd === null ? null : priceUsd * 1e9,
+      volumeUsd: t.volume_usd,
       openingValue: openingValue(t),
+      sold: sold[i],
+      graduated: t.graduated_at !== null || (sold[i] ?? 0) >= GRADUATION,
+      graduatedAt: t.graduated_at,
       scBurned: t.sc_burned,
       devBuy: t.dev_buy,
       trades: t.trades,
@@ -107,6 +184,42 @@ export async function serializeTokens(rows: RealmTokenStats[]) {
       tx: t.tx,
     };
   });
+}
+
+export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };
+
+/**
+ * Candles in dollars per token from a pool's trades: each trade at the pool's own price, before the hook's fee, times
+ * what the base was worth then. The first candle starts at the opening price.
+ */
+export async function candles(t: RealmTokenStats, seconds: number): Promise<Candle[]> {
+  const trades = await db.realmChartTrades(t.pool_id);
+  const now = (await baseUsd(t.base)) ?? 0;
+  const out: Candle[] = [];
+  let last = (openingValue(t) / 1e9) * (trades[0]?.base_usd ?? now);
+  const put = (at: number, price: number, volume: number) => {
+    const time = at - (at % seconds);
+    const c = out.at(-1);
+    if (c && c.time === time) {
+      c.high = Math.max(c.high, price);
+      c.low = Math.min(c.low, price);
+      c.close = price;
+      c.volume += volume;
+    } else {
+      out.push({ time, open: last, high: Math.max(last, price), low: Math.min(last, price), close: price, volume });
+    }
+    last = price;
+  };
+  put(t.at, last, 0);
+  for (const x of trades) {
+    const usd = x.base_usd ?? now;
+    const [inn, outt, fee] = [Number(x.amount_in), Number(x.amount_out), Number(x.fee)];
+    if (!inn || !outt) continue;
+    const base = x.buy ? inn - fee : outt + fee;
+    const tokens = x.buy ? outt : inn;
+    put(x.at, (base / tokens) * usd, (base / 1e18) * usd);
+  }
+  return out;
 }
 
 // ---- keeper: turns the burner's fees into burned SC and ZC
@@ -120,15 +233,28 @@ const SLACK = 0.95;
 const FEE_CAP = parseGwei("10");
 
 export async function realmTick() {
+  if (ADDR.realmFactory === ZERO) return;
+  // graduation is a milestone: the first time 80% of a supply is out of its pool, note when
+  const open = await db.realmUngraduated();
+  const rows = (await Promise.all(open.map((x) => db.realmTokens({ token: x.token }, 1)))).flat();
+  const spot = await pricesOf(rows);
+  for (const [i, x] of rows.entries()) {
+    if ((soldAt(x, spot[i]) ?? 0) >= GRADUATION) await db.upsertRealmToken(x.token, { graduated_at: Math.floor(Date.now() / 1000) });
+  }
   if (!keeper || ADDR.realmBurner === ZERO) return;
   const [p, eth] = await Promise.all([prices(), ethUsd()]);
   if (!p.sc) return;
-  const usd = { [ADDR.weth.toLowerCase()]: Number(eth) / 1e18, [ADDR.zc.toLowerCase()]: Number(p.zc) / 1e18, [ADDR.sc.toLowerCase()]: Number(p.sc) / 1e18 };
+  const usd: Record<string, number> = {
+    [ADDR.weth.toLowerCase()]: Number(eth) / 1e18,
+    [ADDR.zc.toLowerCase()]: Number(p.zc) / 1e18,
+    [ADDR.sc.toLowerCase()]: Number(p.sc) / 1e18,
+  };
+  if (p.stocker) usd[ADDR.stocker.toLowerCase()] = Number(p.stocker) / 1e18;
   const zcUsd = usd[ADDR.zc.toLowerCase()];
   const scUsd = usd[ADDR.sc.toLowerCase()];
   for (const b of BASES) {
     let amount = (await publicClient.readContract({ address: ADDR.realmBurner, abi: realmBurnerAbi, functionName: "pending", args: [b.address] })) as bigint;
-    if (amount === 0n) continue;
+    if (amount === 0n || usd[b.address.toLowerCase()] === undefined) continue;
     const value = (Number(amount) / 1e18) * usd[b.address.toLowerCase()];
     // not worth the gas
     if (value < 1) continue;
@@ -144,7 +270,9 @@ export async function realmTick() {
       sc = units * 0.8;
       zc = ((units * 0.2 * scUsd) / zcUsd) * 0.99;
     } else {
-      const allZc = b.id === "zc" ? units : ((units * usd[b.address.toLowerCase()]) / zcUsd) * 0.99;
+      // STOCKER goes to WETH first: one more 1% pool on the way to ZC
+      const hops = b.id === "zc" ? 0 : b.id === "stocker" ? 2 : 1;
+      const allZc = ((units * usd[b.address.toLowerCase()]) / zcUsd) * 0.99 ** hops;
       zc = allZc * 0.2;
       sc = ((allZc * 0.8 * zcUsd) / scUsd) * 0.99;
     }
