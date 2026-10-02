@@ -109,3 +109,19 @@ body {
     }
   }
 }
+
+/* the realm board's ticker tape: two copies of the row, moved left by one, so it runs without a seam */
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ticker-track {
+    animation: ticker 60s linear infinite;
+  }
+  .ticker:hover .ticker-track,
+  .ticker:focus-within .ticker-track {
+    animation-play-state: paused;
+  }
+}

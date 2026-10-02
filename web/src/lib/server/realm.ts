@@ -4,11 +4,13 @@ import { encodeAbiParameters, keccak256, parseGwei, type Hex, type Log } from "v
 
 import { poolManagerAbi, realmBurnerAbi, realmFactoryAbi, realmHookAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID, ZERO } from "@/lib/config";
+import { busy } from "@/lib/server/rate";
 import { refused } from "@/lib/moderation";
 import { BASES, GRADUATION, imageSrc } from "@/lib/realm";
 
 import { publicClient, send, walletFor } from "./chain";
-import { db, type RealmTokenStats } from "./db";
+import { db, type RealmFeedRow, type RealmTokenStats } from "./db";
+import { displayTime } from "./eligibility";
 import { ethUsd, prices, usdAt } from "./price";
 
 export const REALM_EVENTS = [...realmFactoryAbi, ...realmHookAbi, ...realmBurnerAbi].filter((x) => x.type === "event");
@@ -95,7 +97,10 @@ export async function onRealmLog(log: RealmLog, at: number) {
       return db.saveRealmTrade({
         id,
         pool_id: String(a.poolId),
-        trader: lower(a.sender),
+        // the hook sees the router, not the wallet; the wallet is whoever sent the transaction
+        trader: lower(a.sender) === ADDR.stockereumRouter.toLowerCase()
+          ? lower((await publicClient.getTransaction({ hash: log.transactionHash! }).catch(() => null))?.from ?? a.sender)
+          : lower(a.sender),
         buy: Boolean(a.buy),
         amount_in: String(a.amountIn),
         amount_out: String(a.amountOut),
@@ -118,7 +123,8 @@ async function pricesOf(rows: PoolFields[]) {
   if (!rows.length) return [];
   const slots = rows.map((r) => keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "uint256" }], [r.pool_id as Hex, 6n])));
   const raw = await publicClient
-    .multicall({ contracts: slots.map((s) => ({ address: ADDR.poolManager, abi: poolManagerAbi, functionName: "extsload", args: [s] }) as const) })
+    // one call for all of them: extsload is cheap, and viem's default batch would split a full board into hundreds
+    .multicall({ batchSize: 0, contracts: slots.map((s) => ({ address: ADDR.poolManager, abi: poolManagerAbi, functionName: "extsload", args: [s] }) as const) })
     .catch(() => rows.map(() => null));
   return rows.map((r, i) => {
     const res = raw[i];
@@ -148,15 +154,27 @@ const soldAt = (t: PoolFields, price: number | null) => (price === null ? null :
  * The public shape of launched tokens, prices and pool balances read together. A name or symbol with a refused word is
  * not shown, like a removed poll.
  */
+const isHidden = (t: { name: string | null; symbol: string | null; description: string | null }) =>
+  !!refused({ v: 1, questions: [{ q: `${t.name ?? ""} ${t.symbol ?? ""} ${t.description ?? ""}`, options: [] }] });
+
+/** Base per token a trade was made at, before the hook's fee, as the chart reads it. */
+const tradePrice = (buy: boolean, amountIn: string, amountOut: string, fee: string) => {
+  const [inn, out, f] = [Number(amountIn), Number(amountOut), Number(fee)];
+  if (!inn || !out) return null;
+  return buy ? (inn - f) / out : (out + f) / inn;
+};
+
 export async function serializeTokens(rows: RealmTokenStats[]) {
   const [prices, usd] = await Promise.all([pricesOf(rows), Promise.all([...new Set(rows.map((r) => r.base))].map(async (b) => [b, await baseUsd(b)] as const))]);
   const sold = rows.map((r, i) => soldAt(r, prices[i]));
   const usdOf = new Map(usd);
   return rows.map((t, i) => {
-    const hidden = !!refused({ v: 1, questions: [{ q: `${t.name ?? ""} ${t.symbol ?? ""} ${t.description ?? ""}`, options: [] }] });
+    const hidden = isHidden(t);
     const baseUsd = usdOf.get(t.base) ?? null;
     const price = prices[i];
     const priceUsd = price !== null && baseUsd !== null ? price * baseUsd : null;
+    // the price a day ago: the last trade before then, or the opening price if nobody had traded yet
+    const then = (t.p24_buy !== null && tradePrice(t.p24_buy, t.p24_in!, t.p24_out!, t.p24_fee!)) || openingValue(t) / 1e9;
     return {
       token: t.token,
       realm: t.realm,
@@ -176,6 +194,11 @@ export async function serializeTokens(rows: RealmTokenStats[]) {
       priceUsd,
       marketCapUsd: priceUsd === null ? null : priceUsd * 1e9,
       volumeUsd: t.volume_usd,
+      volume24hUsd: t.volume_24h,
+      trades24h: t.trades_24h,
+      lastTradeAt: t.last_trade_at,
+      // untouched for a day is unchanged: the last trade's own price sits a little off the pool's after it
+      change24h: price === null ? null : t.trades_24h === 0 ? 0 : price / then - 1,
       openingValue: openingValue(t),
       sold: sold[i],
       graduated: t.graduated_at !== null || (sold[i] ?? 0) >= GRADUATION,
@@ -189,6 +212,93 @@ export async function serializeTokens(rows: RealmTokenStats[]) {
     };
   });
 }
+
+export type TokenView = Awaited<ReturnType<typeof serializeTokens>>[number];
+
+export const SORTS = ["trending", "new", "cap", "close", "graduated"] as const;
+export type Sort = (typeof SORTS)[number];
+export const PAGE = 60;
+
+/**
+ * The board's order and filters over every launch: trending is the last day's volume, then the latest trade; close is
+ * the most bought of the tokens not graduated yet. Hidden tokens are left out. `q` matches a name, symbol or address.
+ */
+export function arrange(list: TokenView[], o: { sort: Sort; q?: string; base?: string; page?: number }) {
+  const q = o.q?.trim().toLowerCase();
+  let out = list.filter(
+    (t) => !t.hidden && (!o.base || t.base === o.base) && (!q || t.token === q || t.name?.toLowerCase().includes(q) || t.symbol?.toLowerCase().includes(q)),
+  );
+  const by = <T,>(f: (t: TokenView) => T, desc = true) => (a: TokenView, b: TokenView) => {
+    const [x, y] = [f(a), f(b)];
+    return x === y ? 0 : (x ?? -Infinity) < (y ?? -Infinity) === desc ? 1 : -1;
+  };
+  const then = (...fs: ((a: TokenView, b: TokenView) => number)[]) => (a: TokenView, b: TokenView) => fs.reduce((r, f) => r || f(a, b), 0);
+  const newest = by((t) => t.at);
+  if (o.sort === "close") out = out.filter((t) => !t.graduated);
+  if (o.sort === "graduated") out = out.filter((t) => t.graduated);
+  out.sort(
+    {
+      trending: then(by((t) => t.volume24hUsd), by((t) => t.lastTradeAt), newest),
+      new: newest,
+      cap: then(by((t) => t.marketCapUsd), newest),
+      close: then(by((t) => t.sold), newest),
+      graduated: then(by((t) => t.graduatedAt), newest),
+    }[o.sort],
+  );
+  const page = Math.max(0, o.page ?? 0);
+  return { tokens: out.slice(page * PAGE, (page + 1) * PAGE), total: out.length };
+}
+
+// ponytail: every launch is read and priced in one go, cached 10 s; fine to about 1,000 launches, then keep the price
+// and the share sold in realm_tokens (the keeper's tick reads them already) and sort in SQL
+let everything: { at: number; list: Promise<TokenView[]> } | null = null;
+
+export function allTokens() {
+  if (!everything || Date.now() - everything.at > 10_000) {
+    // only a refresh reads the chain, so only a refresh counts against the shared budget; a busy minute serves the last one
+    if (everything && busy()) return everything.list;
+    const list = db.realmTokens({}, 1000).then(serializeTokens);
+    everything = { at: Date.now(), list };
+    list.catch(() => (everything = null));
+  }
+  return everything.list;
+}
+
+/** The board's featured token: the biggest that has not graduated and traded in the last day, or the newest. */
+export const featured = (list: TokenView[]) => arrange(list, { sort: "cap" }).tokens.find((t) => !t.graduated && t.trades24h > 0) ?? arrange(list, { sort: "new" }).tokens[0] ?? null;
+
+/** The ticker's rows in dollars, hidden tokens left out. */
+export async function feed(limit = 30) {
+  const rows = await db.realmFeed(limit);
+  return rows
+    .filter((r) => !isHidden(r))
+    .map((r: RealmFeedRow) => ({
+      kind: r.kind,
+      // trades indexed before the wallet was read show the router; no name beats a wrong one
+      who: r.who === ADDR.stockereumRouter.toLowerCase() ? null : r.who,
+      buy: r.buy,
+      usd: r.base_amount === null || r.base_usd === null ? null : (Number(r.base_amount) / 1e18) * r.base_usd,
+      token: r.token,
+      symbol: r.symbol,
+      image: r.image ?? (imageSrc(r.uri) ? r.uri : null),
+      at: r.at,
+    }));
+}
+export type FeedItem = Awaited<ReturnType<typeof feed>>[number];
+
+/** Everything the board shows for one view of it, the same for the first render and every refresh. */
+export async function board(o: { sort?: string | null; q?: string | null; base?: string | null; page?: string | number | null }) {
+  const sort = (SORTS as readonly string[]).includes(o.sort ?? "") ? (o.sort as Sort) : "trending";
+  const base = BASES.find((b) => b.id === o.base)?.address.toLowerCase();
+  const page = Math.min(100, Math.max(0, Number.parseInt(String(o.page ?? "0"), 10) || 0));
+  const [list, burned, ticker, now] = await Promise.all([allTokens(), db.realmBurned(), feed(), displayTime()]);
+  const { tokens, total } = arrange(list, { sort, q: o.q?.slice(0, 64), base, page });
+  const volumeUsd = list.reduce((s, t) => s + (t.volumeUsd ?? 0), 0);
+  // the view as read, with the base as its short name, so a page can hand it back
+  const view = { sort, base: BASES.find((b) => b.address.toLowerCase() === base)?.id ?? "" };
+  return { tokens, total, featured: featured(list), burned, volumeUsd, feed: ticker, now, ...view };
+}
+export type Board = Awaited<ReturnType<typeof board>>;
 
 export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };
 
