@@ -53,7 +53,8 @@ contract Deploy is Script {
  * @notice Deploys SilverRiddle and adds its address to an existing deployments/<OUT>.json. The seven days before the
  *         Safe may reclaim start now, so deploy when the site and the repository are public, and fund it right after.
  *   SAFE          the Safe that may reclaim the prize after seven days
- *   ANSWER_HASH   keccak256 of the normalized answer; the answer itself never goes into the repository or the env
+ *   ANSWER_HASH   from web/scripts/riddle-hash.mts, which normalizes like the page; the answer itself never goes into
+ *                 the repository or the env
  *   OUT           deployment name; deployments/<OUT>.json must exist
  *   SC            optional; mainnet $SC by default
  */
@@ -80,7 +81,6 @@ contract DeployRiddle is Script {
     // only on a real broadcast, so a simulation never records an address that was not deployed
     if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
       vm.writeJson(vm.toString(address(_riddle)), _file, ".riddle");
-      vm.writeJson(vm.toString(block.number), _file, ".riddleBlock");
       console.log("riddle", address(_riddle), "added to", _file);
     } else {
       console.log("simulated, nothing written");

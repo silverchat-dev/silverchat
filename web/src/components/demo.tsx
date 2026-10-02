@@ -61,7 +61,7 @@ export function Demo() {
 
   const cost = BigInt(Math.round(perPerson * M)) * BigInt(breadth);
   // the cost goes into ZC once and both columns split it the way SilverAsk.finalize does, so each adds up.
-  // ponytail: whole ZC, fine while a poll costs thousands of them; count in wei with decimals if ZC nears $1
+  // whole ZC, fine while a poll costs thousands of them; count in wei with decimals if ZC nears $1
   const zcCost = zcUsd ? BigInt(Math.round(Number(cost) / M / zcUsd)) : null;
   const split = (c: bigint) => {
     const pool = (c * SPLIT[0][1]) / 10_000n;

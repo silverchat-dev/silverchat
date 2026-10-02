@@ -35,3 +35,14 @@ export const poolManagerAbi = parseAbi(["function extsload(bytes32 slot) view re
 export const priceFeedAbi = parseAbi([
   "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
 ]);
+
+export const riddleAbi = parseAbi([
+  "function ANSWER_HASH() view returns (bytes32)",
+  "function DEADLINE() view returns (uint256)",
+  "function solved() view returns (bool)",
+  "function closed() view returns (bool)",
+  "function winner() view returns (address)",
+  "function commits(address solver) view returns (bytes32 hash, uint256 blockNumber)",
+  "function commit(bytes32 hash)",
+  "function reveal(string answer, bytes32 salt)",
+]);
