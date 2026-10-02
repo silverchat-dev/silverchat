@@ -18,7 +18,7 @@ project=$("$railway" status --json | python3 -c "import json,sys; print(json.loa
 git fetch -q origin main
 commit=$(git rev-parse origin/main)
 
-# SilverRiddle only once it is deployed; until then the riddle page says it opens soon
+# SilverRiddle only once it is deployed; until then /riddle is a 404 and nothing links to it
 riddle=()
 if python3 -c "import json,sys; sys.exit('riddle' not in json.load(open('$out')))"; then
   has_code "$(get riddle)" || { echo "no contract at riddle $(get riddle), or the RPC failed" >&2; exit 1; }
