@@ -59,6 +59,7 @@ export function Realm() {
         own, so a bot in the launch block pays almost everything.
       </p>
 
+      {board.isSuccess && !top.length && <p className="mt-14 text-xl text-paper/80">No launches yet. The first one is yours.</p>}
       {top.length > 0 && (
         <div className="mt-14 space-y-4">
           <h3 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Trending on the board</h3>

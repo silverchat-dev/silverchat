@@ -5,13 +5,14 @@ import Link from "next/link";
 
 import { ADDR, chapter, ZERO } from "@/lib/config";
 import { span, tokens } from "@/lib/format";
+import type { serializeMarket } from "@/lib/server/predict";
 
-type Market = { id: string; kind: "price" | "event"; title: string | null; hidden: boolean; feed: string | null; closesAt: number; pool: string; stakes: number; status: string };
+type Market = ReturnType<typeof serializeMarket>;
 
 const STEPS = [
   ["Stake, sealed", "Put $ZC on YES or NO. Your side stays sealed until the market closes, so nobody can follow the crowd."],
   ["Settled by others", "Prices settle from Chainlink. Every other question goes to Reality.eth, with Kleros as the court when an answer is disputed."],
-  ["Winners share the pool", "2% comes off the top: 1% is burned, 1% goes to the treasury. Opening a market locks $SC, returned when it settles."],
+  ["Winners share the pool", "2% comes off the top: 1% is burned, 1% goes to the treasury. Opening a market locks $SC, returned when it settles unless the question is ruled invalid."],
 ];
 
 /** Predict, the other half of chapter 27: what it is, and the markets taking stakes right now. */
@@ -26,7 +27,7 @@ export function Predict() {
   const now = markets.data?.now ?? 0;
   const open = (markets.data?.list ?? [])
     .filter((m) => !m.hidden && m.title && m.status === "open" && m.closesAt > now)
-    .sort((a, b) => (BigInt(b.pool) > BigInt(a.pool) ? 1 : -1))
+    .sort((a, b) => (BigInt(b.pool) > BigInt(a.pool) ? 1 : BigInt(b.pool) < BigInt(a.pool) ? -1 : 0))
     .slice(0, 3);
 
   return (
