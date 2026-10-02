@@ -46,6 +46,7 @@ export async function GET() {
       pricerEth: w.pricer === null ? null : formatEther(w.pricer),
       zcUsd: p ? formatUnits(p.zc, 18) : null,
       scUsd: p?.sc ? formatUnits(p.sc, 18) : null,
+      stockerUsd: p?.stocker ? formatUnits(p.stocker, 18) : null,
       usdPerPerson: Number(USD_PER_PERSON),
     },
     { headers: { "cache-control": "no-store" } },

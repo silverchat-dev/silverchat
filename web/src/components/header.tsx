@@ -13,6 +13,7 @@ const NAV = [
   { href: "/pulse", label: "Pulse" },
   { href: "/ask", label: "Ask" },
   ...(ADDR.predict !== ZERO ? [{ href: "/predict", label: "Predict" }] : []),
+  ...(ADDR.realmFactory !== ZERO ? [{ href: "/realm", label: "Realm" }] : []),
   { href: "/records", label: "Records" },
   { href: "/docs", label: "Docs" },
   { href: "/demo", label: "Try it" },

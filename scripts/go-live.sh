@@ -30,10 +30,16 @@ if python3 -c "import json,sys; sys.exit('predict' not in json.load(open('$out')
   has_code "$(get predict)" || { echo "no contract at predict $(get predict), or the RPC failed" >&2; exit 1; }
   predict=("NEXT_PUBLIC_PREDICT=$(get predict)" "NEXT_PUBLIC_PREDICT_BLOCK=$(get predictBlock)")
 fi
+# SilverRealm only once it is deployed; until then the Realm pages and its keeper stay off
+realm=()
+if python3 -c "import json,sys; sys.exit('realmFactory' not in json.load(open('$out')))"; then
+  has_code "$(get realmFactory)" || { echo "no contract at realmFactory $(get realmFactory), or the RPC failed" >&2; exit 1; }
+  realm=("NEXT_PUBLIC_REALM_FACTORY=$(get realmFactory)" "NEXT_PUBLIC_REALM_HOOK=$(get realmHook)" "NEXT_PUBLIC_REALM_BURNER=$(get realmBurner)" "NEXT_PUBLIC_REALM_BLOCK=$(get realmBlock)")
+fi
 
 "$railway" variable set --service web --skip-deploys \
   "NEXT_PUBLIC_ASK=$(get ask)" "NEXT_PUBLIC_ALGORITHM=$(get algorithm)" \
-  "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$commit" ${riddle[@]+"${riddle[@]}"} ${predict[@]+"${predict[@]}"}
+  "NEXT_PUBLIC_DEPLOY_BLOCK=$(get deployBlock)" "NEXT_PUBLIC_COMMIT=$commit" ${riddle[@]+"${riddle[@]}"} ${predict[@]+"${predict[@]}"} ${realm[@]+"${realm[@]}"}
 
 tmp=$(mktemp -d)
 git archive "$commit" web | tar -x -C "$tmp"

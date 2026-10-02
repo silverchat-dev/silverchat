@@ -2,12 +2,13 @@ import "server-only";
 
 import { MIN_HOLD_USD } from "@/lib/algorithm";
 import { askAbi } from "@/lib/abi";
-import { ADDR, CHAIN_ID, DEPLOY_BLOCK, PREDICT_BLOCK, ZERO } from "@/lib/config";
+import { ADDR, CHAIN_ID, DEPLOY_BLOCK, PREDICT_BLOCK, REALM_BLOCK, ZERO } from "@/lib/config";
 
 import { publicClient } from "./chain";
 import { db } from "./db";
 import { onPredictLog, PREDICT_EVENTS, syncMarkets } from "./predict";
 import { prices, tokensFor } from "./price";
+import { onRealmLog, REALM_ADDRESSES, REALM_EVENTS } from "./realm";
 
 // the RPC's free plan answers eth_getLogs for at most 10 blocks at a time
 const CHUNK = 10n;
@@ -39,6 +40,10 @@ async function run() {
   // keyed by address, so a new SilverPredict is read from its own deploy block too
   const rewind = predictOn && !(await db.get(`indexer:predict:${ADDR.predict.toLowerCase()}`));
   if (rewind && PREDICT_BLOCK < from) from = PREDICT_BLOCK;
+  // the same for SilverRealm
+  const realmOn = ADDR.realmFactory !== ZERO && REALM_BLOCK > 0n;
+  const rewindRealm = realmOn && !(await db.get(`indexer:realm:${ADDR.realmFactory.toLowerCase()}`));
+  if (rewindRealm && REALM_BLOCK < from) from = REALM_BLOCK;
   if (from > head - TAIL) from = head - TAIL;
   if (from < DEPLOY_BLOCK) from = DEPLOY_BLOCK;
 
@@ -46,16 +51,21 @@ async function run() {
     const to = from + CHUNK - 1n < head ? from + CHUNK - 1n : head;
     // one request for both contracts: the free plan's 10-block chunks make every extra call count
     const predict = ADDR.predict !== ZERO;
+    const realm = REALM_ADDRESSES().map((a) => a.toLowerCase());
     const logs = await publicClient.getLogs({
-      address: predict ? [ADDR.ask, ADDR.predict] : ADDR.ask,
-      events: predict ? [...EVENTS, ...PREDICT_EVENTS] : EVENTS,
+      address: [ADDR.ask, ...(predict ? [ADDR.predict] : []), ...REALM_ADDRESSES()],
+      events: [...EVENTS, ...(predict ? PREDICT_EVENTS : []), ...(realm.length ? REALM_EVENTS : [])],
       fromBlock: from,
       toBlock: to,
     });
     const touched = new Set<string>();
+    const times = new Map<bigint, number>();
     for (const log of logs) {
       if (predict && log.address.toLowerCase() === ADDR.predict.toLowerCase()) {
         touched.add(await onPredictLog(log as Parameters<typeof onPredictLog>[0]));
+      } else if (realm.includes(log.address.toLowerCase())) {
+        if (!times.has(log.blockNumber)) times.set(log.blockNumber, Number((await publicClient.getBlock({ blockNumber: log.blockNumber })).timestamp));
+        await onRealmLog(log as Parameters<typeof onRealmLog>[0], times.get(log.blockNumber)!);
       } else if (log.eventName === "Asked") {
         const p = await prices();
         await db.upsertAsked({
@@ -91,5 +101,7 @@ async function run() {
     from = to + 1n;
   }
   if (rewind) await db.set(`indexer:predict:${ADDR.predict.toLowerCase()}`, "1");
+  if (rewindRealm) await db.set(`indexer:realm:${ADDR.realmFactory.toLowerCase()}`, "1");
   await db.pruneDrafts();
+  await db.pruneRealmImages();
 }

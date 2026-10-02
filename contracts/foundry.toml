@@ -13,6 +13,7 @@ fs_permissions = [{ access = "read-write", path = "./deployments" }]
 remappings = [
     "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.4.0/",
     "forge-std/=dependencies/forge-std-1.9.7/src/",
+    "v4-core/=v4-core/",
 ]
 
 [fmt]
