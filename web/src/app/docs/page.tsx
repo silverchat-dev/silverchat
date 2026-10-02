@@ -200,7 +200,7 @@ export default function DocsPage() {
         <Section id="predict" title="Predict">
           <ol className="space-y-6">
             {[
-              ["Open", "Lock $SC to open a market on a price (Chainlink ETH/USD or BTC/USD at a set time) or on an event (a yes/no question on Reality.eth). The SC comes back when the market settles YES or NO; if the question turns out invalid, it goes to the treasury."],
+              ["Open", "Lock $SC to open a market on a price (Chainlink ETH/USD or BTC/USD at a set time) or on an event (a yes/no question on Reality.eth). The SC comes back when the market settles YES or NO; if the question turns out invalid, it goes to the treasury. The team's Safe can send to the treasury any token the contract does not owe, such as the ZC rewards paid to its SC locks. It can never take a stake, a payout or a lock."],
               ["Stake", "Stake $ZC on YES or NO before the market closes, one stake per wallet. The amount is public; your side is sealed, so nobody can follow the crowd. Your browser keeps the seal. You can also hand it to our keeper."],
               ["Reveal", "In the 72 hours after close, sides are revealed: by your browser when you come back, or by the keeper after 48 hours if you handed it the seal. A side still sealed when the 72 hours end counts as lost."],
               ["Settle", "A price market settles on the Chainlink round that was current at its time. An event market settles on the final answer on Reality.eth: our keeper posts the first answer, anyone can overrule it with twice the bond, and Kleros settles a dispute."],
