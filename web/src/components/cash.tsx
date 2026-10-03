@@ -302,8 +302,8 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
         {words && <p className="w-full bg-paper p-4 font-mono text-sm text-developer">{words}</p>}
       </section>
 
-      <section aria-label="Private balances" className="overflow-x-auto">
-        <table className="w-full min-w-[30rem] font-mono text-sm">
+      <section aria-label="Private balances">
+        <table className="w-full font-mono text-xs sm:text-sm">
           <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-silver">
             <tr>
               <th className="py-2 font-normal">Coin</th>
@@ -315,8 +315,8 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
           <tbody className="divide-y divide-silver/15 border-y border-silver/20">
             {COINS.map(([c, label]) => (
               <tr key={c}>
-                <td className="py-3">{c === "eth" ? "ETH (as WETH)" : label}</td>
-                <td className="py-3 text-right text-xl">{fmt(b.spendable[c])}</td>
+                <td className="py-3">{c === "eth" ? <>ETH<span className="hidden text-silver sm:inline"> (as WETH)</span></> : label}</td>
+                <td className="py-3 text-right text-base sm:text-xl">{fmt(b.spendable[c])}</td>
                 <td className="py-3 text-right text-silver">{fmt(b.waiting[c])}</td>
                 <td className="py-3 text-right text-silver">{fmt(b.blocked[c])}</td>
               </tr>
