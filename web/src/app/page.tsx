@@ -9,6 +9,7 @@ import { Predict } from "@/components/landing/predict";
 import { Realm } from "@/components/landing/realm";
 import { Split } from "@/components/landing/split";
 import { Verify } from "@/components/landing/verify";
+import { CASH_LIVE } from "@/lib/config";
 
 export default function Home() {
   return (
@@ -18,7 +19,7 @@ export default function Home() {
       <Split />
       <Predict />
       <Realm />
-      <Cash />
+      {CASH_LIVE && <Cash />}
       <Burns />
       <Book />
       <Archive />
