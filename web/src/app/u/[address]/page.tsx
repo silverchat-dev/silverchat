@@ -11,6 +11,7 @@ import { topicOf, type Content } from "@/lib/content";
 import { lead, short, tokens } from "@/lib/format";
 import { publicClient } from "@/lib/server/chain";
 import { db, type PollRow } from "@/lib/server/db";
+import { SCORE_MIN, scoreOf } from "@/lib/server/score";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export async function generateMetadata({ params }: PageProps<"/u/[address]">): P
 export default async function ProfilePage({ params }: PageProps<"/u/[address]">) {
   const address = await publicAddress((await params).address);
   if (!address) notFound();
-  const { asked, claimed, at } = await load(address);
+  const [{ asked, claimed, at }, score] = await Promise.all([load(address), scoreOf(address)]);
 
   return (
     <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
@@ -61,8 +62,8 @@ export default async function ProfilePage({ params }: PageProps<"/u/[address]">)
           {address}
         </a>
         <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
-          This wallet chose to show its profile. It lists only what Ethereum already shows: the questions it asked and the
-          ZC it claimed for answering. What it answered stays private.
+          This wallet chose to show its profile. It lists only what Ethereum already shows: the questions it asked, the
+          ZC it claimed for answering and its Predict record. What it answered in polls stays private.
         </p>
       </header>
 
@@ -70,6 +71,10 @@ export default async function ProfilePage({ params }: PageProps<"/u/[address]">)
         {[
           ["Polls asked", asked.length.toLocaleString("en-US")],
           ["ZC claimed for answers", tokens(claimed, 0)],
+          // Predict sides are public on-chain once revealed, so the record adds nothing Ethereum does not show
+          ...(score && score.resolved > 0
+            ? [["Predict markets called right", `${score.correct} / ${score.resolved}${score.rank ? ` · #${score.rank}` : ` · ranked after ${SCORE_MIN}`}`]]
+            : []),
         ].map(([k, v]) => (
           <div key={k} className="space-y-3 bg-tray p-6">
             <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-silver">{k}</dt>

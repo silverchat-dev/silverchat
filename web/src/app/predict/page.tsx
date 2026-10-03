@@ -38,7 +38,10 @@ export default async function PredictPage() {
           <Link href="/predict/open" className="inline-block bg-paper px-5 py-2.5 font-mono text-sm text-developer">
             Open a market
           </Link>
-        )}
+        )}{" "}
+        <Link href="/scores" className="ml-4 inline-block font-mono text-sm text-paper underline-offset-4 hover:underline">
+          Forecasters →
+        </Link>
       </header>
 
       {!live ? (

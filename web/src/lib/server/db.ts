@@ -177,6 +177,8 @@ export type MarketRow = {
   tx: string;
   stakes?: number;
 };
+/** One wallet's record on settled Predict markets; net is in ZC wei and can be negative. */
+export type Score = { address: string; resolved: number; correct: number; net: string };
 export type StakeRow = { market_id: string; staker: string; amount: string; commitment: string; side: number; claimed: boolean };
 /** The sealed side a staker handed the keeper. Never served by any route. */
 export type SealRow = { market_id: string; staker: string; side: number; salt: string };
@@ -499,6 +501,46 @@ export const db = {
     if (!pool) return [...mem.polls.values()].filter((p) => p.asker === address && !isHidden(p.id)).sort((a, b) => Number(BigInt(b.id) - BigInt(a.id)));
     const r = await pool.query(`select * from polls where asker = $1 and id <> all($2::numeric[]) order by id desc`, [address, HIDDEN]);
     return r.rows.map(text);
+  },
+
+  /**
+   * Every staker's record on settled Predict markets. A market that paid out counts; a refunded or void one does not. A
+   * stake still sealed when it settled counts as wrong, as SilverPredict pays it nothing, so revealing only the winners
+   * does not raise a score. Net is what the contract pays a winner (stake × payout / winning side) minus every stake.
+   */
+  async scores(): Promise<Score[]> {
+    await init();
+    if (!pool) {
+      const by = new Map<string, Score>();
+      for (const st of mem.stakes.values()) {
+        const m = mem.markets.get(st.market_id);
+        if (!m || (m.status !== 2 && m.status !== 3) || m.refund) continue;
+        const won = m.status === 2 ? 1 : 2;
+        const right = st.side === won;
+        const net = right ? (BigInt(st.amount) * BigInt(m.payout)) / BigInt(won === 1 ? m.yes : m.no) - BigInt(st.amount) : -BigInt(st.amount);
+        const x = by.get(st.staker) ?? { address: st.staker, resolved: 0, correct: 0, net: "0" };
+        by.set(st.staker, { ...x, resolved: x.resolved + 1, correct: x.correct + (right ? 1 : 0), net: String(BigInt(x.net) + net) });
+      }
+      return [...by.values()];
+    }
+    const r = await pool.query(
+      `select s.staker as address, count(*)::int as resolved,
+         (count(*) filter (where s.side = (case when m.status = 2 then 1 else 2 end)))::int as correct,
+         sum(case when s.side = (case when m.status = 2 then 1 else 2 end)
+           then floor(s.amount * m.payout / (case when m.status = 2 then m.yes else m.no end)) - s.amount
+           else -s.amount end)::text as net
+       from stakes s join markets m on m.id = s.market_id
+       where m.status in (2, 3) and not m.refund
+       group by s.staker`,
+    );
+    return r.rows;
+  },
+
+  /** Every wallet that shows a public profile. */
+  async publicProfiles(): Promise<string[]> {
+    await init();
+    if (!pool) return [...mem.profiles.entries()].filter(([, p]) => p.public).map(([a]) => a);
+    return (await pool.query(`select address from profiles where public`)).rows.map((r) => r.address);
   },
 
   async profile(address: string): Promise<Profile | null> {
