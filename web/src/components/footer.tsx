@@ -29,6 +29,9 @@ export function Footer() {
           <Link className={link} href="/algorithm">
             The rules
           </Link>
+          <Link className={link} href="/demo">
+            Try it
+          </Link>
           <Link className={link} href="/stats">
             Stats
           </Link>

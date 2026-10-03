@@ -14,9 +14,9 @@ const NAV = [
   { href: "/ask", label: "Ask" },
   ...(ADDR.predict !== ZERO ? [{ href: "/predict", label: "Predict" }] : []),
   ...(ADDR.realmFactory !== ZERO ? [{ href: "/realm", label: "Realm" }] : []),
+  { href: "/cash", label: "Cash" },
   { href: "/records", label: "Records" },
   { href: "/docs", label: "Docs" },
-  { href: "/demo", label: "Try it" },
 ];
 
 const NAV_LINK = "text-paper/80 hover:text-paper aria-[current=page]:text-paper";
