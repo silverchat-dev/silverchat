@@ -21,6 +21,9 @@ export function Close() {
           <Link href="/realm" className="font-mono text-sm text-paper underline-offset-4 hover:underline">
             Launch a token →
           </Link>
+          <Link href="/cash" className="font-mono text-sm text-paper underline-offset-4 hover:underline">
+            Go private →
+          </Link>
         </div>
       </div>
     </section>

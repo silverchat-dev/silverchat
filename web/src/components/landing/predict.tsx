@@ -45,6 +45,9 @@ export function Predict() {
             <Link href="/predict" className="text-paper underline-offset-4 hover:underline">
               All markets →
             </Link>
+            <Link href="/scores" className="text-paper underline-offset-4 hover:underline">
+              Forecasters →
+            </Link>
             <a href={chapter(27)} target="_blank" rel="noreferrer" className="text-silver underline-offset-4 hover:text-paper hover:underline">
               Read chapter 27 →
             </a>

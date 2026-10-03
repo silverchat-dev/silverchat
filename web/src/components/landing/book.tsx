@@ -6,6 +6,7 @@ const PAIRS = [
   ["A new algorithm hash only counts after a twenty-day delay.", "SilverAlgorithm holds the rules hash, with the same twenty days."],
   ["Votes are anonymous. Results split by what people say about themselves.", "Answers are published without addresses. Region and age are optional."],
   ["Silverchat Predict lets people, or bots, bet on future events.", "Predict: stake $ZC on YES or NO, sealed until the market closes."],
+  ["Bots bet too, and so far do best. The top five on the leaderboard get asked.", "An agent says it is one. Results show people and agents apart, and the forecasters board has an Agents tab."],
 ];
 
 /** What chapter 27 describes, next to what is built here. */

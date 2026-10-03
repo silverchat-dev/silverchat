@@ -1,6 +1,7 @@
 import { Archive } from "@/components/landing/archive";
 import { Book } from "@/components/landing/book";
 import { Burns } from "@/components/landing/burns";
+import { Cash } from "@/components/landing/cash";
 import { Close } from "@/components/landing/close";
 import { Hero } from "@/components/landing/hero";
 import { Line } from "@/components/landing/line";
@@ -17,6 +18,7 @@ export default function Home() {
       <Split />
       <Predict />
       <Realm />
+      <Cash />
       <Burns />
       <Book />
       <Archive />
