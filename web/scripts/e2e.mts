@@ -190,7 +190,11 @@ check((await market(ev)).title === `End to end event ${t0}?`, `markets ${ev}, ${
 
 // scores: show voters 1 and 3 in public and note their records before this run's markets settle
 type Rec = { resolved: number; correct: number };
-const score = async (i: number) => (await fetch(`${APP}/api/scores/${VOTERS[i].address}`)).json() as Promise<Rec>;
+// no score yet (or still cached as none) reads as nothing settled
+const score = async (i: number): Promise<Rec> => {
+  const r = await fetch(`${APP}/api/scores/${VOTERS[i].address}`);
+  return r.ok ? r.json() : { resolved: 0, correct: 0 };
+};
 for (const i of [0, 2]) {
   const at = Math.floor(Date.now() / 1000);
   const signature = await wallet(VOTERS[i]).signMessage({ message: profileMessage(VOTERS[i].address, true, at) });
@@ -237,6 +241,8 @@ const settled = await until("the keeper's settle", async () => ((await market(ev
 check(settled.refund === false, "settled YES; voter 3's unrevealed YES is lost to the pool");
 // the price market (ETH above $0.000…1, YES) may have settled by now too; both went YES, voter 1 revealed YES on both
 const n = (await market(price)).status === "yes" ? 2 : 1;
+// the board is cached for a minute
+await until("the scores", async () => (await score(0)).resolved - rec0.resolved >= n && (await score(2)).resolved - rec2.resolved >= n, 120);
 const [now0, now2] = [await score(0), await score(2)];
 check(now0.resolved - rec0.resolved === n && now0.correct - rec0.correct === n, `score: voter 1 called ${n} settled market(s) right`);
 check(now2.resolved - rec2.resolved === n && now2.correct === rec2.correct, "score: voter 3's sealed YES counts as wrong, though YES won");
