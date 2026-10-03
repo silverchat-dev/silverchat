@@ -211,8 +211,14 @@ export type Profile = { public: boolean; signed_at: number };
 let ready: Promise<void> | null = null;
 function init() {
   if (!pool) return Promise.resolve();
-  ready ??= pool
-    .query(
+  const db = pool;
+  // one process at a time: two servers starting together (a deploy and its replacement) would otherwise lock each other
+  // on these tables, and Postgres kills one with a deadlock; a failed start must not stick either, so the next call retries
+  ready ??= (async () => {
+    const c = await db.connect();
+    try {
+      await c.query("select pg_advisory_lock(7140301)");
+      await c.query(
       `create table if not exists drafts (hash text primary key, content text not null, created_at timestamptz not null default now());
        create table if not exists polls (
          id numeric primary key, hash text not null, content text, asker text not null, breadth int not null, priority int not null,
@@ -265,8 +271,15 @@ function init() {
        alter table realm_trades add column if not exists base_usd double precision;
        create table if not exists realm_images (
          hash text primary key, type text not null, data bytea not null, created_at timestamptz not null default now());`,
-    )
-    .then(() => undefined);
+      );
+    } finally {
+      await c.query("select pg_advisory_unlock(7140301)").catch(() => {});
+      c.release();
+    }
+  })().catch((e) => {
+    ready = null;
+    throw e;
+  });
   return ready;
 }
 
