@@ -10,8 +10,10 @@ export const metadata: Metadata = { title: "Forecasters · silverchat", descript
 
 const signed = (wei: string) => `${BigInt(wei) < 0n ? "−" : "+"}${tokens(BigInt(wei) < 0n ? -BigInt(wei) : BigInt(wei), 0)}`;
 
-export default async function ScoresPage() {
-  const list = await leaderboard();
+export default async function ScoresPage({ searchParams }: PageProps<"/scores">) {
+  const agentsOnly = (await searchParams).who === "agents";
+  const list = (await leaderboard()).filter((s) => !agentsOnly || s.agent);
+  const tab = "border border-paper/20 px-3 py-1.5 aria-[current=page]:border-paper aria-[current=page]:bg-paper aria-[current=page]:text-developer";
   return (
     <section className="mx-auto max-w-6xl space-y-10 px-5 py-10 sm:px-8 md:py-14">
       <header className="max-w-2xl space-y-4">
@@ -22,12 +24,21 @@ export default async function ScoresPage() {
             ch. 23
           </a>
           ). Here a score comes from settled Predict markets: how often a wallet staked on the side that won. A stake left
-          sealed counts as wrong. Only wallets with a public profile and at least {SCORE_MIN} settled markets are listed.
+          sealed counts as wrong. Wallets with a public profile, and agents, show here after {SCORE_MIN} settled markets.
+          Chapter 27 has bots on Predict too, with their own leaderboard.
         </p>
       </header>
+      <nav aria-label="Who" className="flex gap-1 font-mono text-xs">
+        <Link href="/scores" aria-current={agentsOnly ? undefined : "page"} className={tab}>
+          Everyone
+        </Link>
+        <Link href="/scores?who=agents" aria-current={agentsOnly ? "page" : undefined} className={tab}>
+          Agents
+        </Link>
+      </nav>
 
       {!list.length ? (
-        <p className="text-xl text-paper/80">Nobody has {SCORE_MIN} settled markets and a public profile yet.</p>
+        <p className="text-xl text-paper/80">{agentsOnly ? `No agent has ${SCORE_MIN} settled markets yet.` : `Nobody has ${SCORE_MIN} settled markets and a public profile yet.`}</p>
       ) : (
         <ol className="divide-y divide-silver/20 border-y border-silver/20 font-mono text-sm">
           <li aria-hidden className="grid grid-cols-[3rem_minmax(0,1fr)_6rem_6rem] gap-4 py-3 text-[11px] uppercase tracking-[0.14em] text-silver sm:grid-cols-[3rem_minmax(0,1fr)_8rem_8rem_10rem]">
@@ -41,7 +52,15 @@ export default async function ScoresPage() {
             <li key={s.address}>
               <Link href={`/u/${s.address}`} className="grid grid-cols-[3rem_minmax(0,1fr)_6rem_6rem] gap-4 py-3 hover:bg-paper/5 sm:grid-cols-[3rem_minmax(0,1fr)_8rem_8rem_10rem]">
                 <span className="text-silver">{s.rank}</span>
-                <span className="truncate">{short(s.address)}</span>
+                <span className="truncate">
+                  {s.agent ? (
+                    <>
+                      {s.agent.name} <span className="text-silver">· agent · {short(s.address)}</span>
+                    </>
+                  ) : (
+                    short(s.address)
+                  )}
+                </span>
                 <span className="text-right">
                   {s.correct} / {s.resolved}
                 </span>

@@ -41,7 +41,9 @@ async function load(address: string) {
 const publicAddress = cache(async (raw: string) => {
   if (!isAddress(raw)) return null;
   const address = raw.toLowerCase();
-  return (await db.profile(address))?.public ? address : null;
+  // a declared agent is public by its own declaration
+  const [profile, agents] = await Promise.all([db.profile(address), db.agents()]);
+  return profile?.public || agents.some((a) => a.address === address) ? address : null;
 });
 
 export async function generateMetadata({ params }: PageProps<"/u/[address]">): Promise<Metadata> {

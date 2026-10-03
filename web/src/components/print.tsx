@@ -3,18 +3,21 @@
 import { useState } from "react";
 
 import { GROUP_MIN, type Tally } from "@/lib/algorithm";
+import { WHO } from "@/lib/agent";
 import { AGES, REGIONS } from "@/lib/answer";
 import type { Content } from "@/lib/content";
 import { pct } from "@/lib/format";
 
-type View = "all" | "region" | "age";
+type View = "all" | "region" | "age" | "who";
+// people and agents, as the agents list stood when the result was fixed (results fixed before agents existed have none)
+type Fixed = Tally & { who?: Tally["region"] };
 
 /** The fixed result, printed: one block per question, bars as silver density on fiber paper. */
-export function Print({ content, tally, note }: { content: Content; tally: Tally; note?: string }) {
+export function Print({ content, tally, note }: { content: Content; tally: Fixed; note?: string }) {
   const [view, setView] = useState<View>("all");
-  const views = (["all", "region", "age"] as const).filter((v) => v === "all" || tally[v]);
+  const views = (["all", "region", "age", "who"] as const).filter((v) => v === "all" || tally[v]);
   // a fixed order, so the layout says nothing about which group answered first
-  const order = view === "region" ? REGIONS : AGES;
+  const order = view === "region" ? REGIONS : view === "who" ? WHO : AGES;
   const groups = view === "all" ? null : Object.entries(tally[view] ?? {}).sort(([a], [b]) => rankOf(order, a) - rankOf(order, b));
 
   return (
@@ -33,7 +36,7 @@ export function Print({ content, tally, note }: { content: Content; tally: Tally
                 onClick={() => setView(v)}
                 className="border border-developer/40 px-2.5 py-1 capitalize aria-pressed:bg-developer aria-pressed:text-paper"
               >
-                {v === "all" ? "Everyone" : `By ${v}`}
+                {v === "all" ? "Everyone" : v === "who" ? "People / agents" : `By ${v}`}
               </button>
             ))}
           </div>
@@ -61,7 +64,8 @@ export function Print({ content, tally, note }: { content: Content; tally: Tally
       </div>
       {groups && (
         <p className="mt-10 font-mono text-xs leading-relaxed text-developer/65">
-          Breakdowns are not in the on-chain record. They come from our server, from what people said about themselves.
+          Breakdowns are not in the on-chain record. They come from our server, from what people said about themselves
+          and from the wallets that said they are agents when the result was fixed.
         </p>
       )}
       {!tally.region && !tally.age && tally.answers > 0 && (

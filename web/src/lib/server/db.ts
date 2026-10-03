@@ -56,6 +56,7 @@ const g = globalThis as typeof globalThis & {
     answers: Map<string, AnswerRow>;
     kv: Map<string, string>;
     profiles: Map<string, Profile>;
+    agents: Map<string, AgentRow>;
     markets: Map<string, MarketRow>;
     stakes: Map<string, StakeRow>;
     seals: Map<string, SealRow>;
@@ -71,6 +72,7 @@ const mem = (g.silverchatMem ??= {
   answers: new Map(),
   kv: new Map(),
   profiles: new Map(),
+  agents: new Map(),
   markets: new Map(),
   stakes: new Map(),
   seals: new Map(),
@@ -80,6 +82,7 @@ const mem = (g.silverchatMem ??= {
   realmImages: new Map(),
 });
 mem.profiles ??= new Map();
+mem.agents ??= new Map();
 mem.markets ??= new Map();
 mem.stakes ??= new Map();
 mem.seals ??= new Map();
@@ -179,6 +182,8 @@ export type MarketRow = {
 };
 /** One wallet's record on settled Predict markets; net is in ZC wei and can be negative. */
 export type Score = { address: string; resolved: number; correct: number; net: string };
+/** A wallet's signed word that it is an agent, and when it last said so. */
+export type AgentRow = { address: string; name: string; url: string | null; active: boolean; signed_at: number };
 export type StakeRow = { market_id: string; staker: string; amount: string; commitment: string; side: number; claimed: boolean };
 /** The sealed side a staker handed the keeper. Never served by any route. */
 export type SealRow = { market_id: string; staker: string; side: number; salt: string };
@@ -226,6 +231,7 @@ function init() {
        create index if not exists answers_voter on answers (voter);
        create table if not exists kv (key text primary key, value text not null);
        create table if not exists profiles (address text primary key, public boolean not null, signed_at bigint not null);
+       create table if not exists agents (address text primary key, name text not null, url text, active boolean not null, signed_at bigint not null);
        create table if not exists markets (
          id numeric primary key, kind int not null, opener text not null, question text, feed text, threshold numeric,
          closes_at bigint not null, resolves_at bigint not null, question_id text, arbitrator text, min_bond numeric,
@@ -534,6 +540,29 @@ export const db = {
        group by s.staker`,
     );
     return r.rows;
+  },
+
+  /** Save an agent declaration unless a newer one is already saved. */
+  async setAgent(a: AgentRow): Promise<boolean> {
+    await init();
+    if (!pool) {
+      if ((mem.agents.get(a.address)?.signed_at ?? -1) >= a.signed_at) return false;
+      mem.agents.set(a.address, a);
+      return true;
+    }
+    const r = await pool.query(
+      `insert into agents (address, name, url, active, signed_at) values ($1, $2, $3, $4, $5)
+       on conflict (address) do update set name = $2, url = $3, active = $4, signed_at = $5 where agents.signed_at < $5`,
+      [a.address, a.name, a.url, a.active, a.signed_at],
+    );
+    return r.rowCount === 1;
+  },
+
+  /** Wallets that say they are agents now. */
+  async agents(): Promise<AgentRow[]> {
+    await init();
+    if (!pool) return [...mem.agents.values()].filter((a) => a.active);
+    return (await pool.query(`select address, name, url, active, signed_at::float8 as signed_at from agents where active order by signed_at desc`)).rows;
   },
 
   /** Every wallet that shows a public profile. */

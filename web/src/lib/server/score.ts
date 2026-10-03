@@ -8,7 +8,7 @@ import { db, type Score } from "./db";
  */
 export const SCORE_MIN = Number(process.env.SCORE_MIN ?? 10);
 
-export type Ranked = Score & { accuracy: number; rank: number };
+export type Ranked = Score & { accuracy: number; rank: number; agent: { name: string; url: string | null } | null };
 
 let cached: { at: number; list: Promise<Ranked[]> } | null = null;
 
@@ -19,11 +19,13 @@ let cached: { at: number; list: Promise<Ranked[]> } | null = null;
  */
 export function leaderboard() {
   if (!cached || Date.now() - cached.at > 60_000) {
-    const list = Promise.all([db.scores(), db.publicProfiles()]).then(([all, open]) => {
-      const shown = new Set(open);
+    const list = Promise.all([db.scores(), db.publicProfiles(), db.agents()]).then(([all, open, agents]) => {
+      // an agent's flag is public by design, so a declared agent is listed like a public profile
+      const agent = new Map(agents.map((a) => [a.address, { name: a.name, url: a.url }]));
+      const shown = new Set([...open, ...agent.keys()]);
       return all
         .filter((s) => s.resolved >= SCORE_MIN && shown.has(s.address))
-        .map((s) => ({ ...s, accuracy: s.correct / s.resolved }))
+        .map((s) => ({ ...s, accuracy: s.correct / s.resolved, agent: agent.get(s.address) ?? null }))
         .sort((a, b) => b.accuracy - a.accuracy || b.resolved - a.resolved || (BigInt(b.net) > BigInt(a.net) ? 1 : BigInt(b.net) < BigInt(a.net) ? -1 : 0))
         .map((s, i) => ({ ...s, rank: i + 1 }));
     });
@@ -33,8 +35,8 @@ export function leaderboard() {
   return cached.list;
 }
 
-/** One public wallet's ranked score, or null: not public, or fewer than SCORE_MIN settled markets. */
+/** One wallet's ranked score, or null: neither a public profile nor an agent, or fewer than SCORE_MIN settled markets. */
 export async function scoreOf(address: string) {
-  if (!(await db.profile(address))?.public) return null;
+  // the board holds only public profiles and declared agents with enough settled markets
   return (await leaderboard()).find((s) => s.address === address) ?? null;
 }

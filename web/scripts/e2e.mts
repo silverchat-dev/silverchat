@@ -22,6 +22,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 
 import { askAbi, predictAbi } from "../src/lib/abi";
+import { agentDomain, agentTypes } from "../src/lib/agent";
 import { resultLeaf, tagsHash, types } from "../src/lib/answer";
 import { commitmentOf, FEEDS, NO, questionString, YES, type Side } from "../src/lib/market";
 import { rewardsMessage, today } from "../src/lib/rewards";
@@ -200,7 +201,19 @@ for (const i of [0, 2]) {
   const signature = await wallet(VOTERS[i]).signMessage({ message: profileMessage(VOTERS[i].address, true, at) });
   await fetch(`${APP}/api/profile`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: VOTERS[i].address, public: true, at, signature }) });
 }
-check((await fetch(`${APP}/api/scores/${VOTERS[1].address}`)).status === 404, "a private profile shows no score");
+check((await fetch(`${APP}/api/scores/${ASKER.address}`)).status === 404, "a private profile shows no score");
+// voter 2 says it is an agent; the same signature again is refused, and its score is public from then on
+const declare = async (active: boolean, at = Math.floor(Date.now() / 1000)) => {
+  const message = { name: `e2e bot ${t0}`, url: "https://silverchat.cash/docs", active, at: BigInt(at) };
+  const signature = await wallet(VOTERS[1]).signTypedData({ domain: agentDomain(), types: agentTypes, primaryType: "Agent", message });
+  return fetch(`${APP}/api/agents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: VOTERS[1].address, ...message, at, signature }) });
+};
+const agentAt = Math.floor(Date.now() / 1000);
+check((await declare(true, agentAt)).ok, "voter 2 said it is an agent");
+check((await declare(true, agentAt)).status === 409, "the same agent signature again is refused");
+const listed = (await (await fetch(`${APP}/api/agents`)).json()).agents as { address: string }[];
+check(listed.some((a) => a.address === VOTERS[1].address.toLowerCase()), "the agents list shows it");
+check((await fetch(`${APP}/api/scores/${VOTERS[1].address}`)).ok, "an agent's score is public");
 const rec0 = await score(0);
 const rec2 = await score(2);
 
