@@ -2,7 +2,7 @@ import Link from "next/link";
 
 // a private balance, frame by frame, like the strip in the SilverRealm section
 const FRAMES = [
-  ["Deposit", "$SC · $ZC · ETH", "From your wallet into Railgun. The deposit is public; what follows is not tied to it."],
+  ["Deposit", "your coins", "$SC, $ZC or ETH from your wallet into Railgun. The deposit is public; what follows is not tied to it."],
   ["Shield", "your browser", "A private balance under its own 12 words. The keys never leave your browser, never reach us."],
   ["Swap", "inside", "SC, ZC and ETH trade inside the private pool, through the same pools as the rest of Silverchat."],
   ["Withdraw", "a fresh wallet", "Out to any address, gas paid from your private balance by a Railgun broadcaster."],
