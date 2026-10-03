@@ -22,7 +22,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 
 import { askAbi, predictAbi } from "../src/lib/abi";
-import { agentDomain, agentTypes } from "../src/lib/agent";
+import { agentTypes } from "../src/lib/agent";
 import { resultLeaf, tagsHash, types } from "../src/lib/answer";
 import { commitmentOf, FEEDS, NO, questionString, YES, type Side } from "../src/lib/market";
 import { rewardsMessage, today } from "../src/lib/rewards";
@@ -205,7 +205,7 @@ check((await fetch(`${APP}/api/scores/${ASKER.address}`)).status === 404, "a pri
 // voter 2 says it is an agent; the same signature again is refused, and its score is public from then on
 const declare = async (active: boolean, at = Math.floor(Date.now() / 1000)) => {
   const message = { name: `e2e bot ${t0}`, url: "https://silverchat.cash/docs", active, at: BigInt(at) };
-  const signature = await wallet(VOTERS[1]).signTypedData({ domain: agentDomain(), types: agentTypes, primaryType: "Agent", message });
+  const signature = await wallet(VOTERS[1]).signTypedData({ domain, types: agentTypes, primaryType: "Agent", message });
   return fetch(`${APP}/api/agents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: VOTERS[1].address, ...message, at, signature }) });
 };
 const agentAt = Math.floor(Date.now() / 1000);
