@@ -5,16 +5,15 @@
  */
 import type { Address } from "viem";
 
-import { PUBLIC_RPC_URL } from "@/lib/config";
-
 type W = typeof import("@railgun-community/wallet");
 type S = typeof import("@railgun-community/shared-models");
 export type Railgun = { W: W; S: S; chain: { type: number; id: number } };
 
 // Railgun's own Proof of Innocence node; a fork has none, so the address can be emptied for local tests
 const POI_NODES = (process.env.NEXT_PUBLIC_CASH_POI ?? "https://ppoi.fdi.network").split(",").filter(Boolean);
-// SilverCash reads Ethereum mainnet through a public RPC, never ours, so our server never sees a SilverCash request
-const RPC = process.env.NEXT_PUBLIC_CASH_RPC ?? PUBLIC_RPC_URL;
+// SilverCash reads Ethereum mainnet through public RPCs, never ours, so our server never sees a SilverCash request; two
+// of them, so one failing call is answered by the other
+export const CASH_RPCS = (process.env.NEXT_PUBLIC_CASH_RPC ?? "https://ethereum-rpc.publicnode.com,https://eth.drpc.org").split(",").filter(Boolean);
 
 let started: Promise<Railgun> | null = null;
 
@@ -40,10 +39,15 @@ async function start(): Promise<Railgun> {
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = new (LevelJs as any).default("silvercash");
-  await W.startRailgunEngine("silvercash", db, false, store, false, false, POI_NODES);
+  // NEXT_PUBLIC_CASH_DEBUG=1 prints the engine's own log to the console, for local testing only
+  const debug = process.env.NEXT_PUBLIC_CASH_DEBUG === "1";
+  if (debug) W.setLoggers(console.log, console.error);
+  await W.startRailgunEngine("silvercash", db, debug, store, false, false, POI_NODES, undefined, debug);
   W.getProver().setSnarkJSGroth16(workerProver());
   const chainId = S.NETWORK_CONFIG[S.NetworkName.Ethereum].chain.id;
-  await W.loadProvider({ chainId, providers: [{ provider: RPC, priority: 1, weight: 2 }] }, S.NetworkName.Ethereum);
+  // weights add up to at least 2, as Railgun's fallback provider asks; the first answers unless it stalls
+  const providers = CASH_RPCS.map((provider, i) => ({ provider, priority: i + 1, weight: CASH_RPCS.length === 1 ? 2 : 1 }));
+  await W.loadProvider({ chainId, providers }, S.NetworkName.Ethereum);
   return { W, S, chain: S.NETWORK_CONFIG[S.NetworkName.Ethereum].chain };
 }
 

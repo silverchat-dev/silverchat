@@ -208,6 +208,8 @@ function Unlock({ onOpen, onForget }: { onOpen: (o: Opened) => void; onForget: (
   return (
     <form onSubmit={(e) => (e.preventDefault(), go())} className="max-w-md space-y-4">
       <p className="text-paper/80">Your private wallet is in this browser, locked.</p>
+      {/* for password managers: they file a password under a username */}
+      <input type="text" name="username" autoComplete="username" value="silvercash" readOnly hidden />
       <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="password" className={input} autoComplete="current-password" autoFocus />
       <div className="flex items-center gap-5">
         <button type="submit" disabled={busy || !pw} className={button}>
@@ -249,11 +251,20 @@ function useSender(): Sender | null {
 function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForget: () => void }) {
   const [b, setB] = useState<Buckets>({ spendable: {}, waiting: {}, blocked: {} });
   const [scan, setScan] = useState(0);
+  const [synced, setSynced] = useState(false);
+  const [minutes, setMinutes] = useState(0);
   const [tab, setTab] = useState<"deposit" | "swap" | "withdraw">("deposit");
   const [words, setWords] = useState<string | null>(null);
 
   useEffect(() => {
-    import("@/lib/cash/actions").then(({ watch }) => watch(o, setB, setScan)).catch(() => {});
+    const t0 = Date.now();
+    const tick = setInterval(() => setMinutes(Math.floor((Date.now() - t0) / 60_000)), 15_000);
+    import("@/lib/cash/actions")
+      .then(({ watch }) => watch(o, setB, setScan))
+      .then(() => setSynced(true))
+      .catch(() => {})
+      .finally(() => clearInterval(tick));
+    return () => clearInterval(tick);
   }, [o]);
 
   return (
@@ -262,7 +273,12 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
         <div className="space-y-1">
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Your private address</p>
           <p className="max-w-xl break-all font-mono text-sm">{o.address}</p>
-          {scan > 0 && scan < 1 && <p className="font-mono text-xs text-silver">Reading Railgun&apos;s records… {Math.round(scan * 100)}%</p>}
+          {!synced && (
+            <p className="max-w-xl font-mono text-xs leading-relaxed text-silver">
+              Reading Railgun&apos;s records… {Math.round(scan * 100)}%{minutes > 0 && ` · ${minutes} min`}. The first time in a browser
+              this takes about 10 minutes; keep the tab open. After that it takes seconds. You can deposit now.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-4">
           <button type="button" onClick={async () => setWords(words ? null : await (await import("@/lib/cash/engine")).wordsOf(o))} className={quiet}>
@@ -322,8 +338,9 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
           ))}
         </div>
         {tab === "deposit" && <Deposit o={o} />}
-        {tab === "swap" && <Swap o={o} spendable={b.spendable} />}
-        {tab === "withdraw" && <Withdraw o={o} spendable={b.spendable} />}
+        {tab !== "deposit" && !synced && <p className="text-paper/80">Swapping and withdrawing open once the records are read.</p>}
+        {tab === "swap" && synced && <Swap o={o} spendable={b.spendable} />}
+        {tab === "withdraw" && synced && <Withdraw o={o} spendable={b.spendable} />}
       </section>
     </div>
   );

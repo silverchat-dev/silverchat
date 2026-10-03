@@ -3,16 +3,15 @@
  * (unshield) to any address. A swap or a withdrawal is proved here, then sent either by a public broadcaster, paid in
  * private WETH, or by your own public wallet, which links that wallet to the transaction.
  */
-import { createPublicClient, encodeFunctionData, erc20Abi, http, keccak256, parseAbi, type Address, type Hex } from "viem";
+import { createPublicClient, encodeFunctionData, erc20Abi, fallback, http, keccak256, parseAbi, type Address, type Hex } from "viem";
 import { mainnet } from "viem/chains";
 
-import { ADDR, PUBLIC_RPC_URL } from "@/lib/config";
+import { ADDR } from "@/lib/config";
 
-import { engine, type Opened } from "./engine";
+import { CASH_RPCS, engine, type Opened } from "./engine";
 import { afterFee, RAILGUN, swapCalls, tokenOf, type Coin } from "./routes";
 
-const RPC = process.env.NEXT_PUBLIC_CASH_RPC ?? PUBLIC_RPC_URL;
-export const chainClient = createPublicClient({ chain: mainnet, transport: http(RPC) });
+export const chainClient = createPublicClient({ chain: mainnet, transport: fallback(CASH_RPCS.map((u) => http(u))) });
 
 /** Your public wallet, as the page's wallet connection exposes it. */
 export type Sender = {
