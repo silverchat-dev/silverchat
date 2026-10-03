@@ -14,14 +14,17 @@ export const generateMetadata = (): Metadata =>
   ADDR.riddle === ZERO ? {} : { title: "The riddle · silverchat", description: "One riddle on Silverchat, with a prize in $SC for the first who solves it." };
 
 const RIDDLE = {
-  title: "The count",
+  title: "The courtyard",
   text: [
-    "On the hill in Kalimar the roof closed in ten ticks, and four teas came up the stairs. Seila had a question to ask, and a thousand others to hide it in.",
-    "The source remembers seven lines from the book, and leaves one word out of each. Say the words it leaves out, in the order the book says them.",
-    "Then say the block the source pinned, digit by digit, the way Zei counted down.",
-    "Then say what they all shouted when the count ran out.",
+    "Zei's watch buzzed over tea. A courtyard he had eaten in once was writing to every guest of half a year, and someone had burned four hundred zipcoins to send it. The envelope said only who it was for.",
+    "The courtyard has a token on Silverchat now, launched from the treasury's Realm. Its address on the cryptographic network opens the message. Four hundred zipcoins went to the door that the address and the first word name together. The source keeps four more seals, each over everything said before it; the hash on this page seals it all. Eleven words, each a word of the book. Say the address, then the words.",
   ],
 };
+
+// the riddles before this one, closed for good
+const EARLIER = [
+  { title: "The count", address: "0x48FFB076C0C3F68F7E0E65cC4fA40ce4CA0FC346", winner: "0x67797e1f48c7cdcfde90eb23e3e80b9221485e79", prize: "1,000,000", day: "2 October 2026" },
+];
 
 async function read() {
   const r = { address: ADDR.riddle, abi: riddleAbi } as const;
@@ -119,6 +122,19 @@ export default async function RiddlePage() {
         <p className="border-t border-silver/25 pt-4 text-xs leading-relaxed text-silver">
           After day seven the Safe may take the prize back. Until it does, a right reveal still wins.
         </p>
+        {EARLIER.map((e) => (
+          <p key={e.address} className="border-t border-silver/25 pt-4 text-xs leading-relaxed text-silver">
+            Before this one:{" "}
+            <a href={`${EXPLORER}/address/${e.address}`} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline">
+              {e.title}
+            </a>
+            , solved on {e.day} by{" "}
+            <a href={`${EXPLORER}/address/${e.winner}`} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline">
+              {short(e.winner)}
+            </a>{" "}
+            for {e.prize} $SC.
+          </p>
+        ))}
       </aside>
     </section>
   );
