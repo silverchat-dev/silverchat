@@ -4,7 +4,7 @@
 // Prereq: an anvil mainnet fork (./scripts/local-up.sh sets one up).
 //   pnpm dlx tsx scripts/cash-routes.mts
 import { createPublicClient, createWalletClient, erc20Abi, http, parseEther, type Address } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 
 process.env.NEXT_PUBLIC_SC ??= "0x3C3959052f60cbddC498b384958841b718112353";
@@ -12,9 +12,9 @@ const { ADDR } = await import("../src/lib/config");
 const { swapCalls, tokenOf } = await import("../src/lib/cash/routes");
 
 const RPC = process.env.RPC ?? "http://127.0.0.1:8545";
-// a fresh wallet: the anvil test keys are public, and on mainnet some are delegated (EIP-7702) to contracts that sweep
-// any ETH they receive, which a fork inherits
-const me = privateKeyToAccount(generatePrivateKey());
+// a key of our own, never used on mainnet: the anvil test keys are public, and on mainnet some are delegated (EIP-7702)
+// to contracts that sweep any ETH they receive, which a fork inherits
+const me = privateKeyToAccount("0x1e6f5d8bb7633bbecfd8cef9886d8aac3666f6a589d6c1e50d418bf88920242d");
 const pub = createPublicClient({ chain: foundry, transport: http(RPC) });
 const wallet = createWalletClient({ account: me, chain: foundry, transport: http(RPC) });
 
