@@ -7,14 +7,15 @@ import { usePathname } from "next/navigation";
 import { BlockClock } from "@/components/block-clock";
 import { Rewards } from "@/components/rewards";
 import { YouLink } from "@/components/you";
-import { ADDR, ZERO } from "@/lib/config";
+import { ADDR, CASH_LIVE, ZERO } from "@/lib/config";
 
 const NAV = [
   { href: "/pulse", label: "Pulse" },
   { href: "/ask", label: "Ask" },
   ...(ADDR.predict !== ZERO ? [{ href: "/predict", label: "Predict" }] : []),
   ...(ADDR.realmFactory !== ZERO ? [{ href: "/realm", label: "Realm" }] : []),
-  { href: "/cash", label: "Cash" },
+  // Cash takes Try it's place once it is live (seven links fit a phone)
+  ...(CASH_LIVE ? [{ href: "/cash", label: "Cash" }] : [{ href: "/demo", label: "Try it" }]),
   { href: "/records", label: "Records" },
   { href: "/docs", label: "Docs" },
 ];

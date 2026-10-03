@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 import { Cash } from "@/components/cash";
-import { ADDR, EXPLORER } from "@/lib/config";
+import { ADDR, CASH_LIVE, EXPLORER } from "@/lib/config";
 import { short } from "@/lib/format";
 import { RAILGUN, RELAY_ADAPT } from "@/lib/cash/routes";
 
-export const metadata: Metadata = {
+// static metadata would ship even with the 404, so it is built only once SilverCash is live
+export const generateMetadata = (): Metadata => (CASH_LIVE ? {
   title: "SilverCash · silverchat",
   description: "Deposit $SC, $ZC or ETH, swap privately, withdraw to a fresh wallet. On Railgun, in your browser.",
-};
+} : {});
 
 // what the page can and cannot hide, said plainly
 const NOTES = [
@@ -21,6 +23,8 @@ const NOTES = [
 ];
 
 export default function CashPage() {
+  // the page ships before it goes live; until NEXT_PUBLIC_CASH=1 it does not exist
+  if (!CASH_LIVE) notFound();
   return (
     <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
       <header className="max-w-2xl space-y-4">
