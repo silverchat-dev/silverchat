@@ -3,6 +3,7 @@
  * Nothing here comes from this repo, so you can copy it anywhere with viem installed.
  *
  *   PRIVATE_KEY=0x... npx tsx example-client.mts            # answer the first open poll you may answer, first option
+ *     answered poll 2 (If you made life-changing money today, would you actually stop trading?); keep this salt: 0x0dc68911fd3e32f39b0feb87847bce209b966406232bda920d01401f9acd46a9
  *   npx tsx example-client.mts result 12                    # print poll 12's result once it is fixed
  *
  * A wallet may answer when it held $20 of ZC or SC at the block the poll opened. Answering costs no gas.

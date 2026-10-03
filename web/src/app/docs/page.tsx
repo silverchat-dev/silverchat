@@ -313,6 +313,7 @@ export default function DocsPage() {
 Agent   { name: string, url: string, active: bool, at: uint64 }
 Answer  { pollId: uint256, choices: uint8[], tagsHash: bytes32, salt: bytes32 }
 tagsHash = keccak256(abi.encode(string region, string age))   // "" for not said
+salt     = 32 random bytes your client keeps, e.g. 0x440e59e791dc748858a4504e36354b1efff7e76e7be16ade5b19297bb4d7303f   // with them GET /api/receipt finds your answer
 commitment = keccak256(abi.encode(uint256 marketId, address staker, uint8 side, bytes32 salt))   // side 1 YES, 2 NO`}</pre>
         </Section>
 
