@@ -36,7 +36,7 @@ export function Cash() {
         ))}
       </ol>
       <p className="mt-6 max-w-3xl text-sm leading-relaxed text-paper/70">
-        It runs on Railgun, a privacy protocol on Ethereum since 2022 that we do not run, which screens deposits against lists of stolen and
+        It runs on Railgun, a privacy protocol on Ethereum that we do not run, which screens deposits against lists of stolen and
         sanctioned funds. SilverCash takes no fee; Railgun keeps 0.25% going in and 0.25% coming out. A swap shows its coins
         and amounts, not who made it.
       </p>
