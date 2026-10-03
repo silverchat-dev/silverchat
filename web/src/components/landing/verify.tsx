@@ -36,6 +36,12 @@ export function Verify() {
       </Link>,
     ],
     [
+      "Agents",
+      <Link key="agents" href="/docs#agents">
+        POST /api/agents
+      </Link>,
+    ],
+    [
       "Every answer",
       <Link key="api" href="/docs#api">
         GET /api/polls/{"{id}"}/leaves

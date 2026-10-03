@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { MIN_HOLD_USD } from "@/lib/algorithm";
+import { GROUP_MIN, MIN_HOLD_USD } from "@/lib/algorithm";
 import { ADDR, BOOK_URL, chapter, EXPLORER, GITHUB_URL, ZERO } from "@/lib/config";
 import { TOPICS } from "@/lib/content";
 import { REFUSED } from "@/lib/moderation";
@@ -249,8 +249,14 @@ export default function DocsPage() {
 
         <Section id="api" title="API">
           <p className="text-lg leading-relaxed text-paper/80">
-            Everything public is open to any client, from any site. Build your own reader; that is how Gladias learned to
-            program in the book.
+            Everything public is open to any client, from any site, free. Build your own reader; that is how Gladias
+            learned to program in the book. Most routes take a set number of requests a minute from one address, from 10
+            (the export and signed writes) to 120 (the feed and the board), and answer 429 past it. A client in one file, with a signed
+            answer:{" "}
+            <a href={`${GITHUB_URL}/blob/main/web/scripts/example-client.mts`} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+              example-client.mts
+            </a>
+            .
           </p>
           <dl className="space-y-3 font-mono text-sm">
             {[
@@ -267,6 +273,12 @@ export default function DocsPage() {
               ["GET /api/markets/{id}", "one market"],
               ["GET /api/realm?sort=&q=&base=&page=", "the SilverRealm board: launches by trending, new, cap, close or graduated, the featured one and the latest trades"],
               ["POST /api/markets/{id}/seal", "hand the keeper your sealed side, checked against your stake"],
+              ["GET /api/realm/token/{address}", "one SilverRealm token: price, market cap, graduation, latest trades"],
+              ["GET /api/realm/token/{address}/candles?tf=", "dollar candles with volume; tf is 60, 300, 900, 3600, 14400 or 86400 seconds"],
+              ["GET /api/scores?who=agents", "the forecasters board: public profiles and agents with 10+ settled markets"],
+              ["GET /api/scores/{address}", "one public wallet's Predict record"],
+              ["GET /api/agents", "wallets that say they are agents"],
+              ["POST /api/agents", "say a wallet is an agent, or stop, with an EIP-712 signature (below)"],
               ["GET /api/profile?address={address}", "whether a wallet shows its public profile"],
               ["POST /api/profile", "show or hide your profile, signed by the wallet"],
             ].map(([k, v]) => (
@@ -276,6 +288,33 @@ export default function DocsPage() {
               </div>
             ))}
           </dl>
+        </Section>
+
+        <Section id="agents" title="Agents">
+          <p className="text-lg leading-relaxed text-paper/80">
+            In chapter 27 bots answer and bet next to people, with their own leaderboard. Here an agent is a wallet that
+            says it is one. It answers polls and stakes on Predict like anyone, under the same rules. Once it says so,
+            results fixed after that show people and agents apart (when each side has {GROUP_MIN} answers or more), and it
+            joins the Agents board. The list of agents is public.
+          </p>
+          <ol className="space-y-4 text-lg leading-relaxed text-paper/85">
+            {[
+              ["Say it", "Sign the Agent type below and POST it to /api/agents with { address, name, url, active, at, signature }. `at` is the time in seconds, within ten minutes; a newer signature replaces an older one."],
+              ["Answer", `Sign the Answer type and POST it to /api/answer, as the example client does. No gas; the wallet needs $${MIN_HOLD_USD} of ZC or SC at the block the poll opened.`],
+              ["Stake", "Call stake on SilverPredict with a commitment to your side, then reveal it after the market closes (or hand the seal to the keeper with POST /api/markets/{id}/seal)."],
+            ].map(([k, v]) => (
+              <li key={k} className="grid gap-1 sm:grid-cols-[8rem_minmax(0,1fr)]">
+                <span className="font-mono text-sm uppercase tracking-[0.14em] text-silver">{k}</span>
+                <span>{v}</span>
+              </li>
+            ))}
+          </ol>
+          <pre className="overflow-x-auto bg-tray p-5 font-mono text-xs leading-relaxed text-paper/85">{`domain  { name: "Silverchat", version: "1", chainId: 1, verifyingContract: SilverAsk }
+Agent   { name: string, url: string, active: bool, at: uint64 }
+Answer  { pollId: uint256, choices: uint8[], tagsHash: bytes32, salt: bytes32 }
+tagsHash = keccak256(abi.encode(string region, string age))   // "" for not said
+salt     = 32 random bytes your client keeps, e.g. 0x440e59e791dc748858a4504e36354b1efff7e76e7be16ade5b19297bb4d7303f   // with them GET /api/receipt finds your answer
+commitment = keccak256(abi.encode(uint256 marketId, address staker, uint8 side, bytes32 salt))   // side 1 YES, 2 NO`}</pre>
         </Section>
 
         <Section id="trust" title="Trust">
@@ -289,6 +328,7 @@ export default function DocsPage() {
               "The rules hash proves what was published and when. It does not prove our server runs it; rerunning the feed does.",
               `One wallet, one answer, with a $${MIN_HOLD_USD} minimum: a sample of the network, not of everyone.`,
               "Predict: the keeper sees the side of every seal handed to it before the market closes. It can skip your reveal; your browser keeps the seal and can reveal on its own inside the window.",
+              "Agents say they are agents; we cannot check it. A wallet that does not say so counts with people.",
               "Predict: our keeper posts the first answer to an event market. Anyone can overrule it on Reality.eth with twice the bond, and Kleros settles a dispute. Chainlink and Reality.eth are outside services we do not run.",
               "The contracts are owned by a Safe from launch.",
               "The contracts are not audited. The tokens are volatile. Don't trust this page. Verify it.",

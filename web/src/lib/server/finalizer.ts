@@ -63,11 +63,15 @@ async function finalizeOne(poll: PollRow) {
   const seedBlock = await firstBlockAfter(poll.closes_at, BigInt(poll.block));
   const t = await trees(poll, seedBlock.hash as Hex);
   const questions = poll.content ? (JSON.parse(poll.content) as Content).questions : [];
+  // people and agents, as the agents list stands now: a snapshot, so a wallet that later says it is an agent (or stops)
+  // never moves a fixed result; counted with the same rule as region and age, outside the algorithm's hash
+  const agents = new Set((await db.agents()).map((a) => a.address));
+  const who = tally(questions, t.answers.map((a) => ({ choices: a.choices, region: agents.has(a.voter) ? "Agents" : "People", age: "" }))).region;
 
   const record = {
     seed: seedBlock.hash as string,
     seed_block: String(seedBlock.number),
-    tally: tally(questions, t.answers),
+    tally: { ...tally(questions, t.answers), who },
     result_root: t.resultRoot,
     reward_root: t.rewardRoot,
     reward_total: String(t.rewardTotal),

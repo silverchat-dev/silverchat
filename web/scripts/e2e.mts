@@ -22,9 +22,11 @@ import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 
 import { askAbi, predictAbi } from "../src/lib/abi";
+import { agentTypes } from "../src/lib/agent";
 import { resultLeaf, tagsHash, types } from "../src/lib/answer";
 import { commitmentOf, FEEDS, NO, questionString, YES, type Side } from "../src/lib/market";
 import { rewardsMessage, today } from "../src/lib/rewards";
+import { profileMessage } from "../src/lib/you";
 
 const RPC = "http://127.0.0.1:8545";
 const APP = process.env.APP_URL ?? "http://localhost:3100";
@@ -187,9 +189,39 @@ const quiet = await openOne(() =>
 await until("the indexer", async () => (await fetch(`${APP}/api/markets/${quiet}`)).ok);
 check((await market(ev)).title === `End to end event ${t0}?`, `markets ${ev}, ${price}, ${quiet} opened and indexed with the question from the chain`);
 
+// scores: show voters 1 and 3 in public and note their records before this run's markets settle
+type Rec = { resolved: number; correct: number };
+// no score yet (or still cached as none) reads as nothing settled
+const score = async (i: number): Promise<Rec> => {
+  const r = await fetch(`${APP}/api/scores/${VOTERS[i].address}`);
+  return r.ok ? r.json() : { resolved: 0, correct: 0 };
+};
+for (const i of [0, 2]) {
+  const at = Math.floor(Date.now() / 1000);
+  const signature = await wallet(VOTERS[i]).signMessage({ message: profileMessage(VOTERS[i].address, true, at) });
+  await fetch(`${APP}/api/profile`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: VOTERS[i].address, public: true, at, signature }) });
+}
+check((await fetch(`${APP}/api/scores/${ASKER.address}`)).status === 404, "a private profile shows no score");
+// voter 2 says it is an agent; the same signature again is refused, and its score is public from then on
+const declare = async (active: boolean, at = Math.floor(Date.now() / 1000)) => {
+  const message = { name: `e2e bot ${t0}`, url: "https://silverchat.cash/docs", active, at: BigInt(at) };
+  const signature = await wallet(VOTERS[1]).signTypedData({ domain, types: agentTypes, primaryType: "Agent", message });
+  const body = { address: VOTERS[1].address, name: message.name, url: message.url, active, at, signature };
+  return fetch(`${APP}/api/agents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+};
+const agentAt = Math.floor(Date.now() / 1000);
+check((await declare(true, agentAt)).ok, "voter 2 said it is an agent");
+check((await declare(true, agentAt)).status === 409, "the same agent signature again is refused");
+const listed = (await (await fetch(`${APP}/api/agents`)).json()).agents as { address: string }[];
+check(listed.some((a) => a.address === VOTERS[1].address.toLowerCase()), "the agents list shows it");
+const rec0 = await score(0);
+const rec2 = await score(2);
+
 // voter 1 reveals in the browser, voter 2 hands the seal to the keeper, voter 3 never reveals and loses
 const sides: Side[] = [YES, NO, YES];
-const salts = VOTERS.map(() => toHex(crypto.getRandomValues(new Uint8Array(32))));
+// one salt for the three: a commitment binds the staker and the side anyway, and a run that stops after staking can be revealed by hand
+const salt: Hex = "0x155c53ed60511b9feca9880367a6d663bd3185279e8b4f015415d0deb21dd489";
+const salts = VOTERS.map(() => salt);
 const STAKE = 1000n * 10n ** 18n;
 for (const [i, v] of VOTERS.entries()) {
   await tx(await wallet(v).writeContract({ address: ZC, abi: erc20Abi, functionName: "approve", args: [PREDICT, STAKE * 3n] }));
@@ -222,6 +254,14 @@ await tx(await wallet(KEEPER).writeContract({ address: REALITY, abi: realityAbi,
 await warpTo(Math.max(resolvesAt, closesAt + 72 * 3600) + 2 * 86_400 + 1);
 const settled = await until("the keeper's settle", async () => ((await market(ev)).status === "yes" ? market(ev) : null), 240);
 check(settled.refund === false, "settled YES; voter 3's unrevealed YES is lost to the pool");
+// the price market (ETH above $0.000…1, YES) may have settled by now too; both went YES, voter 1 revealed YES on both
+const n = (await market(price)).status === "yes" ? 2 : 1;
+// the board is cached for a minute
+await until("the scores", async () => (await score(0)).resolved - rec0.resolved >= n && (await score(2)).resolved - rec2.resolved >= n, 120);
+const [now0, now2] = [await score(0), await score(2)];
+check(now0.resolved - rec0.resolved === n && now0.correct - rec0.correct === n, `score: voter 1 called ${n} settled market(s) right`);
+check(now2.resolved - rec2.resolved === n && now2.correct === rec2.correct, "score: voter 3's sealed YES counts as wrong, though YES won");
+check((await fetch(`${APP}/api/scores/${VOTERS[1].address}`)).ok, "an agent's score is public without a public profile");
 const zcBefore = await pub.readContract({ address: ZC, abi: erc20Abi, functionName: "balanceOf", args: [VOTERS[0].address] });
 await tx(await wallet(VOTERS[0]).writeContract({ address: PREDICT, abi: predictAbi, functionName: "claim", args: [ev] }));
 const won = (await pub.readContract({ address: ZC, abi: erc20Abi, functionName: "balanceOf", args: [VOTERS[0].address] })) - zcBefore;

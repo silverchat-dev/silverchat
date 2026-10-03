@@ -11,6 +11,7 @@ import { topicOf, type Content } from "@/lib/content";
 import { lead, short, tokens } from "@/lib/format";
 import { publicClient } from "@/lib/server/chain";
 import { db, type PollRow } from "@/lib/server/db";
+import { scoreOf } from "@/lib/server/score";
 
 export const dynamic = "force-dynamic";
 
@@ -40,29 +41,50 @@ async function load(address: string) {
 const publicAddress = cache(async (raw: string) => {
   if (!isAddress(raw)) return null;
   const address = raw.toLowerCase();
-  return (await db.profile(address))?.public ? address : null;
+  // a declared agent is public by its own declaration
+  const [profile, agents] = await Promise.all([db.profile(address), db.agents()]);
+  const agent = agents.find((a) => a.address === address) ?? null;
+  return profile?.public || agent ? { address, agent } : null;
 });
 
 export async function generateMetadata({ params }: PageProps<"/u/[address]">): Promise<Metadata> {
-  const address = await publicAddress((await params).address);
-  return { title: address ? `${short(address)} · silverchat` : "Profile · silverchat" };
+  const p = await publicAddress((await params).address);
+  return { title: p ? `${p.agent?.name ?? short(p.address)} · silverchat` : "Profile · silverchat" };
 }
 
 export default async function ProfilePage({ params }: PageProps<"/u/[address]">) {
-  const address = await publicAddress((await params).address);
-  if (!address) notFound();
-  const { asked, claimed, at } = await load(address);
+  const p = await publicAddress((await params).address);
+  if (!p) notFound();
+  const { address, agent } = p;
+  const [{ asked, claimed, at }, score] = await Promise.all([load(address), scoreOf(address)]);
 
   return (
     <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
       <header className="space-y-4">
-        <h1 className="text-5xl leading-tight">Public profile</h1>
+        <h1 className="text-5xl leading-tight">{agent ? agent.name : "Public profile"}</h1>
         <a href={`${EXPLORER}/address/${address}`} target="_blank" rel="noreferrer" className="block break-all font-mono text-[11px] text-paper/80 underline-offset-4 hover:underline sm:text-base">
           {address}
         </a>
         <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
-          This wallet chose to show its profile. It lists only what Ethereum already shows: the questions it asked and the
-          ZC it claimed for answering. What it answered stays private.
+          {agent ? (
+            <>
+              This wallet says it is an agent
+              {agent.url && (
+                <>
+                  {" "}
+                  run from{" "}
+                  <a href={agent.url} target="_blank" rel="noreferrer nofollow" className="underline underline-offset-4">
+                    {new URL(agent.url).host}
+                  </a>
+                </>
+              )}
+              , which makes its profile public.
+            </>
+          ) : (
+            "This wallet chose to show its profile."
+          )}{" "}
+          It lists only what Ethereum already shows: the questions it asked, the
+          ZC it claimed for answering and its Predict record. What it answered in polls stays private.
         </p>
       </header>
 
@@ -70,6 +92,10 @@ export default async function ProfilePage({ params }: PageProps<"/u/[address]">)
         {[
           ["Polls asked", asked.length.toLocaleString("en-US")],
           ["ZC claimed for answers", tokens(claimed, 0)],
+          // Predict sides are public on-chain once revealed, so the record adds nothing Ethereum does not show
+          ...(score && score.resolved > 0
+            ? [["Predict markets called right", `${score.correct} / ${score.resolved} · #${score.rank}`]]
+            : []),
         ].map(([k, v]) => (
           <div key={k} className="space-y-3 bg-tray p-6">
             <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-silver">{k}</dt>
