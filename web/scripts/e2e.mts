@@ -219,7 +219,9 @@ const rec2 = await score(2);
 
 // voter 1 reveals in the browser, voter 2 hands the seal to the keeper, voter 3 never reveals and loses
 const sides: Side[] = [YES, NO, YES];
-const salts = VOTERS.map(() => toHex(crypto.getRandomValues(new Uint8Array(32))));
+// one salt for the three: a commitment binds the staker and the side anyway, and a run that stops after staking can be revealed by hand
+const salt: Hex = "0x155c53ed60511b9feca9880367a6d663bd3185279e8b4f015415d0deb21dd489";
+const salts = VOTERS.map(() => salt);
 const STAKE = 1000n * 10n ** 18n;
 for (const [i, v] of VOTERS.entries()) {
   await tx(await wallet(v).writeContract({ address: ZC, abi: erc20Abi, functionName: "approve", args: [PREDICT, STAKE * 3n] }));
