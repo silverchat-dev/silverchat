@@ -206,14 +206,14 @@ check((await fetch(`${APP}/api/scores/${ASKER.address}`)).status === 404, "a pri
 const declare = async (active: boolean, at = Math.floor(Date.now() / 1000)) => {
   const message = { name: `e2e bot ${t0}`, url: "https://silverchat.cash/docs", active, at: BigInt(at) };
   const signature = await wallet(VOTERS[1]).signTypedData({ domain, types: agentTypes, primaryType: "Agent", message });
-  return fetch(`${APP}/api/agents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: VOTERS[1].address, ...message, at, signature }) });
+  const body = { address: VOTERS[1].address, name: message.name, url: message.url, active, at, signature };
+  return fetch(`${APP}/api/agents`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 };
 const agentAt = Math.floor(Date.now() / 1000);
 check((await declare(true, agentAt)).ok, "voter 2 said it is an agent");
 check((await declare(true, agentAt)).status === 409, "the same agent signature again is refused");
 const listed = (await (await fetch(`${APP}/api/agents`)).json()).agents as { address: string }[];
 check(listed.some((a) => a.address === VOTERS[1].address.toLowerCase()), "the agents list shows it");
-check((await fetch(`${APP}/api/scores/${VOTERS[1].address}`)).ok, "an agent's score is public");
 const rec0 = await score(0);
 const rec2 = await score(2);
 
@@ -259,6 +259,7 @@ await until("the scores", async () => (await score(0)).resolved - rec0.resolved 
 const [now0, now2] = [await score(0), await score(2)];
 check(now0.resolved - rec0.resolved === n && now0.correct - rec0.correct === n, `score: voter 1 called ${n} settled market(s) right`);
 check(now2.resolved - rec2.resolved === n && now2.correct === rec2.correct, "score: voter 3's sealed YES counts as wrong, though YES won");
+check((await fetch(`${APP}/api/scores/${VOTERS[1].address}`)).ok, "an agent's score is public without a public profile");
 const zcBefore = await pub.readContract({ address: ZC, abi: erc20Abi, functionName: "balanceOf", args: [VOTERS[0].address] });
 await tx(await wallet(VOTERS[0]).writeContract({ address: PREDICT, abi: predictAbi, functionName: "claim", args: [ev] }));
 const won = (await pub.readContract({ address: ZC, abi: erc20Abi, functionName: "balanceOf", args: [VOTERS[0].address] })) - zcBefore;

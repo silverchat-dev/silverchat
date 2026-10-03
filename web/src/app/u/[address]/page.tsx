@@ -43,28 +43,47 @@ const publicAddress = cache(async (raw: string) => {
   const address = raw.toLowerCase();
   // a declared agent is public by its own declaration
   const [profile, agents] = await Promise.all([db.profile(address), db.agents()]);
-  return profile?.public || agents.some((a) => a.address === address) ? address : null;
+  const agent = agents.find((a) => a.address === address) ?? null;
+  return profile?.public || agent ? { address, agent } : null;
 });
 
 export async function generateMetadata({ params }: PageProps<"/u/[address]">): Promise<Metadata> {
-  const address = await publicAddress((await params).address);
-  return { title: address ? `${short(address)} · silverchat` : "Profile · silverchat" };
+  const p = await publicAddress((await params).address);
+  return { title: p ? `${p.agent?.name ?? short(p.address)} · silverchat` : "Profile · silverchat" };
 }
 
 export default async function ProfilePage({ params }: PageProps<"/u/[address]">) {
-  const address = await publicAddress((await params).address);
-  if (!address) notFound();
+  const p = await publicAddress((await params).address);
+  if (!p) notFound();
+  const { address, agent } = p;
   const [{ asked, claimed, at }, score] = await Promise.all([load(address), scoreOf(address)]);
 
   return (
     <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
       <header className="space-y-4">
-        <h1 className="text-5xl leading-tight">Public profile</h1>
+        <h1 className="text-5xl leading-tight">{agent ? agent.name : "Public profile"}</h1>
         <a href={`${EXPLORER}/address/${address}`} target="_blank" rel="noreferrer" className="block break-all font-mono text-[11px] text-paper/80 underline-offset-4 hover:underline sm:text-base">
           {address}
         </a>
         <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
-          This wallet chose to show its profile. It lists only what Ethereum already shows: the questions it asked, the
+          {agent ? (
+            <>
+              This wallet says it is an agent
+              {agent.url && (
+                <>
+                  {" "}
+                  run from{" "}
+                  <a href={agent.url} target="_blank" rel="noreferrer nofollow" className="underline underline-offset-4">
+                    {new URL(agent.url).host}
+                  </a>
+                </>
+              )}
+              , which makes its profile public.
+            </>
+          ) : (
+            "This wallet chose to show its profile."
+          )}{" "}
+          It lists only what Ethereum already shows: the questions it asked, the
           ZC it claimed for answering and its Predict record. What it answered in polls stays private.
         </p>
       </header>

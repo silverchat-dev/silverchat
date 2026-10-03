@@ -561,7 +561,7 @@ export const db = {
   /** Wallets that say they are agents now. */
   async agents(): Promise<AgentRow[]> {
     await init();
-    if (!pool) return [...mem.agents.values()].filter((a) => a.active);
+    if (!pool) return [...mem.agents.values()].filter((a) => a.active).sort((a, b) => b.signed_at - a.signed_at);
     return (await pool.query(`select address, name, url, active, signed_at::float8 as signed_at from agents where active order by signed_at desc`)).rows;
   },
 

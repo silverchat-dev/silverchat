@@ -29,7 +29,10 @@ export async function POST(req: Request) {
   if (Number(req.headers.get("content-length") ?? Infinity) > 2048) return fail("too large", 413);
   const b = await req.json().catch(() => null);
   if (!b || typeof b.address !== "string" || !isAddress(b.address)) return fail("bad address");
-  if (typeof b.name !== "string" || !/^[\p{L}\p{N} ._-]{1,40}$/u.test(b.name)) return fail("a name of 1 to 40 letters, numbers, spaces, dots, dashes");
+  // the name is signed as sent, so it must already be tidy: no spaces at either end, at least one letter or number
+  if (typeof b.name !== "string" || !/^[\p{L}\p{N}](?:[\p{L}\p{N} ._-]{0,38}[\p{L}\p{N}._-])?$/u.test(b.name)) {
+    return fail("a name of 1 to 40 letters, numbers, spaces, dots and dashes, starting with a letter or number");
+  }
   if (typeof b.url !== "string" || b.url.length > 200 || (b.url && !safeUrl(b.url))) return fail("the link must be https, at most 200 characters, or empty");
   if (typeof b.active !== "boolean") return fail("active must be true or false");
   if (!Number.isInteger(b.at)) return fail("bad time");
