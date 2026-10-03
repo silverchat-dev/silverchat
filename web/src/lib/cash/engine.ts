@@ -3,8 +3,6 @@
  * never reach our server. The engine keeps its notes in IndexedDB, the proving files in the Cache API, and proves in a
  * Web Worker so the page keeps moving. One engine per page, started on first use.
  */
-import type { Address } from "viem";
-
 type W = typeof import("@railgun-community/wallet");
 type S = typeof import("@railgun-community/shared-models");
 export type Railgun = { W: W; S: S; chain: { type: number; id: number } };
@@ -101,6 +99,13 @@ async function keyFrom(password: string, salt: string) {
 
 export type Opened = { id: string; address: string; key: string };
 
+/** Remove the saved wallet without its password (the "use other words" path): its notes leave IndexedDB too. */
+export async function forgetSaved() {
+  const s = saved();
+  if (s) await (await engine()).W.deleteWalletByID(s.id).catch(() => {});
+  localStorage.removeItem(SAVED);
+}
+
 /**
  * Make a new private wallet, or restore one from its words. Derivation index 0 and no extra passphrase, as Railway and
  * other Railgun wallets do, so the words alone recover it anywhere. `block` is where scanning starts.
@@ -139,5 +144,3 @@ export async function forget(o: Opened) {
   await W.deleteWalletByID(o.id);
   localStorage.removeItem(SAVED);
 }
-
-export type Balances = Record<string, Partial<Record<Address, bigint>>>;

@@ -56,10 +56,12 @@ export function swapCalls(from: Coin, to: Coin, amount: bigint, minOut: bigint):
         call(RELAY_ADAPT, encodeFunctionData({ abi: relayAbi, functionName: "wrapBase", args: [0n] })),
       ];
     case "eth>sc":
-      // WETH out to ETH, then ETH to ZC to SC in one router call
+      // WETH out to ETH, then ETH to ZC to SC in one router call; if the buy fails, wrap the ETH back so it is shielded
+      // again as WETH rather than left in RelayAdapt
       return [
         call(RELAY_ADAPT, encodeFunctionData({ abi: relayAbi, functionName: "unwrapBase", args: [amount] })),
         r("buyWithEth", [scZc(), ADDR.zc, 0n, minOut, "0x"], amount),
+        call(RELAY_ADAPT, encodeFunctionData({ abi: relayAbi, functionName: "wrapBase", args: [0n] })),
       ];
     default:
       throw new Error(`no route ${route}`);

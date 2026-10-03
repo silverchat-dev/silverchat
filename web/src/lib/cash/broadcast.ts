@@ -20,11 +20,14 @@ const FEE_SIGNER = (
 type Client = typeof import("@railgun-community/waku-broadcaster-client-web");
 let started: Promise<Client> | null = null;
 
-/** Join Waku once per page; `status` reports Searching, Connected, AllUnavailable and so on. */
+const listeners = new Set<(s: string) => void>();
+
+/** Join Waku once per page; every caller's `status` hears Searching, Connected, AllUnavailable and so on. */
 export function broadcasters(status: (s: string) => void) {
+  listeners.add(status);
   started ??= (async () => {
     const [{ chain }, client] = await Promise.all([engine(), import("@railgun-community/waku-broadcaster-client-web")]);
-    await client.WakuBroadcasterClient.start(chain, { trustedFeeSigner: FEE_SIGNER }, (_c, s) => status(s));
+    await client.WakuBroadcasterClient.start(chain, { trustedFeeSigner: FEE_SIGNER }, (_c, s) => listeners.forEach((l) => l(s)));
     return client;
   })().catch((e) => {
     started = null;

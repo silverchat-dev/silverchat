@@ -8,7 +8,7 @@ import { formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem
 import { useAccount, useSendTransaction, useSignMessage, useSwitchChain } from "wagmi";
 
 import { short } from "@/lib/format";
-import type { Buckets, Sender, Via } from "@/lib/cash/actions";
+import type { Buckets, Prepared, Sender, Via } from "@/lib/cash/actions";
 import type { Opened } from "@/lib/cash/engine";
 import type { Coin } from "@/lib/cash/routes";
 
@@ -24,6 +24,8 @@ const button = "bg-paper px-5 py-2.5 font-mono text-sm text-developer hover:brig
 const quiet = "font-mono text-xs text-silver underline-offset-4 hover:text-paper hover:underline";
 
 type Stage = "loading" | "busy-tab" | "none" | "locked" | "open" | "failed";
+// whether this tab holds SilverCash's lock; module-wide, so it outlives one visit to the page
+let lockHeld = false;
 
 /** SilverCash: a private Railgun wallet in this browser. Deposit, swap privately, withdraw to a fresh wallet. */
 export function Cash() {
@@ -31,30 +33,40 @@ export function Cash() {
   const [opened, setOpened] = useState<Opened | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // one tab at a time: two engines on one IndexedDB would trip over each other
+  // one tab at a time: two engines on one IndexedDB would trip over each other. The engine lives as long as the tab,
+  // so the lock does too, and coming back to this page in the same tab finds it already held here
   useEffect(() => {
-    let release: (() => void) | null = null;
     let cancelled = false;
-    const held = new Promise<void>((r) => (release = r));
-    // a page that just closed (or a reload) lets go of the lock a moment later, so ask twice before calling it busy
-    const ask = (tries: number): Promise<unknown> =>
-      navigator.locks.request("silvercash", { ifAvailable: true }, async (lock) => {
-        if (cancelled) return;
-        if (!lock) return tries > 0 ? void setTimeout(() => void ask(tries - 1), 600) : setStage("busy-tab");
-        const { engine, saved } = await import("@/lib/cash/engine");
-        try {
-          await engine();
-          setStage(saved() ? "locked" : "none");
-        } catch (e) {
+    const open = async () => {
+      const { engine, saved } = await import("@/lib/cash/engine");
+      try {
+        await engine();
+        if (!cancelled) setStage(saved() ? "locked" : "none");
+      } catch (e) {
+        if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));
           setStage("failed");
         }
-        await held;
+      }
+    };
+    // a page that just closed (or a reload) lets go of the lock a moment later, so ask a few times; a retry may find
+    // that this tab got it meanwhile (a page mounted twice in a row)
+    const ask = (tries: number): Promise<unknown> => {
+      if (lockHeld) return open();
+      return navigator.locks.request("silvercash", { ifAvailable: true }, async (lock) => {
+        if (!lock) {
+          if (tries > 0) setTimeout(() => void ask(tries - 1).catch(() => setStage("failed")), 600);
+          else if (!cancelled) setStage("busy-tab");
+          return;
+        }
+        lockHeld = true;
+        await open();
+        await new Promise<never>(() => {});
       });
+    };
     ask(2).catch(() => setStage("failed"));
     return () => {
       cancelled = true;
-      release?.();
     };
   }, []);
 
@@ -121,12 +133,12 @@ function NewWallet({ onOpen }: { onOpen: (o: Opened) => void }) {
       </p>
       {mode === "restore" && (
         <>
-          <textarea value={words} onChange={(e) => setWords(e.target.value)} rows={3} placeholder="the words, in order" className={input} autoComplete="off" spellCheck={false} />
-          <input value={block} onChange={(e) => setBlock(e.target.value.replace(/\D/g, ""))} placeholder="the block it was made at (optional, faster)" className={input} inputMode="numeric" />
+          <textarea aria-label="Your words" value={words} onChange={(e) => setWords(e.target.value)} rows={3} placeholder="the words, in order" className={input} autoComplete="off" spellCheck={false} />
+          <input aria-label="Block it was made at" value={block} onChange={(e) => setBlock(e.target.value.replace(/\D/g, ""))} placeholder="the block it was made at (optional, faster)" className={input} inputMode="numeric" />
         </>
       )}
-      <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="password for this browser" className={input} autoComplete="new-password" />
-      <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="the same password again" className={input} autoComplete="new-password" />
+      <input aria-label="Password for this browser" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="password for this browser" className={input} autoComplete="new-password" />
+      <input aria-label="The same password again" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="the same password again" className={input} autoComplete="new-password" />
       <button type="button" onClick={make} disabled={busy} className={button}>
         {busy ? "Working…" : mode === "new" ? "Make my private wallet" : "Restore"}
       </button>
@@ -210,12 +222,20 @@ function Unlock({ onOpen, onForget }: { onOpen: (o: Opened) => void; onForget: (
       <p className="text-paper/80">Your private wallet is in this browser, locked.</p>
       {/* for password managers: they file a password under a username */}
       <input type="text" name="username" autoComplete="username" value="silvercash" readOnly hidden />
-      <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="password" className={input} autoComplete="current-password" autoFocus />
+      <input aria-label="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="password" className={input} autoComplete="current-password" autoFocus />
       <div className="flex items-center gap-5">
         <button type="submit" disabled={busy || !pw} className={button}>
           {busy ? "Opening…" : "Unlock"}
         </button>
-        <button type="button" onClick={() => (localStorage.removeItem("silvercash:wallet"), onForget())} className={quiet}>
+        <button
+          type="button"
+          onClick={async () => {
+            if (!confirm("Remove the wallet in this browser? Without its 12 words, what it holds is gone.")) return;
+            await (await import("@/lib/cash/engine")).forgetSaved();
+            onForget();
+          }}
+          className={quiet}
+        >
           Use other words instead
         </button>
       </div>
@@ -253,6 +273,8 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
   const [scan, setScan] = useState(0);
   const [synced, setSynced] = useState(false);
   const [minutes, setMinutes] = useState(0);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [peers, setPeers] = useState("starting");
   const [tab, setTab] = useState<"deposit" | "swap" | "withdraw">("deposit");
   const [words, setWords] = useState<string | null>(null);
 
@@ -262,8 +284,12 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
     import("@/lib/cash/actions")
       .then(({ watch }) => watch(o, setB, setScan))
       .then(() => setSynced(true))
-      .catch(() => {})
+      .catch((e) => setFailed(e instanceof Error ? e.message.split("\n")[0] : String(e)))
       .finally(() => clearInterval(tick));
+    // join the broadcasters' network now: their fee offers take a while to arrive
+    import("@/lib/cash/broadcast")
+      .then(({ broadcasters }) => broadcasters(setPeers))
+      .catch(() => setPeers("unavailable"));
     return () => clearInterval(tick);
   }, [o]);
 
@@ -273,7 +299,9 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
         <div className="space-y-1">
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Your private address</p>
           <p className="max-w-xl break-all font-mono text-sm">{o.address}</p>
-          {!synced && (
+          <p className="font-mono text-xs text-silver">Broadcasters: {peers.toLowerCase()}</p>
+          {failed && <p className="max-w-xl font-mono text-xs text-paper">Reading Railgun&apos;s records stopped: {failed}. Reload the page to try again.</p>}
+          {!synced && !failed && (
             <p className="max-w-xl font-mono text-xs leading-relaxed text-silver">
               Reading Railgun&apos;s records… {Math.round(scan * 100)}%{minutes > 0 && ` · ${minutes} min`}. The first time in a browser
               this takes about 10 minutes; keep the tab open. After that it takes seconds. You can deposit now.
@@ -399,10 +427,10 @@ function Deposit({ o }: { o: Opened }) {
       ) : (
         <>
           <CoinPicker value={coin} onChange={setCoin} label="Coin" />
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(coin)}`} inputMode="decimal" className={input} />
+          <input aria-label="Amount to deposit" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(coin)}`} inputMode="decimal" className={input} />
           <p className="font-mono text-xs text-silver">
-            Tip: also deposit about 0.01 ETH. Private swaps and withdrawals pay their gas from it, so you never have to send them
-            from a public wallet.
+            Tip: also deposit about 0.03 ETH. Broadcasters take the gas of private swaps and withdrawals from it, so you never
+            have to send them from a public wallet.
           </p>
           <button type="button" onClick={go} disabled={busy || wei <= 0n} className={button}>
             {busy ? "Depositing…" : `Deposit ${name(coin)}`}
@@ -414,35 +442,99 @@ function Deposit({ o }: { o: Opened }) {
   );
 }
 
-/** How a private transaction goes out: a broadcaster (default, private) or your own wallet (linked). */
-function useVia(relayAdapt: boolean) {
+/**
+ * How a private transaction goes out, and the two steps every one takes: review (estimate the gas and, for a
+ * broadcaster, its fee, and check the fee fits the private WETH) then confirm (prove in this browser and send).
+ */
+function usePrivateSend(relayAdapt: boolean, spendable: Partial<Record<Coin, bigint>>, inputs: string, done: (hash: string) => string) {
   const sender = useSender();
   const [mode, setMode] = useState<"broadcaster" | "self">("broadcaster");
-  const pick = async (): Promise<Via> => {
-    if (mode === "self") {
-      if (!sender) throw new Error("connect a wallet to send it yourself");
-      return { kind: "self", sender };
+  // a review holds for the inputs it was made for; change any and it is gone
+  const [reviewed, setReviewed] = useState<{ p: Prepared; inputs: string } | null>(null);
+  const ready = reviewed?.inputs === inputs ? reviewed.p : null;
+  const setReady = (p: Prepared | null) => setReviewed(p ? { p, inputs } : null);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  /** `ethUsed` is how much private WETH the transaction itself spends, to add to the broadcaster's fee. */
+  async function review(make: (via: Via) => Promise<Prepared>, ethUsed: bigint) {
+    setBusy(true);
+    setReady(null);
+    setNote("Estimating…");
+    try {
+      let via: Via;
+      if (mode === "self") {
+        if (!sender) throw new Error("connect a wallet to send it yourself");
+        via = { kind: "self", sender };
+      } else {
+        const { viaBroadcaster } = await import("@/lib/cash/broadcast");
+        const found = await viaBroadcaster(relayAdapt);
+        if (!found) throw new Error("no broadcaster online takes WETH right now; try again in a minute, or send it yourself");
+        via = found;
+      }
+      const p = await make(via);
+      if (p.fee !== null && p.fee + ethUsed > (spendable.eth ?? 0n)) {
+        throw new Error(`the broadcaster takes ${fmt(p.fee)} WETH and you have ${fmt(spendable.eth)} spendable${ethUsed ? " beside this amount" : ""}; deposit more ETH or lower the amount`);
+      }
+      setReady(p);
+      setNote(null);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message.split("\n")[0] : String(e));
+    } finally {
+      setBusy(false);
     }
-    const { viaBroadcaster } = await import("@/lib/cash/broadcast");
-    const via = await viaBroadcaster(relayAdapt);
-    if (!via) throw new Error("no broadcaster online takes WETH right now; try again in a minute");
-    return via;
-  };
-  const picker = (
-    <fieldset className="space-y-2 font-mono text-xs">
-      <legend className="mb-1 uppercase tracking-[0.14em] text-silver">Send it</legend>
-      <label className="flex gap-2">
-        <input type="radio" checked={mode === "broadcaster"} onChange={() => setMode("broadcaster")} />
-        <span>By a Railgun broadcaster, paid from your private WETH. Private.</span>
-      </label>
-      <label className="flex gap-2">
-        <input type="radio" checked={mode === "self"} onChange={() => setMode("self")} />
-        <span>From my connected wallet. It pays the gas, and the transaction is linked to it.</span>
-      </label>
-      {mode === "self" && !sender && <ConnectButton label="Connect a wallet" />}
-    </fieldset>
+  }
+
+  async function confirm() {
+    if (!ready) return;
+    setBusy(true);
+    try {
+      const hash = await ready.go((p) => setNote(`Proving in this browser… ${Math.round(p)}%`));
+      setNote(done(hash));
+      setReady(null);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message.split("\n")[0] : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const panel = (
+    <>
+      <fieldset className="space-y-2 font-mono text-xs">
+        <legend className="mb-1 uppercase tracking-[0.14em] text-silver">Send it</legend>
+        <label className="flex gap-2">
+          <input type="radio" checked={mode === "broadcaster"} onChange={() => (setMode("broadcaster"), setReady(null))} />
+          <span>By a Railgun broadcaster, paid from your private WETH. Private.</span>
+        </label>
+        <label className="flex gap-2">
+          <input type="radio" checked={mode === "self"} onChange={() => (setMode("self"), setReady(null))} />
+          <span>From my connected wallet. It pays the gas, and the transaction is linked to it.</span>
+        </label>
+        {mode === "self" && !sender && <ConnectButton label="Connect a wallet" />}
+      </fieldset>
+      {ready && (
+        <div className="space-y-3 border border-paper/25 p-4 font-mono text-xs">
+          <p>
+            {ready.fee === null
+              ? "Your connected wallet pays the gas for this one."
+              : `The broadcaster takes ${fmt(ready.fee)} WETH from your private balance for the gas.`}{" "}
+            Proving takes up to a minute; keep the tab open.
+          </p>
+          <div className="flex gap-4">
+            <button type="button" className={button} disabled={busy} onClick={confirm}>
+              Confirm
+            </button>
+            <button type="button" className={quiet} onClick={() => setReady(null)} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {note && <p className="font-mono text-xs text-paper">{note}</p>}
+    </>
   );
-  return { pick, picker };
+  return { review, panel, ready, busy };
 }
 
 function Swap({ o, spendable }: { o: Opened; spendable: Partial<Record<Coin, bigint>> }) {
@@ -450,10 +542,8 @@ function Swap({ o, spendable }: { o: Opened; spendable: Partial<Record<Coin, big
   const [to, setTo] = useState<Coin>("eth");
   const [amount, setAmount] = useState("");
   const [slip, setSlip] = useState(2);
-  const [note, setNote] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const { pick, picker } = useVia(true);
   const wei = amountOf(amount);
+  const send = usePrivateSend(true, spendable, `${from}>${to}:${wei}:${slip}`, (h) => `Sent: ${short(h)}. Your ${name(to)} shows as waiting, then spendable about an hour after it is mined.`);
 
   // what comes back: Railgun's withdrawal fee off the amount in, the pools' price, Railgun's deposit fee off the result
   const quoted = useQuery({
@@ -469,50 +559,42 @@ function Swap({ o, spendable }: { o: Opened; spendable: Partial<Record<Coin, big
   });
   const out = quoted.data ?? null;
 
-  async function go() {
+  async function review() {
     if (out === null || wei <= 0n) return;
-    setBusy(true);
-    setNote("Finding a way to send it…");
-    try {
-      const via = await pick();
-      const { swap, railgunFees } = await import("@/lib/cash/actions");
-      // the minimum is checked by the router before Railgun's deposit fee, so it is set on the amount before that fee
-      const before = (out * 10_000n) / (10_000n - (await railgunFees()).shield);
-      const min = (before * BigInt(100 - slip)) / 100n;
-      const hash = await swap(o, via, from, to, wei, min, (p) => setNote(`Proving in this browser… ${Math.round(p)}%`));
-      setNote(`Sent: ${short(hash)}. Your ${name(to)} shows as waiting, then spendable about an hour after it is mined.`);
-    } catch (e) {
-      setNote(e instanceof Error ? e.message.split("\n")[0] : String(e));
-    } finally {
-      setBusy(false);
-    }
+    const { prepareSwap, railgunFees } = await import("@/lib/cash/actions");
+    // the minimum is checked by the router before Railgun's deposit fee, so it is set on the amount before that fee
+    const before = (out * 10_000n) / (10_000n - (await railgunFees()).shield);
+    const min = (before * BigInt(100 - slip)) / 100n;
+    await send.review((via) => prepareSwap(o, via, from, to, wei, min), from === "eth" ? wei : 0n);
   }
 
   return (
     <div className="max-w-xl space-y-4">
       <p className="text-paper/80">
         Inside Railgun, through the same $SC and $ZC pools as the rest of Silverchat. Railgun keeps 0.25% going out of your
-        balance and 0.25% coming back in. The swap&apos;s coins and amounts are public; who made it is not.
+        balance and 0.25% coming back in. The swap&apos;s coins and amounts are public; who made it is not. If the price
+        moves past your slippage, the coins come back to your balance instead.
       </p>
       <CoinPicker value={from} onChange={(c) => (setFrom(c), c === to && setTo(from))} label="From" />
-      <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(from)}, ${fmt(spendable[from])} spendable`} inputMode="decimal" className={input} />
+      <input aria-label="Amount to swap" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(from)}, ${fmt(spendable[from])} spendable`} inputMode="decimal" className={input} />
       <CoinPicker value={to} onChange={(c) => (setTo(c), c === from && setFrom(to))} label="To" />
       <p className="font-mono text-sm">
         {out === null ? <span className="text-silver">·</span> : `about ${fmt(out)} ${name(to)} back, after Railgun's fees`}
       </p>
       <div role="group" aria-label="Slippage" className="flex items-center gap-1 font-mono text-xs">
         <span className="mr-2 text-silver">Slippage</span>
-        {[1, 2, 5].map((s) => (
-          <button key={s} type="button" aria-pressed={slip === s} onClick={() => setSlip(s)} className="border border-paper/20 px-2.5 py-1 aria-pressed:bg-paper aria-pressed:text-developer">
-            {s}%
+        {[1, 2, 5].map((x) => (
+          <button key={x} type="button" aria-pressed={slip === x} onClick={() => setSlip(x)} className="border border-paper/20 px-2.5 py-1 aria-pressed:bg-paper aria-pressed:text-developer">
+            {x}%
           </button>
         ))}
       </div>
-      {picker}
-      <button type="button" onClick={go} disabled={busy || out === null || wei <= 0n || wei > (spendable[from] ?? 0n)} className={button}>
-        {busy ? "Working…" : "Swap privately"}
-      </button>
-      {note && <p className="font-mono text-xs text-paper">{note}</p>}
+      {send.panel}
+      {!send.ready && (
+        <button type="button" onClick={review} disabled={send.busy || out === null || wei <= 0n || wei > (spendable[from] ?? 0n)} className={button}>
+          {send.busy ? "Working…" : "Review the swap"}
+        </button>
+      )}
     </div>
   );
 }
@@ -522,40 +604,29 @@ function Withdraw({ o, spendable }: { o: Opened; spendable: Partial<Record<Coin,
   const [coin, setCoin] = useState<Coin>("eth");
   const [amount, setAmount] = useState("");
   const [to, setTo] = useState("");
-  const [note, setNote] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const { pick, picker } = useVia(coin === "eth");
   const wei = amountOf(amount);
+  const send = usePrivateSend(coin === "eth", spendable, `${coin}:${wei}:${to}`, (h) => `Sent: ${short(h)}.`);
   const own = !!address && to.toLowerCase() === address.toLowerCase();
 
-  async function go() {
+  async function review() {
     if (!isAddress(to) || wei <= 0n) return;
-    setBusy(true);
-    setNote("Finding a way to send it…");
-    try {
-      const via = await pick();
-      const { withdraw } = await import("@/lib/cash/actions");
-      const hash = await withdraw(o, via, coin, wei, to as Address, (p) => setNote(`Proving in this browser… ${Math.round(p)}%`));
-      setNote(`Sent: ${short(hash)}.`);
-    } catch (e) {
-      setNote(e instanceof Error ? e.message.split("\n")[0] : String(e));
-    } finally {
-      setBusy(false);
-    }
+    const { prepareWithdraw } = await import("@/lib/cash/actions");
+    await send.review((via) => prepareWithdraw(o, via, coin, wei, to as Address), coin === "eth" ? wei : 0n);
   }
 
   return (
     <div className="max-w-xl space-y-4">
       <p className="text-paper/80">To any address, best a fresh one. Railgun keeps 0.25%. ETH comes out as ETH.</p>
       <CoinPicker value={coin} onChange={setCoin} label="Coin" />
-      <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(coin)}, ${fmt(spendable[coin])} spendable`} inputMode="decimal" className={input} />
-      <input value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder="0x… the address to send to" className={input} spellCheck={false} />
+      <input aria-label="Amount to withdraw" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(coin)}, ${fmt(spendable[coin])} spendable`} inputMode="decimal" className={input} />
+      <input aria-label="Address to send to" value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder="0x… the address to send to" className={input} spellCheck={false} />
       {own && <p className="font-mono text-xs text-paper">That is your connected wallet: withdrawing there links it to this balance.</p>}
-      {picker}
-      <button type="button" onClick={go} disabled={busy || !isAddress(to) || wei <= 0n || wei > (spendable[coin] ?? 0n)} className={button}>
-        {busy ? "Working…" : `Withdraw ${name(coin)}`}
-      </button>
-      {note && <p className="font-mono text-xs text-paper">{note}</p>}
+      {send.panel}
+      {!send.ready && (
+        <button type="button" onClick={review} disabled={send.busy || !isAddress(to) || wei <= 0n || wei > (spendable[coin] ?? 0n)} className={button}>
+          {send.busy ? "Working…" : `Review the withdrawal`}
+        </button>
+      )}
     </div>
   );
 }

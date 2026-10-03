@@ -8,8 +8,10 @@ import { mainnet } from "viem/chains";
 
 import { ADDR } from "@/lib/config";
 
+import type { TransactionGasDetails } from "@railgun-community/shared-models";
+
 import { CASH_RPCS, engine, type Opened } from "./engine";
-import { afterFee, RAILGUN, swapCalls, tokenOf, type Coin } from "./routes";
+import { afterFee, RAILGUN, scZc, swapCalls, tokenOf, zcWeth, type Coin } from "./routes";
 
 export const chainClient = createPublicClient({ chain: mainnet, transport: fallback(CASH_RPCS.map((u) => http(u))) });
 
@@ -36,13 +38,6 @@ export function railgunFees() {
   return fees;
 }
 
-async function gasDetails(gasEstimate = 0n) {
-  const { S } = await engine();
-  const f = await chainClient.estimateFeesPerGas();
-  const type2: typeof S.EVMGasType.Type2 = S.EVMGasType.Type2;
-  return { evmGasType: type2, gasEstimate, maxFeePerGas: f.maxFeePerGas, maxPriorityFeePerGas: f.maxPriorityFeePerGas };
-}
-
 // ---- deposit: always from your public wallet; the deposit itself is public, what you do after is not
 
 /**
@@ -52,6 +47,8 @@ async function gasDetails(gasEstimate = 0n) {
 export async function deposit(o: Opened, sender: Sender, coin: Coin, amount: bigint, step: (s: string) => void) {
   const { W, S } = await engine();
   const V2 = S.TXIDVersion.V2_PoseidonMerkle;
+  // Railgun's own list of sanctioned addresses: they cannot deposit here
+  W.assertNotBlockedAddress(sender.address);
   step("Sign the deposit key in your wallet…");
   const key = keccak256(await sender.sign(W.getShieldPrivateKeySignatureMessage()));
   if (coin === "eth") {
@@ -71,48 +68,68 @@ export async function deposit(o: Opened, sender: Sender, coin: Coin, amount: big
   return sender.send({ to: t.to as Address, data: t.data as Hex, value: 0n });
 }
 
-// ---- swap and withdraw: proved here, sent by a broadcaster or by you
+// ---- swap and withdraw: estimated first (so the fee is seen before anything is proved), then proved and sent
 
-type Progress = (pct: number) => void;
+export type Progress = (pct: number) => void;
+type Fee = { tokenAddress: string; amount: bigint; recipientAddress: string } | undefined;
+type Built = { transaction: { to: string; data: string; value?: bigint; gasLimit?: bigint }; nullifiers?: string[]; preTransactionPOIsPerTxidLeafPerList: unknown };
 
-async function sendProved(
+/** A private transaction ready to prove: what the broadcaster takes (null when you send it yourself), and the go. */
+export type Prepared = { fee: bigint | null; go: (progress: Progress) => Promise<string> };
+
+async function prepare(
   via: Via,
-  build: (broadcasterFee: { tokenAddress: string; amount: bigint; recipientAddress: string } | undefined, gas: Awaited<ReturnType<typeof gasDetails>>, minGasPrice: bigint | undefined) => Promise<{ transaction: { to: string; data: string; value?: bigint }; nullifiers?: string[]; preTransactionPOIsPerTxidLeafPerList: unknown }>,
-  estimate: (fee: { tokenAddress: string; feePerUnitGas: bigint } | undefined, gas: Awaited<ReturnType<typeof gasDetails>>) => Promise<bigint>,
+  build: (fee: Fee, gas: TransactionGasDetails, minGasPrice: bigint | undefined, progress: Progress) => Promise<Built>,
+  estimate: (feeToken: { tokenAddress: string; feePerUnitGas: bigint } | undefined, gas: TransactionGasDetails) => Promise<bigint>,
   relayAdapt: boolean,
-) {
-  const { W } = await engine();
-  const gas = await gasDetails();
+): Promise<Prepared> {
+  const { W, S } = await engine();
+  const f = await chainClient.estimateFeesPerGas();
   if (via.kind === "self") {
-    gas.gasEstimate = await estimate(undefined, gas);
-    const { transaction: t } = await build(undefined, gas, undefined);
-    return via.sender.send({ to: t.to as Address, data: t.data as Hex, value: t.value ?? 0n, gas: gas.gasEstimate });
+    // your own wallet sends it: a normal type 2 transaction, gas from that wallet
+    const draft: TransactionGasDetails = { evmGasType: S.EVMGasType.Type2, gasEstimate: 0n, maxFeePerGas: f.maxFeePerGas, maxPriorityFeePerGas: f.maxPriorityFeePerGas };
+    const gas = { ...draft, gasEstimate: await estimate(undefined, draft) };
+    return {
+      fee: null,
+      go: async (progress) => {
+        const { transaction: t } = await build(undefined, gas, undefined, progress);
+        // the SDK's gas limit has its 20% margin; the bare estimate could run out
+        return via.sender.send({ to: t.to as Address, data: t.data as Hex, value: t.value ?? 0n, gas: t.gasLimit ? BigInt(t.gasLimit) : undefined });
+      },
+    };
   }
+  // a broadcaster sends it: Railgun asks for a type 1 gas price, which becomes the batch's minimum gas price
   const feeToken = { tokenAddress: via.fee.token, feePerUnitGas: via.fee.perUnitGas };
-  gas.gasEstimate = await estimate(feeToken, gas);
+  const draft: TransactionGasDetails = { evmGasType: S.EVMGasType.Type1, gasEstimate: 0n, gasPrice: f.maxFeePerGas };
+  const gas = { ...draft, gasEstimate: await estimate(feeToken, draft) };
   const fee = W.calculateBroadcasterFeeERC20Amount(feeToken, gas);
   const recipient = { tokenAddress: fee.tokenAddress, amount: fee.amount, recipientAddress: via.fee.recipient };
-  const minGasPrice = gas.maxFeePerGas;
-  const r = await build(recipient, gas, minGasPrice);
-  return via.submit({ to: r.transaction.to, data: r.transaction.data, nullifiers: r.nullifiers ?? [], pois: r.preTransactionPOIsPerTxidLeafPerList, minGasPrice, relayAdapt });
+  return {
+    fee: fee.amount,
+    go: async (progress) => {
+      const r = await build(recipient, gas, f.maxFeePerGas, progress);
+      return via.submit({ to: r.transaction.to, data: r.transaction.data, nullifiers: r.nullifiers ?? [], pois: r.preTransactionPOIsPerTxidLeafPerList, minGasPrice: f.maxFeePerGas, relayAdapt });
+    },
+  };
 }
 
 /**
  * Swap `amount` of one private coin into another inside Railgun: RelayAdapt takes the coins out (less Railgun's
- * withdrawal fee), runs the Stockereum route, and Railgun shields what it bought back to you (less its deposit fee).
- * What you get back waits an hour before it can be spent, like any deposit.
+ * withdrawal fee), runs the Stockereum route, and Railgun shields back what RelayAdapt then holds of both coins (less
+ * its deposit fee). Shielding the coin that went in too matters: a broadcaster's swap carries on past a failed call,
+ * and anything left in RelayAdapt could be taken by the next caller. What comes back waits an hour, like a deposit.
  */
-export async function swap(o: Opened, via: Via, from: Coin, to: Coin, amount: bigint, minOut: bigint, progress: Progress) {
+export async function prepareSwap(o: Opened, via: Via, from: Coin, to: Coin, amount: bigint, minOut: bigint): Promise<Prepared> {
   const { W, S } = await engine();
   const V2 = S.TXIDVersion.V2_PoseidonMerkle;
   const net = S.NetworkName.Ethereum;
   const out = [{ tokenAddress: tokenOf(from), amount }];
   const calls = swapCalls(from, to, afterFee(amount, (await railgunFees()).unshield), minOut).map((c) => ({ to: c.to, data: c.data, value: c.value }));
-  const back = [{ tokenAddress: tokenOf(to), recipientAddress: o.address }];
+  const back = [to, from].map((c) => ({ tokenAddress: tokenOf(c), recipientAddress: o.address }));
   const self = via.kind === "self";
-  return sendProved(
+  return prepare(
     via,
-    async (fee, gas, minGasPrice) => {
+    async (fee, gas, minGasPrice, progress) => {
       await W.generateCrossContractCallsProof(V2, net, o.id, o.key, out, [], back, [], calls, fee, self, minGasPrice, undefined, (p) => progress(p));
       return W.populateProvedCrossContractCalls(V2, net, o.id, out, [], back, [], calls, fee, self, minGasPrice, gas);
     },
@@ -122,16 +139,16 @@ export async function swap(o: Opened, via: Via, from: Coin, to: Coin, amount: bi
 }
 
 /** Withdraw `amount` of a private coin to any address; ETH comes out as ETH. */
-export async function withdraw(o: Opened, via: Via, coin: Coin, amount: bigint, to: Address, progress: Progress) {
+export async function prepareWithdraw(o: Opened, via: Via, coin: Coin, amount: bigint, to: Address): Promise<Prepared> {
   const { W, S } = await engine();
   const V2 = S.TXIDVersion.V2_PoseidonMerkle;
   const net = S.NetworkName.Ethereum;
   const self = via.kind === "self";
   if (coin === "eth") {
     const weth = { tokenAddress: ADDR.weth, amount };
-    return sendProved(
+    return prepare(
       via,
-      async (fee, gas, minGasPrice) => {
+      async (fee, gas, minGasPrice, progress) => {
         await W.generateUnshieldBaseTokenProof(V2, net, to, o.id, o.key, weth, fee, self, minGasPrice, (p) => progress(p));
         return W.populateProvedUnshieldBaseToken(V2, net, to, o.id, weth, fee, self, minGasPrice, gas);
       },
@@ -140,9 +157,9 @@ export async function withdraw(o: Opened, via: Via, coin: Coin, amount: bigint, 
     );
   }
   const r = [{ tokenAddress: tokenOf(coin), amount, recipientAddress: to }];
-  return sendProved(
+  return prepare(
     via,
-    async (fee, gas, minGasPrice) => {
+    async (fee, gas, minGasPrice, progress) => {
       await W.generateUnshieldProof(V2, net, o.id, o.key, r, [], fee, self, minGasPrice, (p) => progress(p));
       return W.populateProvedUnshield(V2, net, o.id, r, [], fee, self, minGasPrice, gas);
     },
@@ -154,7 +171,6 @@ export async function withdraw(o: Opened, via: Via, coin: Coin, amount: bigint, 
 /** What a swap of `amount` (already less Railgun's withdrawal fee) gives back now, before Railgun's deposit fee. */
 export async function quote(from: Coin, to: Coin, amount: bigint): Promise<bigint> {
   const { routerAbi } = await import("@/lib/abi");
-  const { scZc, zcWeth } = await import("./routes");
   const read = async (functionName: string, args: unknown[]) =>
     (await chainClient.simulateContract({ address: ADDR.stockereumRouter, abi: routerAbi, functionName, args } as never)).result as unknown;
   switch (`${from}>${to}`) {
