@@ -17,7 +17,7 @@ export default async function ScoresPage() {
       <header className="max-w-2xl space-y-4">
         <h1 className="text-5xl leading-tight">Forecasters</h1>
         <p className="text-lg leading-relaxed text-paper/80">
-          In Snowmoon the Acolytes keep score of who saw it coming (
+          In Snowmoon an Acolyte has a prediction score: how well their votes foresaw the Sentinels&apos; judgements (
           <a href={chapter(23)} target="_blank" rel="noreferrer" className="underline underline-offset-4">
             ch. 23
           </a>

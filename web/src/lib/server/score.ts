@@ -2,8 +2,11 @@ import "server-only";
 
 import { db, type Score } from "./db";
 
-/** A score shows only after this many settled markets: fewer says more about luck than about the forecaster. */
-export const SCORE_MIN = 10;
+/**
+ * A score shows only after this many settled markets: fewer says more about luck than about the forecaster. A local fork
+ * may lower it (local-up sets 1) so the end to end check can see a score; production leaves it at 10.
+ */
+export const SCORE_MIN = Number(process.env.SCORE_MIN ?? 10);
 
 export type Ranked = Score & { accuracy: number; rank: number };
 
@@ -30,11 +33,8 @@ export function leaderboard() {
   return cached.list;
 }
 
-/** One public wallet's score, ranked or not yet (under SCORE_MIN), or null when its profile is not public. */
+/** One public wallet's ranked score, or null: not public, or fewer than SCORE_MIN settled markets. */
 export async function scoreOf(address: string) {
   if (!(await db.profile(address))?.public) return null;
-  const ranked = (await leaderboard()).find((s) => s.address === address);
-  if (ranked) return ranked;
-  const s = (await db.scores()).find((x) => x.address === address);
-  return { address, resolved: s?.resolved ?? 0, correct: s?.correct ?? 0, net: s?.net ?? "0", accuracy: null, rank: null };
+  return (await leaderboard()).find((s) => s.address === address) ?? null;
 }

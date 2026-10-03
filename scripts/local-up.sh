@@ -71,6 +71,8 @@ PRICER_PRIVATE_KEY={sys.argv[4]}
 KEEPER_PRIVATE_KEY={sys.argv[6]}
 PRICE_USD_PER_PERSON=1
 ENABLE_WORKERS=1
+# a score shows after 1 settled market here, so the end to end check can read one (production: 10)
+SCORE_MIN=1
 """)
 print(json.dumps(d, indent=2))
 PY

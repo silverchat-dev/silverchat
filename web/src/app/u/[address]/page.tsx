@@ -11,7 +11,7 @@ import { topicOf, type Content } from "@/lib/content";
 import { lead, short, tokens } from "@/lib/format";
 import { publicClient } from "@/lib/server/chain";
 import { db, type PollRow } from "@/lib/server/db";
-import { SCORE_MIN, scoreOf } from "@/lib/server/score";
+import { scoreOf } from "@/lib/server/score";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +73,7 @@ export default async function ProfilePage({ params }: PageProps<"/u/[address]">)
           ["ZC claimed for answers", tokens(claimed, 0)],
           // Predict sides are public on-chain once revealed, so the record adds nothing Ethereum does not show
           ...(score && score.resolved > 0
-            ? [["Predict markets called right", `${score.correct} / ${score.resolved}${score.rank ? ` · #${score.rank}` : ` · ranked after ${SCORE_MIN}`}`]]
+            ? [["Predict markets called right", `${score.correct} / ${score.resolved} · #${score.rank}`]]
             : []),
         ].map(([k, v]) => (
           <div key={k} className="space-y-3 bg-tray p-6">
