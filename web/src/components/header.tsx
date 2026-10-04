@@ -7,15 +7,16 @@ import { usePathname } from "next/navigation";
 import { BlockClock } from "@/components/block-clock";
 import { Rewards } from "@/components/rewards";
 import { YouLink } from "@/components/you";
-import { ADDR, CASH_LIVE, ZERO } from "@/lib/config";
+import { ADDR, CASH_LIVE, ZERO, ZINC_LIVE } from "@/lib/config";
 
 const NAV = [
   { href: "/pulse", label: "Pulse" },
   { href: "/ask", label: "Ask" },
   ...(ADDR.predict !== ZERO ? [{ href: "/predict", label: "Predict" }] : []),
   ...(ADDR.realmFactory !== ZERO ? [{ href: "/realm", label: "Realm" }] : []),
-  // Cash takes Try it's place once it is live (seven links fit a phone)
+  // Cash takes Try it's place once it is live; on a phone the links wrap to a second row
   ...(CASH_LIVE ? [{ href: "/cash", label: "Cash" }] : [{ href: "/demo", label: "Try it" }]),
+  ...(ZINC_LIVE ? [{ href: "/zinc", label: "Zinc" }] : []),
   { href: "/records", label: "Records" },
   { href: "/docs", label: "Docs" },
 ];
@@ -35,7 +36,7 @@ export function Header() {
             <img src="/brand/wordmark.png" alt="silverchat" width={720} height={139} className="h-5 w-auto" />
           </Link>
         )}
-        <nav className="order-last flex w-full flex-wrap justify-between gap-y-1 text-[11px] uppercase tracking-[0.06em] sm:justify-start sm:gap-x-7 sm:text-[13px] sm:tracking-[0.12em] 2xl:order-none 2xl:w-auto 2xl:flex-1">
+        <nav className="order-last flex w-full flex-wrap gap-x-4 gap-y-1 text-[11px] uppercase tracking-[0.06em] sm:gap-x-7 sm:text-[13px] sm:tracking-[0.12em] 2xl:order-none 2xl:w-auto 2xl:flex-1">
           {NAV.map((n) => (
             <Link
               key={n.label}
