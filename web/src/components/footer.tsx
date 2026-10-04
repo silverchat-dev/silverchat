@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ADDR, BOOK_URL, EXPLORER, GITHUB_URL, ZERO, ZIPCOIN_URL } from "@/lib/config";
+import { ADDR, BOOK_URL, EXPLORER, GITHUB_URL, ZERO, ZINC_LIVE, ZIPCOIN_URL } from "@/lib/config";
 import { short } from "@/lib/format";
 
 const link = "text-silver underline-offset-4 hover:text-paper hover:underline";
@@ -35,6 +35,11 @@ export function Footer() {
           <Link className={link} href="/stats">
             Stats
           </Link>
+          {ZINC_LIVE && (
+            <Link className={link} href="/zinc">
+              Zinc
+            </Link>
+          )}
           {ADDR.riddle !== ZERO && (
             <Link className={link} href="/riddle">
               The riddle

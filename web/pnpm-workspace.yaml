@@ -4,7 +4,9 @@ allowBuilds:
   blake-hash: false
   bufferutil: false
   es5-ext: false
+  esbuild: false
   keccak: false
+  msgpackr-extract: false
   secp256k1: false
   sharp: false
   unrs-resolver: false

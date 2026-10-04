@@ -39,6 +39,11 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Zinc's zkAPI SDK reaches the zkAPI server through this origin: the server's POSTs allow no other. Proofs and issued
+  // keys pass through here untouched; nothing logs them
+  async rewrites() {
+    return [{ source: "/zkapi-deployment/:path*", destination: "https://zkapi-mainnet.openanonymity.ai/:path*" }];
+  },
   // one origin for the site and for wallet sessions
   async redirects() {
     return [{ source: "/:path*", has: [{ type: "host", value: "www.silverchat.cash" }], destination: "https://silverchat.cash/:path*", permanent: true }];
