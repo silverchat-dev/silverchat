@@ -7,7 +7,7 @@ import { formatEther, isHex, type Hex } from "viem";
 
 import { short } from "@/lib/format";
 import type { Message } from "@/lib/zinc/chat";
-import type { Burner } from "@/lib/zinc/zkapi";
+import { TIERS, type Burner } from "@/lib/zinc/zkapi";
 import type { Snapshot } from "@openanonymity/zkapi-browser-sdk/client";
 
 const input = "w-full border border-paper/25 bg-transparent px-3 py-2 font-mono text-sm text-paper placeholder:text-silver/60 focus:border-paper focus:outline-none";
@@ -60,6 +60,7 @@ function NewBurner({ onOpen }: { onOpen: (k: Hex) => void }) {
   const [pw2, setPw2] = useState("");
   const [imported, setImported] = useState("");
   const [fresh, setFresh] = useState<Hex | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function make() {
@@ -68,10 +69,17 @@ function NewBurner({ onOpen }: { onOpen: (k: Hex) => void }) {
     if (pw !== pw2) return setError("The two passwords are not the same.");
     const key = imported.trim();
     if (key && !(isHex(key) && key.length === 66)) return setError("A private key is 0x and 64 hex characters.");
-    const { makeBurner } = await import("@/lib/zinc/burner");
-    const k = await makeBurner(pw, (key || undefined) as Hex | undefined);
-    if (key) onOpen(k);
-    else setFresh(k);
+    setBusy(true);
+    try {
+      const { makeBurner } = await import("@/lib/zinc/burner");
+      const k = await makeBurner(pw, (key || undefined) as Hex | undefined);
+      if (key) onOpen(k);
+      else setFresh(k);
+    } catch (e) {
+      setError(err(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (fresh) return <SaveKey k={fresh} onDone={() => onOpen(fresh)} />;
@@ -87,15 +95,15 @@ function NewBurner({ onOpen }: { onOpen: (k: Hex) => void }) {
         <summary className="cursor-pointer font-mono text-xs text-silver">Bring back a saved burner</summary>
         <input aria-label="Saved private key" value={imported} onChange={(e) => setImported(e.target.value)} placeholder="0x… private key" className={`${input} mt-2`} autoComplete="off" spellCheck={false} />
       </details>
-      <button type="button" onClick={make} className={button}>
-        {imported ? "Bring it back" : "Make a burner"}
+      <button type="button" onClick={make} disabled={busy} className={button}>
+        {busy ? "Working…" : imported ? "Bring it back" : "Make a burner"}
       </button>
       {error && <p className="font-mono text-xs text-paper">{error}</p>}
     </section>
   );
 }
 
-/** The key, once. The private balance belongs to this browser's zkAPI note, but the ETH before and after is the key's. */
+/** The key, once. It holds the ETH before and after; the private balance is a note in this browser, not the key's. */
 function SaveKey({ k, onDone }: { k: Hex; onDone: () => void }) {
   const [shown, setShown] = useState(false);
   const [ok, setOk] = useState(false);
@@ -104,7 +112,8 @@ function SaveKey({ k, onDone }: { k: Hex; onDone: () => void }) {
       <h2 className="text-2xl">Save the burner&apos;s key</h2>
       <p className="text-paper/80">
         Any ETH on the burner is this key&apos;s. Keep it until the exit is done: it opens in any Ethereum wallet. Anyone with it can
-        take that ETH.
+        take that ETH. The private balance is different: it is a note kept only in this browser, and the key cannot bring it
+        back. Do not clear this site&apos;s data while it is open.
       </p>
       <div className="bg-paper p-4 font-mono text-xs break-all text-developer">{shown ? k : "•".repeat(66)}</div>
       <div className="flex flex-wrap gap-4">
@@ -151,7 +160,7 @@ function Unlock({ onOpen, onForget }: { onOpen: (k: Hex) => void; onForget: () =
         <button
           type="button"
           onClick={async () => {
-            if (!confirm("Remove the burner from this browser? Without its saved key, any ETH on it is gone.")) return;
+            if (!confirm("Remove the burner from this browser? Without its saved key, any ETH on it is gone. A private balance stays in this browser and can still be closed to a new burner.")) return;
             (await import("@/lib/zinc/burner")).wipeBurner();
             onForget();
           }}
@@ -180,21 +189,27 @@ function Open({ burner, onWiped }: { burner: Burner; onWiped: () => void }) {
 
   useEffect(() => {
     let off = () => {};
+    let gone = false;
     void import("@/lib/zinc/zkapi").then(async ({ zkapi }) => {
       try {
         const client = await zkapi(burner);
+        if (gone) return;
         setMoney({ fmt: (u) => client.formatBillingAmount(u) });
         setSnap(client.snapshot());
         off = client.subscribe(setSnap);
       } catch (e) {
-        setSdkError(err(e));
+        if (!gone) setSdkError(err(e));
       }
     });
-    return () => off();
+    return () => ((gone = true), off());
   }, [burner]);
 
   const note = snap?.wallet?.has_note ? snap.wallet.note : null;
   const balance = note?.current_balance ?? note?.amount;
+  // a withdrawal not yet closed: its ETH is not on the burner yet, so nothing may leave or be wiped
+  const pending = snap?.withdrawals?.find((w) => w.phase !== "closed") ?? null;
+  // a deposit sent but not yet seen confirmed (after a reload the SDK finishes it in the background)
+  const depositing = !!snap?.deposits?.some((d) => d.status.startsWith("submitted"));
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -209,13 +224,24 @@ function Open({ burner, onWiped }: { burner: Burner; onWiped: () => void }) {
           <span>
             <span className={label}>Private balance</span> {balance != null && money ? `${money.fmt(balance)} ETH` : note ? "…" : "none"}
           </span>
+          {note?.expiry ? (
+            <span>
+              <span className={label}>Close before</span> {new Date(note.expiry * 1000).toLocaleString()}
+            </span>
+          ) : null}
         </div>
+        {note?.expiry ? (
+          <p className="text-sm text-paper/70">
+            A private balance lasts 30 days. After that anyone can close it and all of it goes to zkAPI&apos;s operator, not back to
+            you.
+          </p>
+        ) : null}
         {sdkError && <p className="font-mono text-xs text-paper">zkAPI could not start here: {sdkError}</p>}
       </section>
       <Fund burner={burner} onArrived={refresh} />
-      <Deposit burner={burner} eth={eth} hasNote={!!note} onDone={refresh} />
+      <Deposit burner={burner} eth={eth} hasNote={!!note} depositing={depositing} onDone={refresh} />
       <Use burner={burner} hasNote={!!note} />
-      <Exit burner={burner} hasNote={!!note} eth={eth} onWiped={onWiped} />
+      <Exit burner={burner} hasNote={!!note} pending={pending} eth={eth} onWiped={onWiped} />
     </div>
   );
 }
@@ -269,6 +295,17 @@ function Fund({ burner, onArrived }: { burner: Burner; onArrived: () => void }) 
     void import("@/lib/zinc/passport").then(({ passOf }) => setPass(!!passOf(burner.address)));
   }, [burner.address]);
   const needsPass = Number(amount) > OPEN_LIMIT && !pass;
+  // the vault's gas for the round trip, and what each amount brings in ETH, so amounts too small for it are not offered
+  const { data: fit } = useQuery({
+    queryKey: ["zinc-fit"],
+    queryFn: async () => {
+      const [{ reserveNow }, { prices }] = await Promise.all([import("@/lib/zinc/zkapi"), import("@/lib/zinc/oneclick")]);
+      const [reserve, p] = await Promise.all([reserveNow(burner), prices()]);
+      return { reserve: Number(formatEther(reserve)), ethPerZec: p.zec / p.eth };
+    },
+    refetchInterval: 60_000,
+  });
+  const tooSmall = (a: string) => !!fit && Number(a) * fit.ethPerZec < 2 * fit.reserve;
 
   async function go() {
     setError(null);
@@ -305,8 +342,8 @@ function Fund({ burner, onArrived }: { burner: Burner; onArrived: () => void }) 
       ) : leg ? (
         <div className="space-y-3">
           <p className="text-paper/80">
-            Send exactly <b>{(Number(leg.amountIn) / 1e8).toString()} ZEC</b> from a shielded balance (Zodl, Ywallet or any Zcash
-            wallet) to this one-time NEAR address. About {Number(leg.amountOut).toFixed(6)} ETH comes to the burner.
+            Send exactly <span className="font-mono">{(Number(leg.amountIn) / 1e8).toString()} ZEC</span> from a shielded balance (Zodl,
+            Ywallet or any Zcash wallet) to this one-time NEAR address. About {Number(leg.amountOut).toFixed(6)} ETH comes to the burner.
           </p>
           {leg.uri && (
             <a href={leg.uri} aria-label="Open in a Zcash wallet" className="block w-44 bg-paper p-2" dangerouslySetInnerHTML={{ __html: encodeQR(leg.uri, "svg") }} />
@@ -325,7 +362,7 @@ function Fund({ burner, onArrived }: { burner: Burner; onArrived: () => void }) 
         <div className="space-y-3">
           <div role="group" aria-label="Amount" className="flex flex-wrap gap-1 font-mono text-xs">
             {AMOUNTS.map((a) => (
-              <button key={a} type="button" aria-pressed={amount === a} onClick={() => setAmount(a)} className="border border-paper/20 px-3 py-1.5 aria-pressed:border-paper aria-pressed:bg-paper aria-pressed:text-developer">
+              <button key={a} type="button" aria-pressed={amount === a} disabled={tooSmall(a)} onClick={() => setAmount(a)} className="border border-paper/20 px-3 py-1.5 disabled:opacity-40 aria-pressed:border-paper aria-pressed:bg-paper aria-pressed:text-developer">
                 {a} ZEC
               </button>
             ))}
@@ -341,7 +378,9 @@ function Fund({ burner, onArrived }: { burner: Burner; onArrived: () => void }) 
             </>
           )}
           <p className="text-sm text-paper/60">
-            Round amounts make your swap look like everyone else&apos;s. Up to {OPEN_LIMIT} ZEC needs nothing; more needs a ZKPassport proof.
+            Round amounts make your swap look like everyone else&apos;s. Up to {OPEN_LIMIT} ZEC per swap needs nothing; more needs a
+            ZKPassport proof, checked in this browser.
+            {fit && ` The vault's gas for the round trip is about ${fit.reserve.toFixed(4)} ETH today; amounts too small for it are greyed out.`}
           </p>
         </div>
       )}
@@ -380,7 +419,8 @@ function Passport({ burner, onPass }: { burner: Burner; onPass: () => void }) {
     <div className="space-y-3 border border-paper/15 p-4">
       <p className="text-paper/80">
         Larger amounts need a ZKPassport proof: your phone reads your passport&apos;s chip and proves you are 18 or older, on no
-        sanctions list, and not from a country under a full US embargo. Zinc never sees your name, number or country.
+        sanctions list, and not from a country under a full US embargo. Zinc never sees your name, number or country. The check
+        runs in your browser only: no server or contract enforces it, and it applies to the ZEC amounts offered here.
       </p>
       {asking ? (
         <>
@@ -397,7 +437,7 @@ function Passport({ burner, onPass }: { burner: Burner; onPass: () => void }) {
   );
 }
 
-function Deposit({ burner, eth, hasNote, onDone }: { burner: Burner; eth: bigint | null; hasNote: boolean; onDone: () => void }) {
+function Deposit({ burner, eth, hasNote, depositing, onDone }: { burner: Burner; eth: bigint | null; hasNote: boolean; depositing: boolean; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -422,10 +462,11 @@ function Deposit({ burner, eth, hasNote, onDone }: { burner: Burner; eth: bigint
       </h2>
       <p className="text-paper/80">
         The burner puts its ETH into zkAPI&apos;s vault on Ethereum, less the gas it keeps for the way out. From then on, each use
-        is paid with a zero-knowledge proof: nobody can tell which deposit paid for it.
+        is paid with a zero-knowledge proof that does not say which deposit paid. The balance is a note kept in this browser:
+        clearing this site&apos;s data loses it.
       </p>
-      <button type="button" onClick={go} disabled={busy || hasNote || !eth} className={button}>
-        {hasNote ? "Private balance open" : busy ? "Depositing…" : "Deposit into zkAPI"}
+      <button type="button" onClick={go} disabled={busy || hasNote || depositing || !eth} className={button}>
+        {hasNote ? "Private balance open" : busy || depositing ? "Depositing…" : "Deposit into zkAPI"}
       </button>
       {status && <p className="font-mono text-xs text-silver">{status}</p>}
       {error && <p className="font-mono text-xs text-paper">{error}</p>}
@@ -436,24 +477,27 @@ function Deposit({ burner, eth, hasNote, onDone }: { burner: Burner; eth: bigint
 function Use({ burner, hasNote }: { burner: Burner; hasNote: boolean }) {
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState("");
-  const [tier, setTier] = useState(1);
-  const [key, setKey] = useState<{ apiKey: string; release: () => void } | null>(null);
+  const [tier, setTier] = useState<number>(TIERS[0]);
+  const [agentKey, setAgentKey] = useState<string | null>(null);
   const [chat, setChat] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [agent, setAgent] = useState(false);
 
   useEffect(() => {
     void import("@/lib/zinc/chat").then(({ MODELS }) => (setModels(MODELS), setModel(MODELS[0])));
   }, []);
-  useEffect(() => () => key?.release(), [key]);
 
-  async function getKey() {
+  // a key per message, let go when the answer is in: zkAPI keeps a live key for the next one (a key lives about five
+  // minutes) and makes a new one when it has run out
+  async function withKey<T>(run: (apiKey: string) => Promise<T>) {
     const { access } = await import("@/lib/zinc/zkapi");
     const k = await access(burner, tier, setBusy);
-    setKey(k);
-    return k;
+    try {
+      return await run(k.apiKey);
+    } finally {
+      k.release();
+    }
   }
 
   async function send() {
@@ -464,10 +508,22 @@ function Use({ burner, hasNote }: { burner: Burner; hasNote: boolean }) {
     setChat(history);
     setDraft("");
     try {
-      const k = key ?? (await getKey());
-      setBusy("Thinking…");
       const { ask } = await import("@/lib/zinc/chat");
-      await ask(k.apiKey, model, history, (t) => setChat([...history, { role: "assistant", content: t }]));
+      await withKey((apiKey) => {
+        setBusy("Thinking…");
+        return ask(apiKey, model, history, (t) => setChat([...history, { role: "assistant", content: t }]));
+      });
+    } catch (e) {
+      setError(err(e));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function forAgent() {
+    setError(null);
+    try {
+      setAgentKey(await withKey(async (apiKey) => apiKey));
     } catch (e) {
       setError(err(e));
     } finally {
@@ -492,17 +548,18 @@ function Use({ burner, hasNote }: { burner: Burner; hasNote: boolean }) {
                 </option>
               ))}
             </select>
-            <select aria-label="Spending cap" value={tier} onChange={(e) => (key?.release(), setKey(null), setTier(Number(e.target.value)))} className={`${input} w-auto`}>
-              {[1, 2, 3, 4.5, 6].map((t) => (
+            <select aria-label="Spending cap" value={tier} onChange={(e) => setTier(Number(e.target.value))} className={`${input} w-auto`}>
+              {TIERS.map((t) => (
                 <option key={t} value={t} className="bg-developer">
                   up to ${t} per key
                 </option>
               ))}
             </select>
           </div>
-          <div className="max-h-96 space-y-3 overflow-y-auto" aria-live="polite">
+          <div className="max-h-96 space-y-3 overflow-y-auto">
             {chat.map((m, i) => (
-              <p key={i} className={m.role === "user" ? "text-paper" : "whitespace-pre-wrap text-paper/75"}>
+              // the answer being written is read out once it is done, not word by word
+              <p key={i} aria-live={i === chat.length - 1 && m.role === "assistant" && !busy ? "polite" : undefined} className={m.role === "user" ? "text-paper" : "whitespace-pre-wrap text-paper/75"}>
                 {m.content}
               </p>
             ))}
@@ -514,10 +571,10 @@ function Use({ burner, hasNote }: { burner: Burner; hasNote: boolean }) {
             </button>
           </form>
           {busy && <p className="font-mono text-xs text-silver">{busy}</p>}
-          <button type="button" onClick={() => void (key ? setAgent((a) => !a) : getKey().then(() => setAgent(true)).catch((e) => setError(err(e))))} className={quiet}>
-            Use it from an agent
+          <button type="button" onClick={forAgent} disabled={!!busy} className={quiet}>
+            {agentKey ? "Take a new key for an agent" : "Use it from an agent"}
           </button>
-          {agent && key && <AgentKey k={key.apiKey} model={model} />}
+          {agentKey && <AgentKey k={agentKey} model={model} />}
         </>
       )}
       {error && <p className="font-mono text-xs text-paper">{error}</p>}
@@ -533,8 +590,8 @@ function AgentKey({ k, model }: { k: string; model: string }) {
   return (
     <div className="space-y-2">
       <p className="text-sm text-paper/70">
-        A short-lived key with the cap above, for any OpenAI-compatible client. It stops when it expires or the cap is spent;
-        only what is used is charged.
+        A key with the cap above, for any OpenAI-compatible client. It lives about five minutes, or until the cap is spent;
+        only what is used is charged. Take a new one here when it stops.
       </p>
       <pre className="overflow-x-auto bg-paper/5 p-3 font-mono text-xs text-paper/80">{snippet}</pre>
       <button type="button" onClick={() => void navigator.clipboard.writeText(snippet)} className={quiet}>
@@ -544,31 +601,52 @@ function AgentKey({ k, model }: { k: string; model: string }) {
   );
 }
 
-function Exit({ burner, hasNote, eth, onWiped }: { burner: Burner; hasNote: boolean; eth: bigint | null; onWiped: () => void }) {
+type Pending = { recordId: string; mode: "mutual" | "escape"; phase: string; challengeDeadline?: number };
+
+function Exit({ burner, hasNote, pending, eth, onWiped }: { burner: Burner; hasNote: boolean; pending: Pending | null; eth: bigint | null; onWiped: () => void }) {
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const { leg, state, start } = useLeg(OUT, async (s) => {
+  const { leg, state, start, drop } = useLeg(OUT, async (s) => {
     if (s !== "SUCCESS") return setError(`NEAR: ${s.toLowerCase()}. A refund goes back to the burner as ETH.`);
-    (await import("@/lib/zinc/burner")).wipeBurner();
+    // wipe only an empty burner: ETH that came in after the quote (a late close, a late swap) stays reachable
+    const { balanceOf, wipeBurner } = await import("@/lib/zinc/burner");
+    if ((await balanceOf(burner)) > 200_000_000_000_000n) return setError("ZEC is on its way, but ETH is still on the burner. Send it home again.");
+    wipeBurner();
+    (await import("@/lib/zinc/passport")).forgetPassport();
     onWiped();
   });
 
   async function go() {
     setError(null);
     const { isZcashAddress, isTransparent, quote, submitted, ETH, ZEC } = await import("@/lib/zinc/oneclick");
-    if (!isZcashAddress(to)) return setError("That is not a Zcash address.");
+    if (!isZcashAddress(to)) return setError("Use a unified ZEC address (u1…); NEAR does not pay to Sapling (zs1…) addresses.");
     if (isTransparent(to) && !confirm("That is a transparent address: anyone can see what arrives there. Use it anyway?")) return;
     try {
+      // NEAR checks the address before anything closes: a refused address must not leave a closed balance behind
+      setBusy("Checking the address with NEAR…");
+      await quote(ETH, ZEC, "0.01", to.trim(), burner.address, true);
       const { withdraw } = await import("@/lib/zinc/zkapi");
-      const { sendable, send } = await import("@/lib/zinc/burner");
-      if (hasNote) await withdraw(burner, "mutual", setBusy);
+      const { balanceOf, sendable, send } = await import("@/lib/zinc/burner");
+      if (hasNote) {
+        const before = await balanceOf(burner);
+        await withdraw(burner, "mutual", setBusy);
+        // a public RPC can lag the close by a block or two: quote only once the closed note's ETH shows
+        setBusy("Waiting for the closed balance on the burner…");
+        for (let i = 0; i < 30 && (await balanceOf(burner)) <= before; i++) await new Promise((r) => setTimeout(r, 4000));
+      }
       setBusy("Asking NEAR for a quote…");
       const s = await sendable(burner);
       const q = await quote(ETH, ZEC, formatEther(s.value), to.trim(), burner.address);
       start({ depositAddress: q.depositAddress, amountIn: q.amountIn, amountOut: q.amountOutFormatted, deadline: q.deadline });
       setBusy("Sending the ETH to NEAR…");
-      const hash = await send(burner, q.depositAddress as Hex, s);
+      let hash: Hex;
+      try {
+        hash = await send(burner, q.depositAddress as Hex, s);
+      } catch (e) {
+        drop();
+        throw e;
+      }
       await submitted(q.depositAddress, hash);
       setBusy("");
     } catch (e) {
@@ -576,6 +654,19 @@ function Exit({ burner, hasNote, eth, onWiped }: { burner: Burner; hasNote: bool
       setBusy("");
     }
   }
+
+  async function finish() {
+    if (!pending) return;
+    setError(null);
+    try {
+      await (await import("@/lib/zinc/zkapi")).finishEscape(burner, pending.recordId, setBusy);
+      setBusy("");
+    } catch (e) {
+      setError(err(e));
+      setBusy("");
+    }
+  }
+  const deadline = pending?.challengeDeadline ? new Date(pending.challengeDeadline * 1000) : null;
 
   async function escape() {
     if (!confirm("The slow way out works without the zkAPI server, but takes a 24-hour challenge window. Start it?")) return;
@@ -595,18 +686,37 @@ function Exit({ burner, hasNote, eth, onWiped }: { burner: Burner; hasNote: bool
         <p className="font-mono text-xs text-silver">
           NEAR: {state || "waiting"} · about {Number(leg.amountOut).toFixed(4)} ZEC on its way. The burner is wiped when it lands.
         </p>
+      ) : null}
+      {leg && state === "PENDING_DEPOSIT" && !busy && (
+        <button type="button" onClick={() => confirm("Forget this NEAR address? Only if the burner has not sent to it.") && drop()} className={quiet}>
+          Nothing was sent: start over
+        </button>
+      )}
+      {leg ? null : pending ? (
+        <div className="space-y-3">
+          <p className="text-paper/80">
+            {pending.mode === "escape"
+              ? `The slow way out is under way. After ${deadline ? deadline.toLocaleString() : "the 24-hour window"}, finish it to pay the balance to the burner; then send it home.`
+              : "The private balance is closing. Once it is closed, send the ETH home."}
+          </p>
+          {pending.mode === "escape" && (
+            <button type="button" onClick={finish} disabled={!!busy || !deadline || deadline > new Date()} className={button}>
+              Finish the slow way out
+            </button>
+          )}
+        </div>
       ) : (
         <>
           <p className="text-paper/80">
             Closes the private balance, then the burner sends all it holds to NEAR, which pays ZEC to a fresh shielded address of
             yours. Wait a while after your last use, and it is harder to tie the two ends together.
           </p>
-          <input aria-label="Your shielded ZEC address" value={to} onChange={(e) => setTo(e.target.value)} placeholder="a fresh shielded ZEC address (u1… or zs1…)" className={input} autoComplete="off" spellCheck={false} />
+          <input aria-label="Your shielded ZEC address" value={to} onChange={(e) => setTo(e.target.value)} placeholder="a fresh unified ZEC address (u1…)" className={input} autoComplete="off" spellCheck={false} />
           <div className="flex flex-wrap items-center gap-5">
             <button type="button" onClick={go} disabled={!!busy || (!hasNote && !eth)} className={button}>
               {busy ? "Working…" : "Close and send home"}
             </button>
-            {hasNote && (
+            {hasNote && !pending && (
               <button type="button" onClick={escape} className={quiet}>
                 zkAPI server down? The slow way out
               </button>

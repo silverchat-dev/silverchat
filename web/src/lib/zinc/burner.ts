@@ -108,12 +108,12 @@ export const balanceOf = (b: ReturnType<typeof burnerProvider>) => b.reads.getBa
 
 /**
  * Everything the burner can send in one plain transfer: its balance less that transfer's gas, priced at twice today's
- * base fee so it goes through. The exit quotes NEAR for exactly this amount and then sends exactly it.
+ * max fee so it goes through. The exit quotes NEAR for exactly this amount and then sends exactly it.
  */
 export async function sendable(b: ReturnType<typeof burnerProvider>) {
-  const [balance, block] = await Promise.all([balanceOf(b), b.reads.getBlock()]);
-  const maxPriorityFeePerGas = 10_000_000n;
-  const maxFeePerGas = 2n * (block.baseFeePerGas ?? 0n) + maxPriorityFeePerGas;
+  const [balance, fees] = await Promise.all([balanceOf(b), b.reads.estimateFeesPerGas()]);
+  const { maxPriorityFeePerGas } = fees;
+  const maxFeePerGas = 2n * fees.maxFeePerGas;
   const value = balance - 21_000n * maxFeePerGas;
   if (value <= 0n) throw new Error("the burner holds less than the gas to send it");
   return { value, maxFeePerGas, maxPriorityFeePerGas };

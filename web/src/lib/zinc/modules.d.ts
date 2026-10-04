@@ -11,6 +11,7 @@ declare module "@openanonymity/zkapi-browser-sdk/client" {
     wallet: { has_note?: boolean; note?: { note_id: number; status: number; current_balance?: number | string; amount?: number | string; expiry?: number } } | null;
     deposits: { status: string; phase?: string; amount?: string }[];
     withdrawal: { status?: string; phase?: string; deadline?: number } | null;
+    withdrawals: { recordId: string; mode: "mutual" | "escape"; phase: string; challengeDeadline?: number }[];
     loading: boolean;
     lastError: { message?: string } | string | null;
     initialized: boolean;
@@ -29,6 +30,7 @@ declare module "@openanonymity/zkapi-browser-sdk/client" {
     recoverBrowserDeposit(onStatus?: Status): Promise<unknown>;
     acquireInferenceAccess(sessionId: string, o: { spendingLimitUsd?: number; signal?: AbortSignal; onProgress?: (p: { message?: string }) => void }): Promise<{ apiKey: string; release: () => void }>;
     withdraw(mode: "mutual" | "escape", onStatus: Status, o?: { destination?: string }): Promise<unknown>;
+    finalizeEscape(recordId: string, onStatus: Status): Promise<unknown>;
   };
   export default client;
 }

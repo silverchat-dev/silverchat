@@ -22,7 +22,7 @@ export type Quote = {
 export type Status = "PENDING_DEPOSIT" | "KNOWN_DEPOSIT_TX" | "PROCESSING" | "SUCCESS" | "INCOMPLETE_DEPOSIT" | "REFUNDED" | "FAILED";
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, { ...init, headers: { "content-type": "application/json" }, credentials: "omit" });
+  const res = await fetch(`${API}${path}`, { ...init, headers: { "content-type": "application/json" }, credentials: "omit", referrerPolicy: "no-referrer" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`NEAR Intents: ${body.message ?? res.status}`);
   return body as T;
@@ -54,6 +54,13 @@ export async function quote(from: Asset, to: Asset, amount: string, recipient: s
   return { ...r.quote, deadline };
 }
 
+/** NEAR's dollar prices for ZEC and ETH. */
+export async function prices() {
+  const tokens = await call<{ assetId: string; price: number }[]>("/tokens");
+  const usd = (a: string) => tokens.find((t) => t.assetId === a)?.price ?? NaN;
+  return { zec: usd(ZEC.asset), eth: usd(ETH.asset) };
+}
+
 export async function status(depositAddress: string) {
   const r = await call<{ status: Status; swapDetails?: { destinationChainTxHashes?: { hash: string }[]; refundedAmountFormatted?: string } }>(
     `/status?depositAddress=${encodeURIComponent(depositAddress)}`,
@@ -68,6 +75,6 @@ export const submitted = (depositAddress: string, txHash: string) =>
 /** ZIP-321 payment request: any Zcash wallet opens it with the address and the exact amount filled in. */
 export const zip321 = (address: string, amountIn: string) => `zcash:${address}?amount=${formatUnits(BigInt(amountIn), ZEC.decimals)}`;
 
-/** Zcash addresses NEAR pays out to: transparent (t1, t3), Sapling (zs1) or unified (u1). */
-export const isZcashAddress = (a: string) => /^(t1|t3)[1-9A-HJ-NP-Za-km-z]{33}$|^zs1[02-9ac-hj-np-z]{75}$|^u1[02-9ac-hj-np-z]{100,}$/.test(a.trim());
+/** Zcash addresses NEAR pays out to: transparent (t1, t3) or unified (u1). It refuses Sapling (zs1) addresses. */
+export const isZcashAddress = (a: string) => /^(t1|t3)[1-9A-HJ-NP-Za-km-z]{33}$|^u1[02-9ac-hj-np-z]{100,}$/.test(a.trim());
 export const isTransparent = (a: string) => /^(t1|t3)/.test(a.trim());

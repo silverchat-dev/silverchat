@@ -1,8 +1,9 @@
 /**
  * ZKPassport (Aztec Labs; Noir circuits, Aztec's Barretenberg prover, a verifier on Ethereum mainnet): the phone reads
  * the passport's chip and proves three things about its holder without showing them: 18 or older, on no sanctions list,
- * not a national of a country under a full US embargo. The proof is bound to the burner and checked in this browser.
- * Zinc keeps only "verified until" and the per-site identifier ZKPassport derives for scope "zinc": no name, no number.
+ * not a national of a country under a full US embargo. The proof is bound to the burner. The SDK checks it in this browser
+ * against ZKPassport's verifier on Ethereum, through ZKPassport's own RPC, which so sees the burner's address. Zinc keeps
+ * only "verified until" and the per-site identifier ZKPassport derives for scope "zinc": no name, no number.
  */
 import type { Hex } from "viem";
 
@@ -21,6 +22,8 @@ export const passOf = (burner: Hex): Pass | null => {
     return null;
   }
 };
+
+export const forgetPassport = () => localStorage.removeItem(SAVED);
 
 export type Asking = { url: string; cancel: () => void; result: Promise<Pass> };
 
@@ -46,6 +49,7 @@ export async function askPassport(burner: Hex, onStep: (s: string) => void): Pro
   const result = new Promise<Pass>((ok, fail) => {
     r.onReject(() => fail(new Error("declined on the phone")));
     r.onError((e) => fail(new Error(e)));
+    // onResult's verdict is computed in this page; with no server behind Zinc there is nothing better to check it against
     r.onResult(({ verified, uniqueIdentifier }) => {
       if (!verified || !uniqueIdentifier) return fail(new Error("the proof did not verify"));
       const pass = { burner, id: uniqueIdentifier, until: Math.floor(Date.now() / 1000) + WEEK };
