@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Cash } from "@/components/cash";
-import { ADDR, CASH_LIVE, EXPLORER } from "@/lib/config";
+import { ADDR, CASH_LIVE, EXPLORER, ZINC_LIVE } from "@/lib/config";
 import { short } from "@/lib/format";
 import { RAILGUN, RELAY_ADAPT } from "@/lib/cash/routes";
 
@@ -37,6 +38,13 @@ export default function CashPage() {
       </header>
 
       <Cash />
+
+      {ZINC_LIVE && (
+        <p className="max-w-3xl leading-relaxed text-paper/80">
+          Holding ZEC? <Link href="/zinc" className="underline underline-offset-4">Zinc</Link> turns shielded ZEC into a private
+          zkAPI balance for AI models, and back.
+        </p>
+      )}
 
       <section aria-labelledby="cash-notes" className="max-w-3xl space-y-4">
         <h2 id="cash-notes" className="font-mono text-xs uppercase tracking-[0.14em] text-silver">

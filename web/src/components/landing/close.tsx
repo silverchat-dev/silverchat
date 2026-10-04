@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { CASH_LIVE } from "@/lib/config";
+import { CASH_LIVE, ZINC_LIVE } from "@/lib/config";
 
 /** The last word: ask, or answer. */
 export function Close() {
@@ -26,6 +26,11 @@ export function Close() {
           {CASH_LIVE && (
             <Link href="/cash" className="font-mono text-sm text-paper underline-offset-4 hover:underline">
               Go private →
+            </Link>
+          )}
+          {ZINC_LIVE && (
+            <Link href="/zinc" className="font-mono text-sm text-paper underline-offset-4 hover:underline">
+              Pay for AI with shielded ZEC →
             </Link>
           )}
         </div>
