@@ -39,6 +39,8 @@ export const REALM_BLOCK = BigInt(process.env.NEXT_PUBLIC_REALM_BLOCK ?? "0");
 
 /** SilverCash shows on the site only once this is "1": the code can ship before the page goes live. */
 export const CASH_LIVE = process.env.NEXT_PUBLIC_CASH === "1";
+/** Zinc, the same way: the page and every link to it wait for NEXT_PUBLIC_ZINC=1. */
+export const ZINC_LIVE = process.env.NEXT_PUBLIC_ZINC === "1";
 
 export const EXPLORER = "https://etherscan.io";
 export const BOOK_URL = "https://vitalik.eth.limo/snowmoon/html/";
