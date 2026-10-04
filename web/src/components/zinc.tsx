@@ -278,9 +278,9 @@ function useLeg(key: string, done: (status: string) => void) {
   return { leg, state, start, drop };
 }
 
-const AMOUNTS = ["0.05", "0.1", "0.25", "0.5"];
+const AMOUNTS = ["0.05", "0.1", "0.5", "1", "5", "10"];
 // above this, the fund step asks for a ZKPassport proof first
-const OPEN_LIMIT = 0.1;
+const OPEN_LIMIT = 1;
 
 function Fund({ burner, onArrived }: { burner: Burner; onArrived: () => void }) {
   const [via, setVia] = useState<"zec" | "eth">("zec");
@@ -391,8 +391,7 @@ function Fund({ burner, onArrived }: { burner: Burner; onArrived: () => void }) 
 }
 
 /**
- * ZKPassport, for amounts above the open limit: the phone proves 18+, no sanctions list and no embargoed nationality,
- * bound to this burner. Nothing about the person reaches Zinc.
+ * ZKPassport, for amounts above the open limit: the phone proves 18+ and no sanctions list, bound to this burner. Nothing about the person reaches Zinc.
  */
 function Passport({ burner, onPass }: { burner: Burner; onPass: () => void }) {
   const [asking, setAsking] = useState<{ url: string; cancel: () => void } | null>(null);
@@ -418,8 +417,8 @@ function Passport({ burner, onPass }: { burner: Burner; onPass: () => void }) {
   return (
     <div className="space-y-3 border border-paper/15 p-4">
       <p className="text-paper/80">
-        Larger amounts need a ZKPassport proof: your phone reads your passport&apos;s chip and proves you are 18 or older, on no
-        sanctions list, and not from a country under a full US embargo. Zinc never sees your name, number or country. The check
+        Larger amounts need a ZKPassport proof: your phone reads your passport&apos;s chip and proves you are 18 or older and on
+        no sanctions list. Where you are from does not matter, and Zinc never sees your name, number or country. The check
         runs in your browser only: no server or contract enforces it, and it applies to the ZEC amounts offered here.
       </p>
       {asking ? (

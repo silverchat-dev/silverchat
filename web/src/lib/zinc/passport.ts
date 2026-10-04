@@ -1,14 +1,12 @@
 /**
  * ZKPassport (Aztec Labs; Noir circuits, Aztec's Barretenberg prover, a verifier on Ethereum mainnet): the phone reads
- * the passport's chip and proves three things about its holder without showing them: 18 or older, on no sanctions list,
- * not a national of a country under a full US embargo. The proof is bound to the burner. The SDK checks it in this browser
+ * the passport's chip and proves two things about its holder without showing them: 18 or older, and on no sanctions
+ * list. It asks nothing about nationality: a passport is not a reason to refuse anyone. The proof is bound to the burner. The SDK checks it in this browser
  * against ZKPassport's verifier on Ethereum, through ZKPassport's own RPC, which so sees the burner's address. Zinc keeps
  * only "verified until" and the per-site identifier ZKPassport derives for scope "zinc": no name, no number.
  */
 import type { Hex } from "viem";
 
-// countries under comprehensive US sanctions (OFAC)
-const EMBARGOED = ["CUB", "IRN", "PRK", "SYR"] as const;
 const SAVED = "zinc:passport";
 const WEEK = 7 * 24 * 3600;
 
@@ -41,7 +39,6 @@ export async function askPassport(burner: Hex, onStep: (s: string) => void): Pro
   const r = q
     .gte("age", 18)
     .sanctions()
-    .out("nationality", [...EMBARGOED])
     .bind("user_address", burner)
     .done();
   r.onRequestReceived(() => onStep("Request opened on the phone"));
