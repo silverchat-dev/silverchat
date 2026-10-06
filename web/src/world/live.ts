@@ -6,7 +6,7 @@
  * from the site's own APIs once a minute; a place looks complete without any of it.
  */
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import type { Live } from "./sets/types";
 
@@ -24,8 +24,20 @@ export function useLive(): Live {
   const roof = useRef(0);
   const burst = useRef(0);
 
+  // a question just paid for: the bowl in the round room flares for a moment (see burstBowl)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const flare = () => {
+      burst.current = 1;
+      clearTimeout(timer);
+      timer = setTimeout(() => (burst.current = 0), 2500);
+    };
+    addEventListener("meldan:burst", flare);
+    return () => (removeEventListener("meldan:burst", flare), clearTimeout(timer));
+  }, []);
+
   return useMemo(() => {
-    const live: Live = { roof, burst };
+    const live: Omit<Live, "roof" | "burst"> = {};
     const totals: number[] | undefined = polls.data?.polls?.[0]?.tally?.totals?.[0];
     if (totals && totals.some((n) => n > 0)) live.result = { shares: totals, colours: COLOURS };
     const tokens = (realm.data?.tokens ?? []) as { symbol: string | null; volume24hUsd: number; hidden?: boolean }[];
@@ -44,6 +56,9 @@ export function useLive(): Live {
         return { question: (m.title ?? "").slice(0, 60), yes: y + n > 0 ? y / (y + n) : 0.5 };
       });
     if (open.length) live.markets = open;
-    return live;
+    return { ...live, roof, burst };
   }, [polls.data, realm.data, markets.data]);
 }
+
+/** Called by the Ask form once a question's burn is confirmed: the bowl behind the panel flares. */
+export const burstBowl = () => dispatchEvent(new Event("meldan:burst"));
