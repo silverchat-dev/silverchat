@@ -38,7 +38,7 @@ export function PageHead({ stop, title, children, art, aside }: { stop: string; 
       <p className={label}>
         No. {String(stopIndex(stop) + 1).padStart(2, "0")} · {s.name}
       </p>
-      <h1 className={`max-w-[14em] ${art ? "pr-20 sm:pr-36" : ""} text-[clamp(2.3rem,5.2vw,3.5rem)] leading-[1.03] tracking-[-0.012em] text-balance`}>{title ?? s.label}</h1>
+      <h1 className={`max-w-[14em] ${art ? "pr-20 sm:pr-36" : ""} text-[clamp(2.3rem,5.2vw,3.5rem)] leading-[1.03] tracking-[-0.012em] text-balance wrap-anywhere`}>{title ?? s.label}</h1>
       <div className="max-w-[34em] text-[1.075rem] leading-relaxed text-paper/80 text-pretty">{children ?? s.line}</div>
       {aside && <div className="flex flex-wrap items-center gap-3 pt-1">{aside}</div>}
     </header>
@@ -62,13 +62,14 @@ export function Part({ title, more, children, id }: { title: string; more?: Reac
 
 /** Figures set like a ledger: a label, the number large, and a short note under it. */
 export function Figures({ items, columns = 3 }: { items: { label: string; value: ReactNode; note?: ReactNode }[]; columns?: 2 | 3 | 4 }) {
-  const cols = { 2: "grid-cols-2", 3: "grid-cols-2 sm:grid-cols-3", 4: "grid-cols-2 sm:grid-cols-4" }[columns];
+  // up to `columns` across, as many as fit: a long number takes a row of its own rather than running into the next one
+  const cols = { 2: "minmax(12rem,1fr)", 3: "minmax(9rem,1fr)", 4: "minmax(7.5rem,1fr)" }[columns];
   return (
-    <dl className={`grid ${cols} gap-x-6 gap-y-6`}>
+    <dl className="grid gap-x-6 gap-y-6" style={{ gridTemplateColumns: `repeat(auto-fit, ${cols})` }}>
       {items.map((f) => (
         <div key={f.label} className="space-y-1.5 border-l border-paper/20 pl-4">
           <dt className={label}>{f.label}</dt>
-          <dd className="text-[clamp(1.6rem,3.4vw,2.2rem)] leading-none tabular-nums">{f.value}</dd>
+          <dd className="text-[clamp(1.6rem,3.4vw,2.2rem)] leading-none tabular-nums wrap-anywhere">{f.value}</dd>
           {f.note && <dd className="font-mono text-[11px] text-silver">{f.note}</dd>}
         </div>
       ))}
@@ -86,7 +87,7 @@ export function Tabs({ items, label: name }: { items: { href: string; label: str
           href={t.href}
           scroll={false}
           aria-current={t.active ? "page" : undefined}
-          className="rounded-full px-3 py-1.5 font-mono text-[12px] tracking-[0.04em] text-silver transition-colors hover:text-paper aria-[current=page]:bg-paper aria-[current=page]:text-developer"
+          className="inline-flex min-h-11 items-center rounded-full px-3 py-1.5 font-mono text-[12px] tracking-[0.04em] text-silver transition-colors hover:text-paper aria-[current=page]:bg-paper aria-[current=page]:text-developer sm:min-h-0"
         >
           {t.label}
         </Link>
