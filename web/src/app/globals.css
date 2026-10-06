@@ -132,3 +132,30 @@ body {
 html.walk {
   scroll-snap-type: y proximity;
 }
+
+/*
+ * A stop's page in Meldan is a page of a field journal laid over the world: warm paper, ink type, the green of the
+ * circle for the one thing to do. The site's colours are variables, so every page turns to paper inside the panel
+ * with no change of its own: "developer" becomes the paper, "paper" the ink.
+ */
+.journal {
+  --color-developer: #f2ead9;
+  --color-tray: #e6dcc6;
+  --color-film: #ebe1cc;
+  --color-paper: #1d1914;
+  --color-silver: #6e6455;
+  --color-safelight: #13894a;
+  --color-tap: #13894a;
+  color-scheme: light;
+  color: var(--color-paper);
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(255, 255, 255, 0.55), transparent 60%),
+    linear-gradient(180deg, #f4ecdb, #efe5d0);
+}
+.journal ::selection {
+  background: #1d1914;
+  color: #f2ead9;
+}
+.journal :focus-visible {
+  outline-color: #1d1914;
+}

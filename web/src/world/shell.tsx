@@ -12,8 +12,9 @@ import { usePathname } from "next/navigation";
 import { Component, useEffect, useState, type ReactNode } from "react";
 
 import { Footer } from "@/components/footer";
-import { Header } from "@/components/header";
 
+import { Hud } from "./hud";
+import { useLive } from "./live";
 import { tOfStop } from "./rail";
 import { world, useWorld } from "./state";
 import { STOPS, stopIndex, stopOf, type Stop } from "./stops";
@@ -42,6 +43,7 @@ function Still({ stop }: { stop: Stop }) {
 }
 
 function Backdrop({ stop }: { stop: Stop }) {
+  const live = useLive();
   const tier = useWorld((s) => s.tier);
   const failed = useWorld((s) => s.failed);
   const [ready, setReady] = useState(false);
@@ -58,7 +60,7 @@ function Backdrop({ stop }: { stop: Stop }) {
       {ready && tier > 0 && !failed && (
         <Guard>
           <div className="absolute inset-0">
-            <World live={{}} />
+            <World live={live} />
           </div>
         </Guard>
       )}
@@ -71,8 +73,8 @@ function Backdrop({ stop }: { stop: Stop }) {
 /** A stop's page, in a panel beside the world: the right half on a desk, a sheet over the lower screen on a phone. */
 function Panel({ stop, children }: { stop: Stop; children: ReactNode }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-10 flex h-[78dvh] flex-col border-t border-silver/25 bg-developer/[0.94] md:top-28 md:right-0 md:bottom-0 md:left-auto md:h-auto md:w-[min(760px,52vw)] md:border-t md:border-l">
-      <div className="flex items-center justify-between gap-4 px-5 pt-4 pb-2 font-mono text-xs uppercase tracking-[0.14em] text-silver sm:px-8">
+    <div className="journal fixed inset-x-0 bottom-0 z-10 flex h-[80dvh] flex-col rounded-t-2xl shadow-[0_-20px_60px_rgba(0,0,0,0.35)] md:top-[4.5rem] md:right-5 md:bottom-5 md:left-auto md:h-auto md:w-[min(720px,50vw)] md:rounded-2xl md:shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+      <div className="flex items-center justify-between gap-4 border-b border-silver/25 px-5 pt-4 pb-3 font-mono text-xs uppercase tracking-[0.14em] text-silver sm:px-8">
         <span>
           {stop.name} · {stop.label}
         </span>
@@ -135,8 +137,8 @@ export function WorldShell({ children }: { children: ReactNode }) {
       </a>
       <Sound />
       <Backdrop stop={stop ?? STOPS[0]} />
-      <div className="fixed inset-x-0 top-0 z-20 bg-gradient-to-b from-black/55 to-transparent">
-        <Header />
+      <div className="fixed inset-x-0 top-0 z-20 bg-gradient-to-b from-black/50 to-transparent">
+        <Hud />
       </div>
       {stop ? <Panel stop={stop}>{children}</Panel> : <div className="relative z-10">{children}</div>}
     </>

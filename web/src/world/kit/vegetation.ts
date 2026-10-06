@@ -243,7 +243,7 @@ export function treeGeometry(kind: Kind, seed: number, near = true) {
   return {
     wood: trunk(r, h + size.y * 0.3, kind === "tall" ? 0.28 : 0.32, kind === "tall" ? 3 : 4),
     leaves: crown(r, centre, size.clone().multiplyScalar(0.7), kind === "tall" ? 9 : 11, inner),
-    cards: leafSprays(r, centre, size, (kind === "tall" ? 420 : 520) * (near ? 1 : 0.28), LEAVES[kind]),
+    cards: leafSprays(r, centre, size, (kind === "tall" ? 300 : 380) * (near ? 1 : 0.2), LEAVES[kind]),
     crownBase: h * 0.6,
   };
 }

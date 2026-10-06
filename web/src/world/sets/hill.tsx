@@ -13,6 +13,7 @@ import { barkMaterial, foliageMaterial, grassMaterial, groundMaterial, stoneMate
 import { fbm, rng, simplex2, smoothstep } from "../kit/noise";
 import { landGeometry, makeLand, type Land } from "../kit/terrain";
 import { labOff } from "../lab";
+import { useWorld } from "../state";
 import type { SetModule, SetProps } from "./types";
 import { BurnBowl, Embers, SkyDial, TeaRobot } from "./room";
 import { bladeGeometry, scatter, treeGeometry, type Kind } from "../kit/vegetation";
@@ -22,24 +23,38 @@ export const HILL = { x: 0, z: 0, height: 27, radius: 34, plateau: 15, room: ROO
 /** the reserved colour: a green circle means "tap here", and nothing else in Meldan glows this green */
 export const TAP_GREEN = "#38ff86";
 
-export function useHillLand() {
-  return useMemo(
-    () =>
-      makeLand({
-        seed: 27,
-        size: 560,
-        hill: HILL,
-        path: [
-          [-14, 190],
-          [6, 150],
-          [-8, 118],
-          [7, 88],
-          [-2, 62],
-          [0, 44],
-        ],
-      }),
-    [],
-  );
+// one land for the scene and for the camera poses, which are placed by the path itself
+const LAND = makeLand({
+  seed: 27,
+  size: 560,
+  hill: HILL,
+  path: [
+    [-14, 190],
+    [6, 150],
+    [-8, 118],
+    [7, 88],
+    [-2, 62],
+    [0, 44],
+  ],
+});
+
+export const useHillLand = () => LAND;
+
+// where the gate and the Pulse post stand on the path, and the side of it the post is on
+const GATE_T = 0.07;
+const POST_T = 0.42;
+const onPath = (t: number) => {
+  const p = LAND.path.getPointAt(t);
+  const tan = LAND.path.getTangentAt(t);
+  return { p, tan, side: new THREE.Vector3(-tan.z, 0, tan.x).normalize() };
+};
+
+/** A camera pose standing `back` metres down the path from point t, `up` metres high, looking at `look`. */
+function poseBehind(t: number, back: number, up: number, look: THREE.Vector3, sideways = 0) {
+  const { p, tan, side } = onPath(t);
+  const at = p.clone().addScaledVector(tan, -back).addScaledVector(side, sideways);
+  at.y = LAND.height(at.x, at.z) + up;
+  return { position: at.toArray() as [number, number, number], target: look.toArray() as [number, number, number] };
 }
 
 function Ground({ land }: { land: Land }) {
@@ -162,8 +177,8 @@ function Forest({ land }: { land: Land }) {
     const accept = (x: number, z: number, r: () => number) => clear(x, z) && r() < density(x, z);
     const box: [number, number, number, number] = [-200, -180, 200, 210];
     return {
-      broadleaf: scatter(1, 700, box, 6.5, accept),
-      tall: scatter(2, 300, box, 7.5, accept),
+      broadleaf: scatter(1, 520, box, 6.5, accept),
+      tall: scatter(2, 220, box, 7.5, accept),
       pine: scatter(3, 120, [-200, -180, 200, 40], 7, (x, z, r) => accept(x, z, r) && Math.hypot(x, z) > HILL.radius * 0.9),
       blossom: scatter(4, 7, [-60, 40, 60, 92], 14, (x, z, r) => Math.hypot(x, z) > HILL.plateau + 4 && land.toPath(x, z) > 12 && land.toPath(x, z) < 26 && r() < 0.7),
     };
@@ -443,6 +458,110 @@ function Rocks({ land }: { land: Land }) {
   );
 }
 
+/** A green circle in the ground: the reserved glow that marks where the visitor acts, breathing slowly. */
+function TapCircle({ position, radius = 1.2 }: { position: [number, number, number]; radius?: number }) {
+  const ring = useRef<THREE.MeshStandardMaterial>(null);
+  useFrame(() => {
+    if (ring.current) ring.current.emissiveIntensity = 2.2 + Math.sin(weather.time.value * 2.2) * 0.6;
+  });
+  return (
+    <group position={position} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0, 0.03]}>
+        <ringGeometry args={[radius * 0.8, radius, 72]} />
+        <meshStandardMaterial ref={ring} color="#0f2a18" emissive={TAP_GREEN} emissiveIntensity={2.2} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0, 0.02]}>
+        <circleGeometry args={[radius * 0.8, 48]} />
+        <meshStandardMaterial color="#20301f" emissive={TAP_GREEN} emissiveIntensity={0.12} roughness={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * The gate where the walk starts (ch. 1: a gate with a glowing green circle): two stone posts, a beam with a small
+ * roof of clay tiles, and the circle on the path beneath, where you tap to come in.
+ */
+function Gate({ land }: { land: Land }) {
+  const stone = useMemo(() => stoneMaterial({ a: "#c9bb9d", b: "#968873", brick: [0.55, 0.32], moss: 0.6 }), []);
+  const at = land.path.getPointAt(GATE_T);
+  const tan = land.path.getTangentAt(GATE_T);
+  const y = land.height(at.x, at.z);
+  const turn = Math.atan2(tan.x, tan.z);
+  return (
+    <group position={[at.x, y, at.z]} rotation={[0, turn, 0]}>
+      {[-2.6, 2.6].map((x) => (
+        <mesh key={x} material={stone} position={[x, 2.1, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.9, 4.2, 0.9]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 4.45, 0]} castShadow>
+        <boxGeometry args={[6.8, 0.38, 0.7]} />
+        <meshStandardMaterial color="#5e4128" roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 4.95, 0]} rotation={[0, Math.PI / 4, 0]} scale={[1, 0.55, 1]} castShadow>
+        <coneGeometry args={[5.1, 1.4, 4]} />
+        <meshStandardMaterial color="#a8492f" roughness={0.75} />
+      </mesh>
+      {[-1.6, 1.6].map((x) => (
+        <mesh key={x} position={[x, 3.95, 0.4]}>
+          <boxGeometry args={[0.22, 0.32, 0.22]} />
+          <meshStandardMaterial color="#ffe2a8" emissive="#ffb35c" emissiveIntensity={2.2} toneMapped={false} />
+        </mesh>
+      ))}
+      <TapCircle position={[0, 0.06, 1.6]} radius={1.5} />
+    </group>
+  );
+}
+
+/**
+ * Pulse's post beside the path: the street vote of ch. 1 (your watch buzzes, a slider from -5 to 5, "Select") as a
+ * small board on a post, five knobs along a bar glowing in turn, and the green circle before it.
+ */
+function PollPost({ land }: { land: Land }) {
+  const knobs = useRef<THREE.MeshStandardMaterial[]>([]);
+  const at = land.path.getPointAt(POST_T);
+  const tan = land.path.getTangentAt(POST_T);
+  const side = new THREE.Vector3(-tan.z, 0, tan.x).normalize().multiplyScalar(-4.2);
+  const x = at.x + side.x;
+  const z = at.z + side.z;
+  const y = land.height(x, z);
+  useFrame(() => {
+    const t = weather.time.value;
+    knobs.current.forEach((m, i) => {
+      if (m) m.emissiveIntensity = 0.4 + 2.2 * Math.max(0, Math.cos((t * 1.4 - i * 0.6) % (Math.PI * 2)));
+    });
+  });
+  return (
+    // the board turns to the path and down it, so the walker coming up reads it
+    <group position={[x, y, z]} rotation={[0, Math.atan2(-side.x / 4.2 - tan.x * 1.3, -side.z / 4.2 - tan.z * 1.3), 0]}>
+      <mesh position={[0, 1.1, 0]} castShadow>
+        <cylinderGeometry args={[0.09, 0.12, 2.2, 8]} />
+        <meshStandardMaterial color="#4e3925" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 2.25, 0.05]} castShadow>
+        <boxGeometry args={[1.9, 1.05, 0.12]} />
+        <meshStandardMaterial color="#e9dfc8" roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 2.25, 0.12]}>
+        <boxGeometry args={[1.45, 0.05, 0.02]} />
+        <meshStandardMaterial color="#5a4a36" />
+      </mesh>
+      {["#e8605a", "#efa25a", "#e9d66b", "#9fd36a", "#5bc98a"].map((c, i) => (
+        <mesh key={c} position={[-0.68 + i * 0.34, 2.25, 0.14]}>
+          <sphereGeometry args={[0.08, 16, 12]} />
+          <meshStandardMaterial ref={(m) => void (knobs.current[i] = m!)} color={c} emissive={c} emissiveIntensity={0.6} toneMapped={false} />
+        </mesh>
+      ))}
+      <mesh position={[0, 2.86, 0.02]} rotation={[0, 0, Math.PI / 4]} castShadow>
+        <boxGeometry args={[0.32, 0.32, 0.16]} />
+        <meshStandardMaterial color="#a8492f" roughness={0.75} />
+      </mesh>
+      <TapCircle position={[0, 0.06, 1.5]} radius={1.1} />
+    </group>
+  );
+}
+
 /** Lanterns on wooden posts along the path, alternating sides: they lead the eye and glow at dusk. */
 function Lanterns({ land }: { land: Land }) {
   const spots = useMemo(() => {
@@ -531,6 +650,8 @@ const DEMO_RESULT = { shares: [46, 31, 15, 8], colours: ["#f2c14e", "#7fc8f8", "
 
 function EvelorHill({ live }: SetProps) {
   const land = useHillLand();
+  // fewer blades on slower devices: grass is the easiest place to spend less
+  const tier = useWorld((s) => s.tier);
   const cottages = useMemo(
     () => [
       { x: -17, z: 58, turn: 0.5 },
@@ -544,7 +665,7 @@ function EvelorHill({ live }: SetProps) {
   return (
     <group>
       <Ground land={land} />
-      <Grass land={land} count={300000} />
+      <Grass land={land} count={[40000, 60000, 110000, 150000][tier]} />
       <Lanterns land={land} />
       <Mountains />
       <Forest land={land} />
@@ -553,6 +674,8 @@ function EvelorHill({ live }: SetProps) {
         <Cottage key={i} land={land} {...c} seed={i + 1} />
       ))}
       <Arch land={land} />
+      <Gate land={land} />
+      <PollPost land={land} />
       <Room land={land} closed={live.roof ?? STILL} burst={live.burst ?? STILL} result={live.result ?? DEMO_RESULT} />
     </group>
   );
@@ -564,10 +687,18 @@ export const hillSet: SetModule = {
   origin: [0, 0, 0],
   hour: 8.5,
   poses: {
-    gate: { position: [-9, 5.5, 182], target: [0, 13, 60] },
-    pulse: { position: [7, 5, 122], target: [-6, 5, 78] },
+    // just outside the gate: its posts and circle in the left part of the view, the hill beyond
+    gate: poseBehind(GATE_T, 16, 3.2, onPath(GATE_T).p.clone().add(new THREE.Vector3(5, 5, -30)), 3),
+    // a few steps before the post: the post and its circle on the left, the path winding up to the hill behind
+    pulse: (() => {
+      const { p, tan, side } = onPath(POST_T);
+      const post = p.clone().addScaledVector(side, -4.2);
+      const look = post.clone().addScaledVector(tan, 10).addScaledVector(side, 4.5);
+      look.y = LAND.height(post.x, post.z) + 2.4;
+      return poseBehind(POST_T, 15, 3.6, look, 0);
+    })(),
     // the panel takes the right half: the bowl and its green circle sit in the left part of the view
-    ask: { position: [9.5, 28.8, 6.5], target: [3.2, 26.4, -2.6] },
+    ask: { position: [7.2, 29.6, 5.8], target: [2.6, 26.3, -2.2] },
   },
   Scene: EvelorHill,
 };
