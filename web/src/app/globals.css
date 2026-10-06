@@ -6,6 +6,8 @@
   --color-silver: #a7a9ac;
   --color-paper: #e9e4da;
   --color-safelight: #e0582c;
+  /* Meldan's green circle: the one colour that means "act here" in the world */
+  --color-tap: #38ff86;
   --color-film: #0e0d0c;
 
   --font-serif: var(--font-caslon), Georgia, serif;
@@ -124,4 +126,9 @@ body {
   .ticker:focus-within .ticker-track {
     animation-play-state: paused;
   }
+}
+
+/* the walk at "/": the page scrolls the camera, and settles near each stop */
+html.walk {
+  scroll-snap-type: y proximity;
 }

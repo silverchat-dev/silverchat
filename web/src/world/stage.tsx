@@ -30,7 +30,11 @@ export function sunAt(hour: number) {
 /** How much of the day is left: 1 in daylight, 0 at night, for the light's strength and colour. */
 export const daylight = (hour: number) => 1 - THREE.MathUtils.smoothstep(hour, 17.6, 19.6);
 
-export function Stage({ hour, quality = "high" }: { hour: number; quality?: "high" | "low" }) {
+/**
+ * `veil` (0 to 1) thickens the air until the place is gone: the walk crosses from one place to the next inside it.
+ * `quality` "low" drops ambient occlusion and the soft shadows' size, for phones and slower machines.
+ */
+export function Stage({ hour, quality = "high", veil }: { hour: number; quality?: "high" | "low"; veil?: { value: number } }) {
   const sun = useMemo(() => sunAt(hour), [hour]);
   const warm = THREE.MathUtils.smoothstep(sun.y, 0.05, 0.45);
   const day = daylight(hour);
@@ -40,6 +44,12 @@ export function Stage({ hour, quality = "high" }: { hour: number; quality?: "hig
   );
   useFrame((_, dt) => {
     weather.time.value += Math.min(dt, 0.05);
+    const f = scene.fog as THREE.Fog | null;
+    const v = veil?.value ?? 0;
+    if (f) {
+      f.near = THREE.MathUtils.lerp(240, 1, v);
+      f.far = THREE.MathUtils.lerp(1200, 30, v);
+    }
   });
   const sky = useMemo(() => skyAt(hour), [hour]);
   const haze = useMemo(() => new THREE.Color(sky.horizon), [sky]);
@@ -51,14 +61,14 @@ export function Stage({ hour, quality = "high" }: { hour: number; quality?: "hig
 
   return (
     <>
-      {!labOff("sky") && <PaintedSky sun={sun} colours={sky} time={weather.time} />}
+      {!labOff("sky") && <PaintedSky sun={sun} colours={sky} time={weather.time} veil={veil} />}
       <hemisphereLight args={[day > 0.5 ? "#bcd8f0" : "#3a4878", day > 0.5 ? "#4f6b33" : "#151a22", 0.12 + 0.16 * day]} />
       <directionalLight
         position={sun.clone().multiplyScalar(160)}
         color={sunColour}
         intensity={0.5 + 4.1 * day}
         castShadow={!labOff("shadow")}
-        shadow-mapSize={[4096, 4096]}
+        shadow-mapSize={quality === "high" ? [4096, 4096] : [2048, 2048]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.04}
         shadow-camera-left={-110}

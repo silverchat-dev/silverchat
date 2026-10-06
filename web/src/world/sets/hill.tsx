@@ -566,7 +566,8 @@ export const hillSet: SetModule = {
   poses: {
     gate: { position: [-9, 5.5, 182], target: [0, 13, 60] },
     pulse: { position: [7, 5, 122], target: [-6, 5, 78] },
-    ask: { position: [5, 28.6, 7.5], target: [0, 26.4, -1] },
+    // the panel takes the right half: the bowl and its green circle sit in the left part of the view
+    ask: { position: [9.5, 28.8, 6.5], target: [3.2, 26.4, -2.6] },
   },
   Scene: EvelorHill,
 };

@@ -21,7 +21,7 @@ const vertex = /* glsl */ `
 
 const fragment = /* glsl */ `
   uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uGround; uniform vec3 uSunColour; uniform vec3 uCloud;
-  uniform vec3 uSun; uniform float uTime;
+  uniform vec3 uSun; uniform float uTime; uniform float uVeil;
   varying vec3 vDir;
   float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -50,12 +50,14 @@ const fragment = /* glsl */ `
       float star = step(0.9975, h(floor(g))) * smoothstep(0.5, 0.0, length(fract(g) - 0.5));
       col += vec3(star) * dark * (0.6 + 0.4 * sin(uTime * 2.0 + h(floor(g)) * 30.0));
     }
+    // the haze between two places: the whole sky goes to the horizon's colour
+    col = mix(col, uHorizon, uVeil);
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
   }
 `;
 
-export function PaintedSky({ sun, colours, time }: { sun: THREE.Vector3; colours: SkyColours; time: { value: number } }) {
+export function PaintedSky({ sun, colours, time, veil }: { sun: THREE.Vector3; colours: SkyColours; time: { value: number }; veil?: { value: number } }) {
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -72,9 +74,10 @@ export function PaintedSky({ sun, colours, time }: { sun: THREE.Vector3; colours
           uCloud: { value: new THREE.Color() },
           uSun: { value: new THREE.Vector3() },
           uTime: time,
+          uVeil: veil ?? { value: 0 },
         },
       }),
-    [time],
+    [time, veil],
   );
   const u = material.uniforms;
   u.uZenith.value.set(colours.zenith);
