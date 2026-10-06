@@ -86,6 +86,7 @@ export function Hud() {
           >
             <span aria-hidden className="mr-1.5 inline-block size-1.5 rounded-full bg-paper/40 align-middle group-aria-[current=page]:bg-tap" />
             {s.name}
+            {s.also && s.live && ` · ${s.also.name}`}
           </Link>
         ))}
       </nav>
