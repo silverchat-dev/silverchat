@@ -12,6 +12,8 @@ import { ADDR, EXPLORER } from "@/lib/config";
 import { canonical, contentHash, type Content } from "@/lib/content";
 import { short } from "@/lib/format";
 
+import { Part } from "./journal";
+
 type Poll = {
   id: string;
   contentHash: string;
@@ -108,35 +110,37 @@ export function Proof({ poll }: { poll: Poll }) {
   });
 
   return (
-    <aside aria-label="Proof" className="space-y-5 bg-tray px-5 py-7 font-mono text-xs sm:px-7">
-      <p className="uppercase tracking-[0.14em] text-silver">The negative</p>
-      <p className="leading-relaxed text-paper/80">
-        Checked in your browser against Ethereum, not taken from our server.
-      </p>
-      <ul className="space-y-3">
+    <Part id="proof" title="Proof">
+      <p className="max-w-[34em] leading-relaxed text-paper/80">Checked in your browser against Ethereum, not taken from our server.</p>
+      <ul className="ruled">
         {(checks.data ?? []).map((c) => (
-          <li key={c.label} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-2">
-            <span aria-hidden className={c.ok ? "text-paper" : "text-silver"}>
+          <li key={c.label} className="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-3 py-3.5">
+            <span
+              aria-hidden
+              className={`grid size-7 place-items-center rounded-full border text-sm ${c.ok ? "border-paper bg-paper text-developer" : "border-silver text-silver"}`}
+            >
               {c.ok ? "✓" : "×"}
             </span>
-            <span>
-              <span className="text-paper">{c.label}</span>
-              <span className="sr-only">{c.ok ? " matches" : " does not match"}</span>
-              <span className="block text-silver">{c.detail}</span>
+            <span className="min-w-0 space-y-1">
+              <span className="block text-[1.05rem] leading-snug">
+                {c.label}
+                <span className="sr-only">{c.ok ? " matches" : " does not match"}</span>
+              </span>
+              <span className="block break-words font-mono text-[11px] leading-relaxed text-silver">{c.detail}</span>
             </span>
           </li>
         ))}
-        {checks.isLoading && <li className="text-silver">Checking…</li>}
+        {checks.isLoading && <li className="py-3.5 font-mono text-xs text-silver">Checking…</li>}
         {checks.isError && (
-          <li className="text-silver">
+          <li className="py-3.5 font-mono text-xs text-silver">
             Could not reach Ethereum from this browser.{" "}
-            <button type="button" onClick={() => checks.refetch()} className="underline underline-offset-4">
+            <button type="button" onClick={() => checks.refetch()} className="text-paper underline decoration-paper/30 underline-offset-4 hover:decoration-paper">
               Try again
             </button>
           </li>
         )}
       </ul>
-      <dl className="space-y-2 border-t border-silver/25 pt-4 text-silver">
+      <dl className="grid gap-x-6 gap-y-3 border-t border-dashed border-paper/20 pt-4 font-mono text-xs sm:grid-cols-3">
         <Row k="Asked" href={`${EXPLORER}/tx/${poll.tx}`}>
           block {Number(poll.block).toLocaleString("en-US")}
         </Row>
@@ -151,17 +155,17 @@ export function Proof({ poll }: { poll: Poll }) {
           </Row>
         )}
       </dl>
-    </aside>
+    </Part>
   );
 }
 
 function Row({ k, href, children }: { k: string; href: string; children: React.ReactNode }) {
   return (
-    <div className="flex justify-between gap-4">
-      <dt>{k}</dt>
+    <div className="flex items-baseline justify-between gap-4 sm:block sm:space-y-1">
+      <dt className="text-[11px] uppercase tracking-[0.16em] text-silver">{k}</dt>
       <dd>
-        <a href={href} target="_blank" rel="noreferrer" className="text-paper/85 underline-offset-4 hover:underline">
-          {children}
+        <a href={href} target="_blank" rel="noreferrer" className="text-paper underline decoration-paper/30 underline-offset-4 transition-colors hover:decoration-paper">
+          {children} ↗
         </a>
       </dd>
     </div>

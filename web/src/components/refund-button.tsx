@@ -8,6 +8,8 @@ import { askAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { tokens } from "@/lib/format";
 
+import { action } from "./journal";
+
 /** Shown to the asker when a poll was never fixed within 7 days of closing: the whole payment comes back. */
 export function RefundButton({ pollId, asker, cost }: { pollId: string; asker: string; cost: string }) {
   const { address, chainId } = useAccount();
@@ -38,14 +40,14 @@ export function RefundButton({ pollId, asker, cost }: { pollId: string; asker: s
   }
 
   return (
-    <div className="space-y-3 border border-paper/30 p-5">
-      <p className="text-lg">This poll was not fixed within 7 days of closing. You can take your {tokens(cost)} ZC back.</p>
-      <button type="button" onClick={refund} disabled={state !== "idle"} className="bg-paper px-5 py-2.5 font-mono text-sm text-developer disabled:opacity-50">
+    <div className="space-y-4">
+      <p className="max-w-[30em] text-lg leading-snug">This poll was not fixed within 7 days of closing. You can take your {tokens(cost)} ZC back.</p>
+      <button type="button" onClick={refund} disabled={state !== "idle"} className={action}>
         {state === "done" ? "Refunded" : state === "busy" ? "Confirm in your wallet…" : "Take my ZC back"}
       </button>
       {error && (
-        <p role="alert" className="font-mono text-xs text-silver">
-          {error}
+        <p role="alert" className="font-mono text-xs text-paper">
+          × {error}
         </p>
       )}
     </div>

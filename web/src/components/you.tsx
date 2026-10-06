@@ -9,6 +9,7 @@ import { useAccount, useSignMessage } from "wagmi";
 
 import type { Tally } from "@/lib/algorithm";
 import { receiptIds } from "@/lib/answer";
+import { Empty, Part, action, quiet, second } from "@/components/journal";
 import { topicOf, type Content } from "@/lib/content";
 import { lead, span } from "@/lib/format";
 import { isNew, parse, profileMessage, saveSeen, savedRaw, seenRaw, setSaved, stateOf, subscribe, type State } from "@/lib/you";
@@ -117,56 +118,82 @@ export function YouPage() {
   }, [address]);
 
   return (
-    <div className="space-y-14">
+    <div className="space-y-10">
       {all.isError && !all.data ? (
-        <p className="font-mono text-sm text-silver">Could not read the record. Try again in a minute.</p>
+        <p role="alert" className="font-mono text-sm text-silver">
+          Could not read the record. Try again in a minute.
+        </p>
       ) : isReconnecting || !mounted ? null : !address ? (
-        <div className="space-y-4">
-          <p className="text-xl text-paper/80">Connect a wallet to see the polls you asked and answered.</p>
-          <ConnectButton />
-        </div>
+        <Empty then={<Connect />}>Connect a wallet to see the polls you asked and answered.</Empty>
       ) : (
         <>
-          <ProfileSwitch address={address} />
-          <List title="Asked by you" polls={yours?.asked} seen={seen} now={now} empty="You have not asked a question with this wallet yet." loading={loading} />
+          <List
+            title="Asked by you"
+            polls={yours?.asked}
+            seen={seen}
+            now={now}
+            empty="You have not asked a question with this wallet yet."
+            next={{ href: "/ask", label: "Ask the network" }}
+            loading={loading}
+          />
           <List
             title="Answered on this device"
             polls={yours?.answered}
             seen={seen}
             now={now}
             empty="No answers from this wallet on this device. Answers you gave on another device are listed on that device."
+            next={{ href: "/pulse", label: "Answer today's questions" }}
             loading={loading}
           />
         </>
       )}
       {!(all.isError && !all.data) && (
-        <List title="Saved" polls={yours?.saved} seen={seen} now={now} empty="Nothing saved. Save a poll from its page to keep it here." loading={loading} />
+        <List
+          title="Saved"
+          polls={yours?.saved}
+          seen={seen}
+          now={now}
+          empty="Nothing saved. Save a poll from its page to keep it here."
+          next={{ href: "/pulse", label: "Find one on Pulse" }}
+          loading={loading}
+        />
       )}
+      {/* the profile switch comes last: the polls are what a visitor comes here for */}
+      {!(all.isError && !all.data) && address && mounted && !isReconnecting && <ProfileSwitch address={address} />}
     </div>
   );
 }
 
-type ListProps = { title: string; polls: Poll[] | undefined; seen: Record<string, State> | null; now: number; empty: string; loading: boolean };
+type ListProps = {
+  title: string;
+  polls: Poll[] | undefined;
+  seen: Record<string, State> | null;
+  now: number;
+  empty: string;
+  next: { href: string; label: string };
+  loading: boolean;
+};
 
-function List({ title, polls, seen, now, empty, loading }: ListProps) {
+function List({ title, polls, seen, now, empty, next, loading }: ListProps) {
   return (
-    <section className="space-y-4">
-      <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-        {title}
-        {polls?.length ? ` · ${polls.length}` : ""}
-      </h2>
+    <Part title={title} more={polls?.length ? <span className="text-silver tabular-nums">{polls.length}</span> : undefined}>
       {loading ? (
         <p className="font-mono text-sm text-silver">Reading the record…</p>
       ) : polls?.length ? (
-        <ol className="divide-y divide-silver/20 border-y border-silver/20">
+        <ol className="ruled -mx-2">
           {polls.map((p) => (
             <Row key={p.id} poll={p} now={now} fresh={isNew(seen, p.id, stateOf(p, now))} />
           ))}
         </ol>
       ) : (
-        <p className="text-lg text-paper/70">{empty}</p>
+        <div className="space-y-3">
+          <p className="max-w-[30em] text-lg leading-snug text-paper/80 italic">{empty}</p>
+          <Link href={next.href} className={`${quiet} font-mono text-xs`}>
+            {next.label} →
+          </Link>
+        </div>
       )}
-    </section>
+    </Part>
   );
 }
 
@@ -188,18 +215,42 @@ function Row({ poll, now, fresh }: { poll: Poll; now: number; fresh: boolean }) 
   return (
     <li>
       {/* no prefetch: a burst of requests for exactly these polls would tell the server which ones you answered */}
-      <Link href={`/poll/${poll.id}`} prefetch={false} className="grid gap-x-6 gap-y-1 py-4 hover:bg-paper/5 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-baseline">
-        <span className="min-w-0 space-y-1">
-          <span className="block font-mono text-xs uppercase tracking-[0.14em] text-silver">
-            No. {poll.id}
-            {topic && ` · ${topic}`}
-            {fresh && <span className="ml-2 bg-paper px-1.5 py-0.5 text-developer">New</span>}
+      <Link
+        href={`/poll/${poll.id}`}
+        prefetch={false}
+        className="group grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 rounded-md px-2 py-4 transition-colors hover:bg-paper/[0.04]"
+      >
+        <span className="min-w-0 space-y-2">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] uppercase tracking-[0.12em] text-silver">
+            <span>
+              No. {poll.id}
+              {topic && ` · ${topic}`}
+            </span>
+            {fresh && <span className="rounded-full bg-paper px-2 py-0.5 tracking-[0.08em] text-developer">New</span>}
           </span>
-          <span className="line-clamp-2 text-xl">{poll.content?.questions[0].q ?? (poll.hidden ? "Removed from the site" : "Question not published")}</span>
+          <span className="line-clamp-2 block text-[1.2rem] leading-snug text-balance">
+            {poll.content?.questions[0].q ?? (poll.hidden ? "Removed from the site" : "Question not published")}
+          </span>
+          <span className={`block font-mono text-[11px] ${state === "open" ? "text-paper" : "text-silver"}`}>{status}</span>
         </span>
-        <span className="font-mono text-sm text-paper/80 sm:text-right">{status}</span>
+        <span aria-hidden className="pt-6 font-mono text-sm text-silver transition-transform group-hover:translate-x-0.5 group-hover:text-paper">
+          →
+        </span>
       </Link>
     </li>
+  );
+}
+
+/** Connect a wallet as the one green action of a view. It opens the same wallet list as the button in the header. */
+export function Connect({ children = "Connect a wallet" }: { children?: string }) {
+  return (
+    <ConnectButton.Custom>
+      {({ openConnectModal, mounted }) => (
+        <button type="button" onClick={openConnectModal} disabled={!mounted} className={action}>
+          {children}
+        </button>
+      )}
+    </ConnectButton.Custom>
   );
 }
 
@@ -211,8 +262,11 @@ export function SaveButton({ id }: { id: string }) {
       type="button"
       aria-pressed={on}
       onClick={() => setSaved(id, !on)}
-      className="border border-paper/60 px-3 py-1.5 font-mono text-xs text-paper hover:border-paper aria-pressed:bg-paper aria-pressed:text-developer"
+      className="inline-flex min-h-11 items-center gap-2 rounded-full border border-paper/35 px-4 font-mono text-[12px] tracking-[0.04em] text-paper transition-colors hover:border-paper aria-pressed:border-paper aria-pressed:bg-paper aria-pressed:text-developer"
     >
+      <svg aria-hidden viewBox="0 0 12 14" className="h-3.5 w-3" fill={on ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round">
+        <path d="M1.5 1.5h9v11L6 9.5l-4.5 3z" />
+      </svg>
       {on ? "Saved" : "Save"}
     </button>
   );
@@ -263,13 +317,12 @@ function ProfileSwitch({ address }: { address: string }) {
   if (state.isError && on === undefined) return <p className="font-mono text-sm text-silver">Could not read your profile setting. Try again in a minute.</p>;
   if (on === undefined) return null;
   return (
-    <section className="space-y-3 bg-tray p-6">
-      <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Public profile · {on ? "on" : "off"}</h2>
-      <p className="max-w-2xl leading-relaxed text-paper/80">
+    <Part title={`Public profile · ${on ? "on" : "off"}`}>
+      <p className="max-w-[34em] leading-relaxed text-paper/80">
         {on ? (
           <>
             Anyone can open{" "}
-            <Link href={`/u/${address.toLowerCase()}`} className="underline underline-offset-4">
+            <Link href={`/u/${address.toLowerCase()}`} className={quiet}>
               your profile
             </Link>
             . It shows the polls you asked and the ZC you claimed. Ethereum shows both anyway. It does not show what you answered.
@@ -279,7 +332,7 @@ function ProfileSwitch({ address }: { address: string }) {
         )}
       </p>
       <div className="flex flex-wrap items-center gap-4">
-        <button type="button" onClick={flip} disabled={busy} className="border border-paper/60 px-3 py-2 font-mono text-xs text-paper hover:border-paper disabled:opacity-50">
+        <button type="button" onClick={flip} disabled={busy} className={second}>
           {busy ? "Sign the message in your wallet…" : on ? "Hide my profile" : "Show my profile"}
         </button>
         {note && (
@@ -288,6 +341,6 @@ function ProfileSwitch({ address }: { address: string }) {
           </span>
         )}
       </div>
-    </section>
+    </Part>
   );
 }
