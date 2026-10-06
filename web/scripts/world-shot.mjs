@@ -21,7 +21,8 @@ const { values: o } = parseArgs({
   },
 });
 const [width, height] = o.size.split("x").map(Number);
-const browser = await chromium.launch({ headless: false, args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--window-position=-2400,0"] });
+// headless Chrome still draws on the GPU (ANGLE on Metal), and opens no window
+const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width, height } });
 const q = new URLSearchParams({ set: o.set, ...(o.view ? { view: o.view } : {}), ...(o.hour ? { hour: o.hour } : {}) });
 const errors = [];

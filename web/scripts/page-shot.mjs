@@ -18,7 +18,8 @@ const { values: o } = parseArgs({
   },
 });
 const [width, height] = o.size.split("x").map(Number);
-const browser = await chromium.launch(o.world ? { headless: false, args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--window-position=-2400,0"] } : {});
+// headless, with the GPU for the world: no window opens
+const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const context = await browser.newContext({ viewport: { width, height }, reducedMotion: o.world ? "no-preference" : "reduce", isMobile: width < 768, hasTouch: width < 768 });
 await context.addInitScript(() => sessionStorage.setItem("meldan:entered", "1"));
 const page = await context.newPage();
