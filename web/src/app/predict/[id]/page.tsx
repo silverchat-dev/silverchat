@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
-import { StakePanel } from "@/components/predict";
+import { Figures, Page, Part, label, quiet } from "@/components/journal";
+import { Sides, StakePanel } from "@/components/predict";
 import { ADDR, EXPLORER } from "@/lib/config";
-import { pct, short, span, tokens } from "@/lib/format";
+import { short, span, tokens } from "@/lib/format";
 import { utcStamp as utc } from "@/lib/market";
 import { db } from "@/lib/server/db";
 import { displayTime } from "@/lib/server/eligibility";
@@ -47,84 +49,108 @@ export default async function MarketPage({ params }: PageProps<"/predict/[id]">)
     m.kind === "price"
       ? { label: `Chainlink ${m.feed}`, href: `https://data.chain.link/feeds/ethereum/mainnet/${(m.feed ?? "").toLowerCase().replace("/", "-")}` }
       : { label: "Reality.eth question", href: `https://reality.eth.limo/#!/network/1/question/${ADDR.reality}-${m.questionId}` };
-  const facts: [string, string][] = [
-    ["Staked", `${tokens(m.pool, 0)} ZC`],
-    ["Stakes", String(m.stakes)],
-    ["Closes", utc(m.closesAt)],
-    ["Reveals end", utc(m.revealEnds)],
-    [m.kind === "price" ? "Price read" : "Opens", utc(m.resolvesAt)],
-    ["SC locked", `${tokens(m.lock, 0)} by ${short(m.opener)}`],
-  ];
+  // the market's days in the order they come, the next one marked while the market is open
+  const days = (
+    [
+      ["Staking closes", m.closesAt],
+      ["Reveals end", m.revealEnds],
+      [m.kind === "price" ? "Price read" : "Question opens", m.resolvesAt],
+    ] as [string, number][]
+  ).sort((a, b) => a[1] - b[1]);
+  const next = m.status === "open" ? days.find(([, at]) => at > now)?.[0] : undefined;
 
   return (
-    <section className="mx-auto grid max-w-6xl gap-10 px-5 py-10 sm:px-8 md:py-14 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="min-w-0 space-y-10">
-        <header className="space-y-5">
-          <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-            Predict No. {m.id} · {m.kind === "price" ? `Price · ${m.feed}` : "Event"}
-          </p>
-          <h1 className="text-4xl leading-tight text-balance wrap-anywhere sm:text-5xl">{m.title ?? "This market's question is not shown here."}</h1>
-          <p className="font-mono text-sm text-paper/80">{state}</p>
-        </header>
+    <Page>
+      <header className="space-y-5">
+        <Link href="/predict" className={`${label} inline-flex min-h-11 items-center gap-2 transition-colors hover:text-paper`}>
+          <span aria-hidden>←</span> All markets
+        </Link>
+        <p className={label}>
+          Market No. {m.id} · {m.kind === "price" ? `Price · ${m.feed}` : "Event"}
+        </p>
+        <h1 className="text-[clamp(1.85rem,4.4vw,2.7rem)] leading-[1.08] tracking-[-0.01em] text-balance wrap-anywhere">
+          {m.title ?? "This market's question is not shown here."}
+        </h1>
+        <p className="flex items-start gap-2.5 font-mono text-[13px] leading-relaxed text-paper/85">
+          <span aria-hidden className={`mt-[0.45em] size-2 shrink-0 rounded-full ${m.status === "open" && !closed ? "bg-tap" : "border border-paper/60"}`} />
+          {state}
+        </p>
+      </header>
 
-        {closed && shown > 0n && (
-          <section aria-labelledby="sides" className="space-y-3">
-            <h2 id="sides" className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-              Revealed sides
-            </h2>
-            <div className="flex h-3 bg-paper/10" aria-hidden>
-              <div className="h-full bg-paper" style={{ width: `${pct(Number(yes / 10n ** 15n), Number(shown / 10n ** 15n))}%` }} />
-            </div>
-            <p className="flex justify-between font-mono text-sm text-paper/85">
-              <span>YES {tokens(yes, 0)} ZC</span>
-              <span>NO {tokens(no, 0)} ZC</span>
-            </p>
-            {BigInt(m.pool) > shown && (
-              <p className="font-mono text-xs text-silver">
-                {tokens(BigInt(m.pool) - shown, 0)} ZC {now < m.revealEnds ? "not revealed yet" : "never revealed, counted as lost"}.
-              </p>
-            )}
-          </section>
-        )}
-
-        <StakePanel
-          now={now}
-          market={{
-            id: m.id,
-            kind: m.kind,
-            opener: m.opener,
-            closesAt: m.closesAt,
-            revealEnds: m.revealEnds,
-            resolvesAt: m.resolvesAt,
-            status: m.status,
-            refund: m.refund,
-            invalid: m.invalid,
-            lockClaimed: m.lockClaimed,
-          }}
+      <Part title="The pool" id="pool">
+        <Figures
+          columns={3}
+          items={[
+            { label: "ZC staked", value: tokens(m.pool, 0) },
+            { label: "Stakes", value: m.stakes },
+          ]}
         />
-      </div>
+        {!closed ? (
+          <Sides yes={m.yes} no={m.no} sealed>
+            Every side is sealed until {utc(m.closesAt)}. Nobody can see which way the pool leans.
+          </Sides>
+        ) : shown > 0n ? (
+          <Sides yes={m.yes} no={m.no} sealed={false}>
+            {BigInt(m.pool) > shown && <>{tokens(BigInt(m.pool) - shown, 0)} ZC {now < m.revealEnds ? "not revealed yet" : "never revealed, counted as lost"}.</>}
+          </Sides>
+        ) : (
+          BigInt(m.pool) > 0n && (
+            <p className="font-mono text-xs text-silver">
+              {tokens(m.pool, 0)} ZC {now < m.revealEnds ? "not revealed yet" : "never revealed, counted as lost"}.
+            </p>
+          )
+        )}
+      </Part>
 
-      <aside className="space-y-5 self-start bg-tray px-5 py-7 font-mono text-sm sm:px-7 lg:sticky lg:top-6">
-        <dl className="space-y-2">
-          {facts.map(([k, v]) => (
-            <div key={k} className="flex justify-between gap-4">
-              <dt className="text-silver">{k}</dt>
-              <dd className="text-right tabular-nums">{v}</dd>
-            </div>
+      <StakePanel
+        now={now}
+        market={{
+          id: m.id,
+          kind: m.kind,
+          opener: m.opener,
+          closesAt: m.closesAt,
+          revealEnds: m.revealEnds,
+          resolvesAt: m.resolvesAt,
+          status: m.status,
+          refund: m.refund,
+          invalid: m.invalid,
+          lockClaimed: m.lockClaimed,
+        }}
+      />
+
+      <Part title="The terms" id="terms">
+        <ol className="ruled">
+          {days.map(([k, at]) => (
+            <li key={k} className="flex items-baseline justify-between gap-4 py-3">
+              <span className="flex items-center gap-2.5 text-[1.05rem]">
+                <span aria-hidden className={`size-1.5 rounded-full ${k === next ? "bg-paper" : "bg-paper/25"}`} />
+                {k}
+                {k === next && <span className="ml-1 font-mono text-[11px] text-silver">next</span>}
+              </span>
+              <span className="text-right font-mono text-[12px] text-paper/80 tabular-nums">{utc(at)}</span>
+            </li>
           ))}
-        </dl>
-        <p className="border-t border-silver/25 pt-4 text-xs leading-relaxed text-silver">
+          <li className="flex items-baseline justify-between gap-4 py-3">
+            <span className="pl-4 text-[1.05rem]">SC locked</span>
+            <span className="text-right font-mono text-[12px] text-paper/80 tabular-nums">
+              {tokens(m.lock, 0)} by {short(m.opener)}
+            </span>
+          </li>
+        </ol>
+        <p className="max-w-[34em] text-[0.95rem] leading-relaxed text-paper/75 text-pretty">
           {m.kind === "price"
             ? "YES if the feed's price at that time is at or above the line. Anyone can settle it with the Chainlink round that was current then."
             : "After the question opens, anyone can answer on Reality.eth with an ETH bond; a higher bond overrules it, and Kleros settles a dispute. Our keeper posts the first answer."}
         </p>
-        <a href={oracle.href} target="_blank" rel="noreferrer" className="block underline underline-offset-4">
-          {oracle.label}
-        </a>
-        <a href={`${EXPLORER}/tx/${m.tx}`} target="_blank" rel="noreferrer" className="block text-xs text-silver underline-offset-4 hover:underline">
-          Opened in {short(m.tx)}
-        </a>
-      </aside>
-    </section>
+        <p className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-[12px]">
+          <a href={oracle.href} target="_blank" rel="noreferrer" className={quiet}>
+            {oracle.label} ↗
+          </a>
+          <a href={`${EXPLORER}/tx/${m.tx}`} target="_blank" rel="noreferrer" className={`${quiet} text-silver`}>
+            Opened in {short(m.tx)} ↗
+          </a>
+        </p>
+      </Part>
+    </Page>
   );
 }

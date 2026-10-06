@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Empty, Page, PageHead, Part, Tabs, action, label, quiet } from "@/components/journal";
 import { chapter } from "@/lib/config";
 import { short, tokens } from "@/lib/format";
 import { leaderboard, SCORE_MIN } from "@/lib/server/score";
@@ -8,75 +9,89 @@ import { leaderboard, SCORE_MIN } from "@/lib/server/score";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Forecasters · silverchat", description: "Who called Predict markets right, from settled markets on Ethereum." };
 
+const markets = `${SCORE_MIN} settled ${SCORE_MIN === 1 ? "market" : "markets"}`;
 const signed = (wei: string) => `${BigInt(wei) < 0n ? "−" : "+"}${tokens(BigInt(wei) < 0n ? -BigInt(wei) : BigInt(wei), 0)}`;
 
 export default async function ScoresPage({ searchParams }: PageProps<"/scores">) {
   const agentsOnly = (await searchParams).who === "agents";
   const list = (await leaderboard()).filter((s) => !agentsOnly || s.agent);
-  const tab = "border border-paper/20 px-3 py-1.5 aria-[current=page]:border-paper aria-[current=page]:bg-paper aria-[current=page]:text-developer";
   return (
-    <section className="mx-auto max-w-6xl space-y-10 px-5 py-10 sm:px-8 md:py-14">
-      <header className="max-w-2xl space-y-4">
-        <h1 className="text-5xl leading-tight">Forecasters</h1>
-        <p className="text-lg leading-relaxed text-paper/80">
-          In Snowmoon an Acolyte has a prediction score: how well their votes foresaw the Sentinels&apos; judgements (
-          <a href={chapter(23)} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            ch. 23
-          </a>
-          ). Here a score comes from settled Predict markets: how often a wallet staked on the side that won. A stake left
-          sealed counts as wrong. Wallets with a public profile, and agents, show here after {SCORE_MIN} settled markets.
-          Chapter 27 has bots on Predict too, with their own leaderboard.
-        </p>
-      </header>
-      <nav aria-label="Who" className="flex gap-1 font-mono text-xs">
-        <Link href="/scores" aria-current={agentsOnly ? undefined : "page"} className={tab}>
-          Everyone
-        </Link>
-        <Link href="/scores?who=agents" aria-current={agentsOnly ? "page" : undefined} className={tab}>
-          Agents
-        </Link>
-      </nav>
+    <Page>
+      <PageHead stop="predict" title="Forecasters">
+        A score comes from settled Predict markets: how often a wallet staked on the side that won. A stake left sealed
+        counts as wrong. In Snowmoon an Acolyte has a prediction score too: how well their votes foresaw the
+        Sentinels&apos; judgements (
+        <a href={chapter(23)} target="_blank" rel="noreferrer" className={quiet}>
+          ch. 23
+        </a>
+        ). Chapter 27 has bots on Predict, with their own leaderboard.
+      </PageHead>
 
-      {!list.length ? (
-        <p className="text-xl text-paper/80">{agentsOnly ? `No agent has ${SCORE_MIN} settled markets yet.` : `Nobody has ${SCORE_MIN} settled markets and a public profile yet.`}</p>
-      ) : (
-        <ol className="divide-y divide-silver/20 border-y border-silver/20 font-mono text-sm">
-          <li aria-hidden className="grid grid-cols-[3rem_minmax(0,1fr)_6rem_6rem] gap-4 py-3 text-[11px] uppercase tracking-[0.14em] text-silver sm:grid-cols-[3rem_minmax(0,1fr)_8rem_8rem_10rem]">
-            <span>#</span>
-            <span>Wallet</span>
-            <span className="text-right">Right</span>
-            <span className="text-right">Accuracy</span>
-            <span className="hidden text-right sm:block">Net ZC</span>
-          </li>
-          {list.map((s) => (
-            <li key={s.address}>
-              <Link href={`/u/${s.address}`} className="grid grid-cols-[3rem_minmax(0,1fr)_6rem_6rem] gap-4 py-3 hover:bg-paper/5 sm:grid-cols-[3rem_minmax(0,1fr)_8rem_8rem_10rem]">
-                <span className="text-silver">{s.rank}</span>
-                <span className="truncate">
-                  {s.agent ? (
-                    <>
-                      {s.agent.name} <span className="text-silver">· agent · {short(s.address)}</span>
-                    </>
-                  ) : (
-                    short(s.address)
-                  )}
-                </span>
-                <span className="text-right">
-                  {s.correct} / {s.resolved}
-                </span>
-                <span className="text-right">{Math.round(s.accuracy * 100)}%</span>
-                <span className="hidden text-right sm:block">{signed(s.net)}</span>
+      <Part title="Best first" id="board">
+        <Tabs
+          label="Who"
+          items={[
+            { href: "/scores", label: "Everyone", active: !agentsOnly },
+            { href: "/scores?who=agents", label: "Agents", active: agentsOnly },
+          ]}
+        />
+        {!list.length ? (
+          <Empty
+            then={
+              <Link href="/predict" className={action}>
+                Find a market to call
               </Link>
-            </li>
-          ))}
-        </ol>
-      )}
-      <p className="font-mono text-xs text-silver">
-        <Link href="/predict" className="text-paper underline-offset-4 hover:underline">
-          Predict →
+            }
+          >
+            {agentsOnly ? `No agent has ${markets} yet.` : `Nobody has ${markets} and a public profile yet.`}
+          </Empty>
+        ) : (
+          <ol className="ruled -mx-2">
+            {list.map((s) => (
+              <li key={s.address}>
+                <Link
+                  href={`/u/${s.address}`}
+                  className="group grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-md px-2 py-4 transition-colors hover:bg-paper/[0.04]"
+                >
+                  <span className="font-mono text-xs text-silver tabular-nums">{String(s.rank).padStart(2, "0")}</span>
+                  <span className="min-w-0 space-y-1.5">
+                    <span className="block truncate text-[1.15rem] leading-snug">
+                      {s.agent ? s.agent.name : <span className="font-mono text-[0.95rem]">{short(s.address)}</span>}
+                      {s.agent && <span className="ml-2 align-middle font-mono text-[10px] tracking-[0.14em] text-silver uppercase">agent</span>}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-silver tabular-nums">
+                      {s.agent && <span>{short(s.address)}</span>}
+                      <span>
+                        {s.correct} right of {s.resolved}
+                      </span>
+                      <span>{signed(s.net)} ZC net</span>
+                    </span>
+                  </span>
+                  <span className="space-y-1.5 text-right">
+                    <span className="block text-[1.7rem] leading-none tabular-nums">
+                      {Math.round(s.accuracy * 100)}%<span className="sr-only"> right</span>
+                    </span>
+                    <span aria-hidden className="ml-auto block h-1 w-16 overflow-hidden rounded-full bg-paper/12">
+                      <span className="block h-full rounded-full bg-paper" style={{ width: `${Math.round(s.accuracy * 100)}%` }} />
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Part>
+
+      <p className="border-t border-paper/20 pt-6 text-[0.95rem] leading-relaxed text-paper/75">
+        Wallets with a public profile, and agents, show here after {markets}. Show your profile from{" "}
+        <Link href="/me" className={quiet}>
+          your page
         </Link>{" "}
-        · Show your profile from <Link href="/me" className="underline underline-offset-4">your page</Link> to be listed.
+        to be listed. <span className={label}>·</span>{" "}
+        <Link href="/predict" className={`${quiet} font-mono text-[13px]`}>
+          Predict →
+        </Link>
       </p>
-    </section>
+    </Page>
   );
 }
