@@ -43,6 +43,13 @@ const fragment = /* glsl */ `
       float lit = 0.75 + 0.25 * s;
       col = mix(col, uCloud * lit + uSunColour * pow(s, 8.0) * 0.25, c * smoothstep(0.02, 0.22, up) * 0.9);
     }
+    // stars, only once the sky is dark
+    float dark = 1.0 - smoothstep(0.05, 0.25, dot(uZenith, vec3(0.33)));
+    if (up > 0.0 && dark > 0.0) {
+      vec2 g = d.xz / (up + 0.4) * 140.0;
+      float star = step(0.9975, h(floor(g))) * smoothstep(0.5, 0.0, length(fract(g) - 0.5));
+      col += vec3(star) * dark * (0.6 + 0.4 * sin(uTime * 2.0 + h(floor(g)) * 30.0));
+    }
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
   }
@@ -92,6 +99,9 @@ export function skyAt(hour: number): SkyColours {
     [13, { zenith: "#2a62b0", horizon: "#d7e8f2", ground: "#7d8a6a", sun: "#fff8ea", cloud: "#ffffff" }],
     [16.5, { zenith: "#35619e", horizon: "#f3d3a0", ground: "#7a6e55", sun: "#ffc277", cloud: "#fbe6c8" }],
     [18, { zenith: "#1f2f57", horizon: "#e98a5c", ground: "#4a3b3a", sun: "#ff7a45", cloud: "#e7a588" }],
+    [19.5, { zenith: "#121a3a", horizon: "#4b3f6e", ground: "#1d1a26", sun: "#ff9a6a", cloud: "#3e3a5c" }],
+    [21, { zenith: "#070b1c", horizon: "#1c2547", ground: "#0b0c12", sun: "#c9d6ff", cloud: "#1b2240" }],
+    [24, { zenith: "#05081a", horizon: "#141c3a", ground: "#08090e", sun: "#c9d6ff", cloud: "#151b34" }],
   ];
   let i = 0;
   while (i < keys.length - 2 && hour > keys[i + 1][0]) i++;

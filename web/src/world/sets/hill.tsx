@@ -13,6 +13,7 @@ import { barkMaterial, foliageMaterial, grassMaterial, groundMaterial, stoneMate
 import { fbm, rng, simplex2, smoothstep } from "../kit/noise";
 import { landGeometry, makeLand, type Land } from "../kit/terrain";
 import { labOff } from "../lab";
+import type { SetModule, SetProps } from "./types";
 import { BurnBowl, Embers, SkyDial, TeaRobot } from "./room";
 import { bladeGeometry, scatter, treeGeometry, type Kind } from "../kit/vegetation";
 
@@ -285,11 +286,10 @@ const PETALS = 12;
  * The round room on the summit: a ring wall, a bench all around inside, a stone floor, the green circle in the middle,
  * and a roof of twelve copper petals hinged on the rim. `closed` 0 is open sky, 1 the roof fully closed.
  */
-function Room({ land, closed }: { land: Land; closed: React.RefObject<number> }) {
+function Room({ land, closed, burst, result }: { land: Land; closed: React.RefObject<number>; burst: React.RefObject<number>; result: { shares: number[]; colours: string[] } }) {
   const y = land.summit;
   const stone = useMemo(() => stoneMaterial({ a: "#cdbf9f", b: "#958670", brick: [1.05, 0.46], moss: 0.45 }), []);
   const floorStone = useMemo(() => stoneMaterial({ a: "#c9bca0", b: "#9a8d76", brick: [1.0, 0.85], moss: 0.12, radial: new THREE.Vector3(HILL.x, 0, HILL.z) }), []);
-  const burst = useRef(0);
   const ring = useMemo(() => {
     const { radius: R, wall: H, thick: T } = ROOM;
     const profile = [
@@ -394,7 +394,7 @@ function Room({ land, closed }: { land: Land; closed: React.RefObject<number> })
       </mesh>
       <BurnBowl stone={stone} />
       <Embers burst={burst} />
-      <SkyDial shares={[46, 31, 15, 8]} colours={["#f2c14e", "#7fc8f8", "#f78c6b", "#b8a1e8"]} height={ROOM.wall + 6} />
+      <SkyDial shares={result.shares} colours={result.colours} height={ROOM.wall + 6} />
       <group position={[-5.6, 0, 3.4]} rotation={[0, 2.2, 0]}>
         <TeaRobot />
       </group>
@@ -526,11 +526,11 @@ function Mountains() {
   );
 }
 
-export function EvelorHill({ closed }: { closed: React.RefObject<number> }) {
+const STILL = { current: 0 };
+const DEMO_RESULT = { shares: [46, 31, 15, 8], colours: ["#f2c14e", "#7fc8f8", "#f78c6b", "#b8a1e8"] };
+
+function EvelorHill({ live }: SetProps) {
   const land = useHillLand();
-  useFrame((_, dt) => {
-    weather.time.value += Math.min(dt, 0.05);
-  });
   const cottages = useMemo(
     () => [
       { x: -17, z: 58, turn: 0.5 },
@@ -553,7 +553,20 @@ export function EvelorHill({ closed }: { closed: React.RefObject<number> }) {
         <Cottage key={i} land={land} {...c} seed={i + 1} />
       ))}
       <Arch land={land} />
-      <Room land={land} closed={closed} />
+      <Room land={land} closed={live.roof ?? STILL} burst={live.burst ?? STILL} result={live.result ?? DEMO_RESULT} />
     </group>
   );
 }
+
+/** Stops 0 to 2: the gate where the walk starts, the Kalimar path (Pulse), and the round room on the hill (Ask). */
+export const hillSet: SetModule = {
+  id: "hill",
+  origin: [0, 0, 0],
+  hour: 8.5,
+  poses: {
+    gate: { position: [-9, 5.5, 182], target: [0, 13, 60] },
+    pulse: { position: [7, 5, 122], target: [-6, 5, 78] },
+    ask: { position: [5, 28.6, 7.5], target: [0, 26.4, -1] },
+  },
+  Scene: EvelorHill,
+};

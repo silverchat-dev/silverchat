@@ -6,7 +6,7 @@
  * what glows, a touch of grain and vignette, and AgX tone mapping over all of it.
  */
 import { Environment, Lightformer } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Bloom, BrightnessContrast, EffectComposer, HueSaturation, N8AO, Noise, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import { useEffect, useMemo } from "react";
@@ -16,17 +16,31 @@ import { weather } from "./kit/materials";
 import { PaintedSky, skyAt } from "./kit/sky";
 import { labOff } from "./lab";
 
-/** The sun for an hour of the day, 6 (sunrise) to 18 (sunset), coming up in the east (+x) and setting in the west. */
+/**
+ * The light for an hour: the sun from 6 (sunrise, east +x) to 18 (sunset, west); after dusk the moon, high and pale,
+ * so night scenes still have one clear light and readable shadows.
+ */
 export function sunAt(hour: number) {
+  if (hour > 18.6) return new THREE.Vector3(-0.35, 0.8, 0.45).normalize();
   const a = ((hour - 6) / 12) * Math.PI;
   const elevation = Math.sin(a) * 0.95;
-  return new THREE.Vector3(Math.cos(a), Math.max(elevation, -0.1), 0.55).normalize();
+  return new THREE.Vector3(Math.cos(a), Math.max(elevation, 0.04), 0.55).normalize();
 }
+
+/** How much of the day is left: 1 in daylight, 0 at night, for the light's strength and colour. */
+export const daylight = (hour: number) => 1 - THREE.MathUtils.smoothstep(hour, 17.6, 19.6);
 
 export function Stage({ hour, quality = "high" }: { hour: number; quality?: "high" | "low" }) {
   const sun = useMemo(() => sunAt(hour), [hour]);
   const warm = THREE.MathUtils.smoothstep(sun.y, 0.05, 0.45);
-  const sunColour = useMemo(() => new THREE.Color("#ffb46b").lerp(new THREE.Color("#fff3df"), warm), [warm]);
+  const day = daylight(hour);
+  const sunColour = useMemo(
+    () => new THREE.Color("#ffb46b").lerp(new THREE.Color("#fff3df"), warm).lerp(new THREE.Color("#8fa2e8"), 1 - day),
+    [warm, day],
+  );
+  useFrame((_, dt) => {
+    weather.time.value += Math.min(dt, 0.05);
+  });
   const sky = useMemo(() => skyAt(hour), [hour]);
   const haze = useMemo(() => new THREE.Color(sky.horizon), [sky]);
   const { scene } = useThree();
@@ -38,11 +52,11 @@ export function Stage({ hour, quality = "high" }: { hour: number; quality?: "hig
   return (
     <>
       {!labOff("sky") && <PaintedSky sun={sun} colours={sky} time={weather.time} />}
-      <hemisphereLight args={["#bcd8f0", "#4f6b33", 0.28]} />
+      <hemisphereLight args={[day > 0.5 ? "#bcd8f0" : "#3a4878", day > 0.5 ? "#4f6b33" : "#151a22", 0.12 + 0.16 * day]} />
       <directionalLight
         position={sun.clone().multiplyScalar(160)}
         color={sunColour}
-        intensity={4.6}
+        intensity={0.5 + 4.1 * day}
         castShadow={!labOff("shadow")}
         shadow-mapSize={[4096, 4096]}
         shadow-bias={-0.0004}
