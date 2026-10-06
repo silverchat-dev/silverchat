@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { lead, people, span, tokens } from "@/lib/format";
+import { Empty, Figures, Page, PageHead, Part, action, quiet } from "@/components/journal";
 import { Topics, pickTopic } from "@/components/topics";
 import { topicOf, type Content } from "@/lib/content";
+import { lead, people, span, tokens } from "@/lib/format";
 import { db } from "@/lib/server/db";
 import { liveFeed } from "@/lib/server/feed";
 import { stats } from "@/lib/server/stats";
@@ -21,120 +22,119 @@ export default async function PulsePage({ searchParams }: PageProps<"/pulse">) {
     .slice(0, 60);
 
   return (
-    <section className="mx-auto max-w-6xl space-y-10 px-5 py-10 sm:px-8 md:py-14">
-      <header className="space-y-4">
-        <h1 className="text-5xl leading-tight">Pulse</h1>
-        <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
-          Every question open right now, laid out like a contact sheet, in the order the{" "}
-          <Link href="/algorithm" className="underline underline-offset-4">
-            published rules
-          </Link>{" "}
-          give. Pick a frame to answer it.
-        </p>
-        <Topics base="/pulse" active={topic} />
-      </header>
+    <Page>
+      <PageHead stop="pulse" art={<PostArt />}>
+        Every question open right now, in the order the{" "}
+        <Link href="/algorithm" className={quiet}>
+          published rules
+        </Link>{" "}
+        give. Answer with a signature: no gas, and nobody sees who you are.
+      </PageHead>
 
       {!topic && <NetworkNow />}
 
-      {live.length ? (
-        <ol className="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
-          {live.map((p) => {
-            const q = p.parsed?.questions[0].q ?? null;
-            const t = topicOf(p.parsed);
-            const filled = Math.min(1, (p.answers ?? 0) / p.breadth);
-            return (
-              <li key={p.id} className="film">
-                <span aria-hidden className="absolute left-3 top-[14px] font-mono text-[9px] leading-none tracking-[0.2em] text-paper/40">
-                  {p.n} ▸ SILVERCHAT {p.id}
-                  {t && ` ▸ ${t.toUpperCase()}`}
-                </span>
-                <Link
-                  href={`/poll/${p.id}`}
-                  className="flex h-full min-h-40 flex-col sm:min-h-56 justify-between gap-6 bg-paper p-5 text-developer outline-offset-4 transition-[filter] duration-300 hover:brightness-[1.04]"
-                >
-                  <span className="line-clamp-4 text-xl leading-snug">{q ?? "Question not published"}</span>
-                  <span className="space-y-2 font-mono text-xs">
-                    <span className="block h-1.5 bg-developer/10" aria-hidden>
-                      <span className="block h-full bg-developer" style={{ width: `${filled * 100}%` }} />
-                    </span>
-                    <span className="flex justify-between gap-3 text-developer/70">
-                      <span>
-                        {(p.answers ?? 0).toLocaleString("en-US")} / {people(p.breadth)}
+      <Part title={topic ? `Open now · ${topic}` : "Open now"} more={<span className="text-silver">{live.length || ""}</span>}>
+        <Topics base="/pulse" active={topic} />
+        {live.length ? (
+          <ol className="ruled -mx-2">
+            {live.map((p) => {
+              const q = p.parsed?.questions[0].q ?? null;
+              const t = topicOf(p.parsed);
+              const filled = Math.min(1, (p.answers ?? 0) / p.breadth);
+              return (
+                <li key={p.id}>
+                  <Link href={`/poll/${p.id}`} className="group grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-start gap-x-3 rounded-md px-2 py-4 transition-colors hover:bg-paper/[0.04]">
+                    <span className="pt-1 font-mono text-xs text-silver tabular-nums">{String(p.n).padStart(2, "0")}</span>
+                    <span className="space-y-2.5">
+                      <span className="line-clamp-3 block text-[1.2rem] leading-snug text-balance">{q ?? "Question not published"}</span>
+                      <span className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-silver">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="block h-1 w-16 overflow-hidden rounded-full bg-paper/12" aria-hidden>
+                            <span className="block h-full rounded-full bg-tap" style={{ width: `${filled * 100}%` }} />
+                          </span>
+                          {(p.answers ?? 0).toLocaleString("en-US")} of {people(p.breadth)}
+                        </span>
+                        <span>{tokens(p.cost)} ZC</span>
+                        <span>closes in {span(p.closes_at - now)}</span>
+                        {t && <span className="uppercase tracking-[0.12em]">{t}</span>}
                       </span>
-                      <span>{tokens(p.cost)} ZC</span>
-                      <span>{span(p.closes_at - now)}</span>
                     </span>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ol>
-      ) : (
-        <div className="film mx-auto max-w-xl">
-          <div className="space-y-4 bg-paper/5 p-8 text-center">
-            <p className="text-2xl">{topic ? `No questions under ${topic} are open right now.` : "No questions are open right now."}</p>
-            <Link href="/ask" className="inline-block bg-paper px-5 py-2.5 font-mono text-sm text-developer">
-              Ask the first one
-            </Link>
-          </div>
-        </div>
-      )}
-    </section>
+                    <span aria-hidden className="pt-1 font-mono text-sm text-silver transition-transform group-hover:translate-x-0.5 group-hover:text-paper">
+                      →
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <Empty
+            then={
+              <Link href="/ask" className={action}>
+                Ask the first one
+              </Link>
+            }
+          >
+            {topic ? `No questions about ${topic.toLowerCase()} are open right now.` : "The post is bare. No questions are open right now."}
+          </Empty>
+        )}
+      </Part>
+    </Page>
   );
 }
 
 /** The last 24 hours across the whole network, and the newest fixed results. */
 async function NetworkNow() {
   const [s, fixed] = await Promise.all([stats(), db.polls(4, "final")]);
-  const figures: [string, string][] = [
-    ["Answers", s.dayAnswers.toLocaleString("en-US")],
-    ["ZC paid in", s.daySpent === null ? "·" : tokens(s.daySpent, 0)],
-    ["ZC burned", tokens(s.dayBurned, 0)],
-  ];
-
   return (
-    <section aria-labelledby="now" className={`grid gap-3 ${fixed.length ? "lg:grid-cols-[20rem_minmax(0,1fr)]" : ""}`}>
-      <div className="space-y-5 bg-tray p-6">
-        <h2 id="now" className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-          The network now · last 24 hours
-        </h2>
-        <dl className={`grid gap-4 sm:grid-cols-3 ${fixed.length ? "lg:grid-cols-1" : ""}`}>
-          {figures.map(([k, v]) => (
-            <div key={k} className="flex items-baseline justify-between gap-4 sm:block sm:space-y-1">
-              <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-silver">{k}</dt>
-              <dd className="text-[clamp(1.5rem,3vw,2.25rem)] leading-none tabular-nums">{v}</dd>
-            </div>
-          ))}
-        </dl>
-        <Link href="/stats" className="inline-block font-mono text-xs text-paper/80 underline underline-offset-4 hover:text-paper">
-          Every number since launch
-        </Link>
-      </div>
+    <>
+      <Part title="The network · last 24 hours" more={<Link href="/stats" className={quiet}>Every number since launch</Link>}>
+        <Figures
+          items={[
+            { label: "Answers", value: s.dayAnswers.toLocaleString("en-US") },
+            { label: "ZC paid in", value: s.daySpent === null ? "·" : tokens(s.daySpent, 0) },
+            { label: "ZC burned", value: tokens(s.dayBurned, 0) },
+          ]}
+        />
+      </Part>
 
       {fixed.length > 0 && (
-        <ol className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Just fixed">
-          {fixed.map((p) => {
-            const content = p.content ? (JSON.parse(p.content) as Content) : null;
-            const top = lead(content, p.tally);
-            return (
-              <li key={p.id}>
-                <Link
-                  href={`/poll/${p.id}`}
-                  className="flex h-full min-h-44 flex-col justify-between gap-4 bg-[url(/plates/paper.webp)] bg-cover p-4 text-developer transition-[filter] duration-300 hover:brightness-[1.04]"
-                >
-                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-developer/60">Fixed · No. {p.id}</span>
-                  <span className="space-y-1">
-                    <span className="block text-4xl leading-none tabular-nums">{top ? `${top.share}%` : "·"}</span>
-                    <span className="line-clamp-2 font-mono text-[11px] uppercase tracking-[0.12em]">{top?.option ?? "no answers"}</span>
-                  </span>
-                  <span className="line-clamp-3 text-sm leading-snug text-developer/80">{content?.questions[0].q ?? "Question not published"}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ol>
+        <Part title="Just fixed" more={<Link href="/records" className={quiet}>All results</Link>}>
+          <ol className="grid gap-3 sm:grid-cols-2">
+            {fixed.map((p) => {
+              const content = p.content ? (JSON.parse(p.content) as Content) : null;
+              const top = lead(content, p.tally);
+              return (
+                <li key={p.id}>
+                  <Link href={`/poll/${p.id}`} className="flex h-full items-start gap-4 rounded-lg border border-paper/15 p-4 transition-colors hover:border-paper/40">
+                    <span className="w-16 shrink-0 text-3xl leading-none tabular-nums">{top ? `${top.share}%` : "·"}</span>
+                    <span className="min-w-0 space-y-1">
+                      <span className="block truncate font-mono text-[11px] uppercase tracking-[0.12em] text-silver">{top?.option ?? "no answers"}</span>
+                      <span className="line-clamp-2 block text-[0.95rem] leading-snug text-paper/85">{content?.questions[0].q ?? "Question not published"}</span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        </Part>
       )}
-    </section>
+    </>
+  );
+}
+
+/** The poll post on Evelor hill, in ink: a board on a stake, five knobs lit in turn. */
+function PostArt() {
+  return (
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M58 46 L57 112 M63 46 L64 112" />
+      <rect x="22" y="18" width="76" height="34" rx="2" transform="rotate(-3 60 35)" />
+      <path d="M32 36 L88 33" strokeWidth="0.8" opacity="0.6" />
+      {[34, 47, 60, 73, 86].map((x, i) => (
+        <circle key={x} cx={x} cy={35.5 - i * 0.6} r="3.4" fill={i === 2 ? "var(--color-tap)" : "none"} stroke={i === 2 ? "var(--color-tap)" : "currentColor"} />
+      ))}
+      <path d="M30 112 Q 60 104 92 112" strokeWidth="1" opacity="0.6" />
+      <path d="M40 112 l-3 -8 M46 112 l1 -9 M74 112 l-2 -7 M82 112 l3 -8" strokeWidth="0.9" opacity="0.55" />
+    </svg>
   );
 }

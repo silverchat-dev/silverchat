@@ -159,3 +159,8 @@ html.walk {
 .journal :focus-visible {
   outline-color: #1d1914;
 }
+
+/* a ruled list in the journal: one line between rows, like a notebook */
+.ruled > li + li {
+  border-top: 1px dashed color-mix(in srgb, var(--color-paper) 22%, transparent);
+}

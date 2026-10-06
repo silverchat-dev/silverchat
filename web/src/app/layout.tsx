@@ -9,7 +9,7 @@ import { WorldShell } from "@/world/shell";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const serif = Libre_Caslon_Text({ variable: "--font-caslon", subsets: ["latin"], weight: "400" });
+const serif = Libre_Caslon_Text({ variable: "--font-caslon", subsets: ["latin"], weight: "400", style: ["normal", "italic"] });
 const mono = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin"] });
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
