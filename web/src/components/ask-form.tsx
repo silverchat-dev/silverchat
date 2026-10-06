@@ -15,8 +15,10 @@ import { canonical, contentHash, LIMITS, parseContent, TOPICS, type Topic } from
 import { people, tokens, usd } from "@/lib/format";
 import { refused } from "@/lib/moderation";
 import { BREADTHS, costOf as priceOf, PRIORITIES, SPLIT } from "@/lib/pricing";
+import { burstBowl } from "@/world/live";
 
 import { buy, ethFor, POOL_KEY, STOCKEREUM_ZC, useEthFor, withBuffer } from "./buy";
+import { action, field, Figures, label, Part, quiet, second } from "./journal";
 
 const DURATIONS = [
   { label: "1 hour", s: 3600 },
@@ -175,6 +177,8 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
 
   /** The ZC is paid from here on: nothing may report a failure or let the form send again. */
   async function settle(id: string) {
+    // the ask is on chain: the bowl behind the panel flares
+    burstBowl();
     setStep("developing");
     // the indexer trails the chain by a few seconds
     for (let i = 0; i < 30; i++) {
@@ -186,204 +190,288 @@ export function AskForm({ initialBreadth = 100 }: { initialBreadth?: number }) {
 
   const busy = step !== "idle";
   const short = shortBy !== null;
+  const [, burnBps] = SPLIT[2];
+  const burned = cost !== null ? (cost * burnBps) / 10_000n : null;
+  const zc = (wei: bigint, digits?: number) => (
+    <>
+      {tokens(wei, digits)} <span className="text-[0.55em] tracking-[0.04em]">ZC</span>
+    </>
+  );
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <form
-        className="bg-paper px-5 py-7 text-developer sm:px-9 sm:py-9"
-        onSubmit={(e) => e.preventDefault()}
-      >
-        <fieldset disabled={busy} className="space-y-9">
-          {questions.map((q, i) => (
-            <div key={i} className="space-y-3">
-              <div className="flex items-baseline justify-between">
-                <label htmlFor={`q${i}`} className="font-mono text-xs uppercase tracking-[0.14em]">
-                  Question {i + 1}
-                </label>
-                {questions.length > 1 && (
-                  <button type="button" onClick={() => setQuestions((qs) => qs.filter((_, j) => j !== i))} className="font-mono text-xs underline underline-offset-4">
-                    Remove
-                  </button>
-                )}
-              </div>
-              <textarea
-                id={`q${i}`}
-                value={q.q}
-                maxLength={LIMITS.question}
-                rows={2}
-                placeholder="Will ETH be above $5,000 before January?"
-                onChange={(e) => edit(i, (x) => (x.q = e.target.value))}
-                className="w-full resize-none border-b border-developer/40 bg-transparent pb-2 text-2xl leading-snug outline-none placeholder:text-developer/35 focus:border-developer"
-              />
-              <ol className="space-y-2">
-                {q.options.map((o, k) => (
-                  <li key={k} className="flex items-center gap-3">
-                    <span aria-hidden className="grid size-7 shrink-0 place-items-center border border-developer/50 font-mono text-xs">
-                      {"ABCDEF"[k]}
-                    </span>
-                    <input
-                      aria-label={`Question ${i + 1}, option ${"ABCDEF"[k]}`}
-                      value={o}
-                      maxLength={LIMITS.option}
-                      placeholder={k === 0 ? "Yes" : k === 1 ? "No" : "Another answer"}
-                      onChange={(e) => edit(i, (x) => (x.options[k] = e.target.value))}
-                      className="min-w-0 flex-1 border-b border-developer/25 bg-transparent py-1 text-lg outline-none placeholder:text-developer/35 focus:border-developer"
-                    />
-                    {q.options.length > 2 && (
-                      <button type="button" aria-label="Remove this option" onClick={() => edit(i, (x) => x.options.splice(k, 1))} className="grid size-7 place-items-center font-mono text-sm">
-                        ×
+    <div className="space-y-10">
+      <form onSubmit={(e) => e.preventDefault()}>
+        <fieldset disabled={busy} className="space-y-10 transition-opacity motion-reduce:transition-none disabled:opacity-60">
+          <Part title="1 · The question">
+            <ol className="ruled">
+              {questions.map((q, i) => (
+                <li key={i} className="space-y-4 py-7 first:pt-0">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <label htmlFor={`q${i}`} className={questions.length > 1 ? label : "sr-only"}>
+                      Question {i + 1}
+                    </label>
+                    {questions.length > 1 && (
+                      <button type="button" onClick={() => setQuestions((qs) => qs.filter((_, j) => j !== i))} className={`font-mono text-xs ${quiet}`}>
+                        Remove
                       </button>
                     )}
-                  </li>
+                  </div>
+                  <textarea
+                    id={`q${i}`}
+                    value={q.q}
+                    maxLength={LIMITS.question}
+                    rows={2}
+                    placeholder="Will ETH be above $5,000 before January?"
+                    onChange={(e) => edit(i, (x) => (x.q = e.target.value))}
+                    className="w-full resize-none border-0 border-b field-sizing-content border-paper/30 bg-transparent px-0 pb-3 text-[clamp(1.4rem,3.6vw,1.75rem)] leading-snug text-paper placeholder:text-silver/70 focus:border-paper focus:outline-none focus:ring-0"
+                  />
+                  <ol className="space-y-1">
+                    {q.options.map((o, k) => (
+                      <li key={k} className="flex items-center gap-3">
+                        <span aria-hidden className="grid size-7 shrink-0 place-items-center rounded-full border border-paper/30 font-mono text-[11px] text-silver">
+                          {"ABCDEF"[k]}
+                        </span>
+                        <input
+                          aria-label={`Question ${i + 1}, option ${"ABCDEF"[k]}`}
+                          value={o}
+                          maxLength={LIMITS.option}
+                          placeholder={k === 0 ? "Yes" : k === 1 ? "No" : "Another answer"}
+                          onChange={(e) => edit(i, (x) => (x.options[k] = e.target.value))}
+                          className={`${field} min-w-0 flex-1`}
+                        />
+                        {q.options.length > 2 && (
+                          <button
+                            type="button"
+                            aria-label="Remove this option"
+                            onClick={() => edit(i, (x) => x.options.splice(k, 1))}
+                            className="grid size-11 shrink-0 place-items-center rounded-full font-mono text-base text-silver transition-colors hover:text-paper sm:size-9"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                  {q.options.length < LIMITS.options && (
+                    <button type="button" onClick={() => edit(i, (x) => x.options.push(""))} className={`ml-10 py-2 font-mono text-xs ${quiet}`}>
+                      Add an option
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ol>
+            {questions.length < LIMITS.questions && (
+              <button type="button" onClick={() => setQuestions((qs) => [...qs, blank()])} className={second}>
+                Add another question
+              </button>
+            )}
+            <div className="pt-4">
+              <Group legend="Topic" hint="Where it shows when people filter by topic">
+                {TOPICS.map((t) => (
+                  <Chip key={t} name="topic" checked={topic === t} onChange={() => setTopic(t)}>
+                    {t}
+                  </Chip>
                 ))}
-              </ol>
-              {q.options.length < LIMITS.options && (
-                <button type="button" onClick={() => edit(i, (x) => x.options.push(""))} className="font-mono text-xs underline underline-offset-4">
-                  Add an option
-                </button>
-              )}
+              </Group>
             </div>
-          ))}
-          {questions.length < LIMITS.questions && (
-            <button type="button" onClick={() => setQuestions((qs) => [...qs, blank()])} className="border border-dashed border-developer/50 px-4 py-2 font-mono text-xs">
-              Add another question
-            </button>
-          )}
+          </Part>
 
-          <div className="grid gap-7 border-t border-developer/25 pt-7 sm:grid-cols-2">
-            <Choice legend="Topic" hint="Where it shows when people filter by topic" className="sm:col-span-2">
-              {TOPICS.map((t) => (
-                <Pill key={t} name="topic" checked={topic === t} onChange={() => setTopic(t)}>
-                  {t}
-                </Pill>
-              ))}
-            </Choice>
-            <Choice legend="Breadth" hint="How many people it asks" className="sm:col-span-2">
-              {BREADTHS.map((b) => (
-                <Pill key={b} name="breadth" checked={breadth === b} onChange={() => setBreadth(b)}>
-                  {people(b)}
-                </Pill>
-              ))}
-            </Choice>
-            <Choice legend="Priority" hint="How high it shows in the feed. High costs 1.2x, Top 1.5x">
-              {PRIORITIES.map((p, i) => (
-                <Pill key={p.label} name="priority" checked={priority === i} onChange={() => setPriority(i)}>
-                  {p.label}
-                </Pill>
-              ))}
-            </Choice>
-            <label className="space-y-2">
-              <span className="block font-mono text-xs uppercase tracking-[0.14em]">Open for</span>
-              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-full border border-developer/50 bg-transparent px-3 py-2 font-mono text-sm">
-                {DURATIONS.map((d) => (
-                  <option key={d.s} value={d.s}>
-                    {d.label}
-                  </option>
+          <Part title="2 · Who it asks">
+            <fieldset className="space-y-3">
+              <legend className="space-y-1">
+                <span className={`block ${label}`}>Breadth</span>
+                <span className="block text-[0.95rem] text-paper/75">How many people it asks. Each place costs the price per person.</span>
+              </legend>
+              <div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-4">
+                {BREADTHS.map((b) => (
+                  <label key={b} className="cursor-pointer">
+                    <input type="radio" name="breadth" checked={breadth === b} onChange={() => setBreadth(b)} className="peer sr-only" />
+                    <span className="flex h-full flex-col gap-1.5 rounded-lg border border-paper/20 px-4 py-3.5 transition-colors duration-200 hover:border-paper/50 motion-reduce:transition-none peer-checked:border-paper peer-checked:bg-paper peer-checked:text-developer peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-paper peer-focus-visible:outline-solid">
+                      <span className="text-[2rem] leading-none tabular-nums">{people(b)}</span>
+                      <span className="font-mono text-[11px] tracking-[0.04em] opacity-75">people</span>
+                      <span className="pt-1.5 font-mono text-[11px] tabular-nums opacity-75">{price.data ? `${tokens(priceOf(price.data, b, priority), 0)} ZC` : "·"}</span>
+                    </span>
+                  </label>
                 ))}
-              </select>
-            </label>
-          </div>
+              </div>
+            </fieldset>
+            <div className="grid gap-7 pt-2 sm:grid-cols-[minmax(0,1fr)_11rem]">
+              <Group legend="Priority" hint="How high it shows in the feed. High costs 1.2x, Top 1.5x">
+                {PRIORITIES.map((p, i) => (
+                  <Chip key={p.label} name="priority" checked={priority === i} onChange={() => setPriority(i)}>
+                    {p.label}
+                  </Chip>
+                ))}
+              </Group>
+              <label className="block space-y-2">
+                <span className={`block ${label}`}>Open for</span>
+                <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className={`${field} cursor-pointer font-mono`}>
+                  {DURATIONS.map((d) => (
+                    <option key={d.s} value={d.s}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </Part>
         </fieldset>
       </form>
 
-      <aside className="space-y-6 self-start bg-tray px-5 py-7 font-mono text-sm sm:px-7 lg:sticky lg:top-6">
-        <p className="text-xs uppercase tracking-[0.14em] text-silver">Receipt</p>
-        <dl className="space-y-2">
-          <Row k="Topic">{topic ?? "·"}</Row>
-          <Row k="Reach">{people(breadth)} people</Row>
-          <Row k="Priority">{PRIORITIES[priority].label}</Row>
-          <Row k="Price">{price.data === undefined ? "·" : price.data === 0n ? "not set" : `${tokens(price.data)} ZC a person`}</Row>
-        </dl>
-        <div className="border-t border-silver/25 pt-4">
-          <p className="flex items-baseline justify-between">
-            <span className="text-silver">Cost</span>
-            <span className="text-2xl tabular-nums">{cost !== null ? `${tokens(cost)} ZC` : "·"}</span>
-          </p>
-          {costUsd !== null && <p className="text-right text-xs text-silver">≈ {usd(costUsd)}</p>}
+      <Part title="3 · What it costs">
+        <Figures
+          columns={2}
+          items={[
+            { label: "You pay", value: cost !== null ? zc(cost) : "·", note: costUsd !== null ? `≈ ${usd(costUsd)}` : "held by the contract until the result is fixed" },
+            { label: "Burned for good", value: burned !== null ? zc(burned) : "·", note: `${Number(burnBps) / 100}% of it, when the result is fixed` },
+          ]}
+        />
+
+        <div className="grid gap-x-8 gap-y-6 pt-2 sm:grid-cols-2">
+          <div className="space-y-3">
+            <p className={label}>The receipt</p>
+            <dl className="divide-y divide-dashed divide-paper/20 font-mono text-[13px]">
+              <Line k="Topic">{topic ?? <span className="text-silver">not chosen yet</span>}</Line>
+              <Line k="Reach">{people(breadth)} people</Line>
+              <Line k="Priority">{PRIORITIES[priority].label}</Line>
+              <Line k="Open for">{DURATIONS.find((d) => d.s === duration)?.label}</Line>
+              <Line k="Price">{price.data === undefined ? "·" : price.data === 0n ? "not set" : `${tokens(price.data)} ZC a person`}</Line>
+            </dl>
+          </div>
+          <div className="space-y-3">
+            <p className={label}>Where it goes</p>
+            <div aria-hidden className="flex h-2 overflow-hidden rounded-full bg-paper/10">
+              {SPLIT.map(([k, bps], i) => (
+                <span key={k} className={["bg-paper/30", "bg-paper/55", "bg-paper"][i]} style={{ width: `${Number(bps) / 100}%` }} />
+              ))}
+            </div>
+            <dl className="divide-y divide-dashed divide-paper/20 font-mono text-[13px]">
+              {SPLIT.map(([k, bps], i) => (
+                <Line key={k} k={`${k} ${Number(bps) / 100}%`} strong={i === 2}>
+                  {cost !== null ? `${tokens((cost * bps) / 10_000n)} ZC` : "·"}
+                </Line>
+              ))}
+            </dl>
+          </div>
         </div>
-        {cost !== null && (
-          <dl className="space-y-1 text-xs">
-            {SPLIT.map(([k, bps]) => (
-              <Row key={k} k={`${k} ${Number(bps) / 100}%`}>
-                {tokens((cost * bps) / 10_000n)} ZC
-              </Row>
-            ))}
-          </dl>
-        )}
-        <p className="text-xs leading-relaxed text-silver">
+
+        <p className="max-w-[34em] text-[0.975rem] leading-relaxed text-paper/75 text-pretty">
           The contract holds your ZC until the result is fixed. Answerers get at most {Number(SPLIT[0][1]) / 100}%; what they don&apos;t
           earn comes back to you. If the result is never fixed, you take all of it back 7 days after the poll closes.
         </p>
 
-        {word && (
-          <p role="status" className="text-xs leading-relaxed text-paper">
-            Silverchat does not publish questions with &quot;{word}&quot; in them.{" "}
-            <Link href="/docs#questions" className="underline underline-offset-4">
-              The rules for questions
-            </Link>
-          </p>
-        )}
-        {!address ? (
-          <ConnectButton label="Connect a wallet" />
-        ) : chainId !== CHAIN_ID ? (
-          <button type="button" onClick={() => switchChain({ chainId: CHAIN_ID })} className="w-full bg-paper py-3 text-developer">
-            Switch to Ethereum
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy || !price.data || !!word || (short && !(eth.eth && eth.enough))}
-            className="w-full bg-paper py-3 text-developer hover:bg-paper/90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy
-              ? {
-                  idle: "",
-                  publishing: "Saving the question…",
-                  buy: "Confirm the ZC buy in your wallet…",
-                  batch: "Confirm in your wallet…",
-                  sent: "Sent. Check Records",
-                  approve: "Approve ZC in your wallet…",
-                  ask: "Confirm the ask in your wallet…",
-                  developing: "Developing…",
-                }[step]
-              : price.data === undefined
-                ? price.isError
-                  ? "Cannot read the price, try again"
-                  : "Reading the price…"
-                : price.data === 0n
-                  ? "Asking is paused"
-                  : short
-                    ? eth.eth
-                      ? `Buy ${tokens(shortBy, 0)} ZC and ask`
-                      : eth.error
-                        ? "Not enough ZC"
-                        : "Getting a price…"
-                    : "Ask the network"}
-          </button>
-        )}
-        {short && !busy && (
-          <p className="text-xs leading-relaxed text-silver">
-            {eth.error ? (
-              <>
-                Can&apos;t get a price right now.{" "}
-                <a href={STOCKEREUM_ZC} target="_blank" rel="noreferrer" className="text-paper underline underline-offset-4">
-                  Buy ZC on Stockereum
-                </a>
-              </>
-            ) : eth.eth && eth.have !== undefined && !eth.enough ? (
-              `You need about ${Number(formatEther(eth.eth)).toPrecision(2)} ETH plus gas; this wallet has ${Number(formatEther(eth.have)).toPrecision(2)} ETH.`
-            ) : eth.eth ? (
-              `About ${Number(formatEther(eth.eth)).toPrecision(2)} ETH, bought through Stockereum with its 1% fee and a 3% buffer; extra ZC stays with you. ${atomic ? "One confirmation." : "Three confirmations: buy, approve, ask."}`
-            ) : null}
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-xs leading-relaxed text-paper">
-            {error}
-          </p>
-        )}
-      </aside>
+        <div className="space-y-4 pt-2">
+          {word && (
+            <p role="status" className="border-l-2 border-paper pl-3 text-[0.975rem] leading-relaxed">
+              Silverchat does not publish questions with &quot;{word}&quot; in them.{" "}
+              <Link href="/docs#questions" className={quiet}>
+                The rules for questions
+              </Link>
+            </p>
+          )}
+          {!address ? (
+            <ConnectButton.Custom>
+              {({ openConnectModal, mounted }) => (
+                <button type="button" onClick={openConnectModal} disabled={!mounted} className={`${action} min-h-12 w-full`}>
+                  Connect a wallet
+                </button>
+              )}
+            </ConnectButton.Custom>
+          ) : chainId !== CHAIN_ID ? (
+            <button type="button" onClick={() => switchChain({ chainId: CHAIN_ID })} className={`${action} min-h-12 w-full`}>
+              Switch to Ethereum
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={submit}
+              disabled={busy || !price.data || !!word || (short && !(eth.eth && eth.enough))}
+              className={`${action} min-h-12 w-full`}
+            >
+              {busy
+                ? {
+                    idle: "",
+                    publishing: "Saving the question…",
+                    buy: "Confirm the ZC buy in your wallet…",
+                    batch: "Confirm in your wallet…",
+                    sent: "Sent. Check Records",
+                    approve: "Approve ZC in your wallet…",
+                    ask: "Confirm the ask in your wallet…",
+                    developing: "Developing…",
+                  }[step]
+                : price.data === undefined
+                  ? price.isError
+                    ? "Cannot read the price, try again"
+                    : "Reading the price…"
+                  : price.data === 0n
+                    ? "Asking is paused"
+                    : short
+                      ? eth.eth
+                        ? `Buy ${tokens(shortBy, 0)} ZC and ask`
+                        : eth.error
+                          ? "Not enough ZC"
+                          : "Getting a price…"
+                      : "Ask the network"}
+            </button>
+          )}
+          {short && !busy && (
+            <p className="font-mono text-xs leading-relaxed text-silver">
+              {eth.error ? (
+                <>
+                  Can&apos;t get a price right now.{" "}
+                  <a href={STOCKEREUM_ZC} target="_blank" rel="noreferrer" className={`text-paper ${quiet}`}>
+                    Buy ZC on Stockereum
+                  </a>
+                </>
+              ) : eth.eth && eth.have !== undefined && !eth.enough ? (
+                `You need about ${Number(formatEther(eth.eth)).toPrecision(2)} ETH plus gas; this wallet has ${Number(formatEther(eth.have)).toPrecision(2)} ETH.`
+              ) : eth.eth ? (
+                `About ${Number(formatEther(eth.eth)).toPrecision(2)} ETH, bought through Stockereum with its 1% fee and a 3% buffer; extra ZC stays with you. ${atomic ? "One confirmation." : "Three confirmations: buy, approve, ask."}`
+              ) : null}
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="border-l-2 border-paper pl-3 text-[0.975rem] leading-relaxed">
+              {error}
+            </p>
+          )}
+        </div>
+      </Part>
+    </div>
+  );
+}
+
+/** A set of choices on the journal page: a small label, a plain-words hint, and the chips. */
+function Group({ legend, hint, children }: { legend: string; hint: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="space-y-3">
+      <legend className="space-y-1">
+        <span className={`block ${label}`}>{legend}</span>
+        <span className="block text-[0.95rem] text-paper/75">{hint}</span>
+      </legend>
+      <div className="flex flex-wrap gap-2 pt-1">{children}</div>
+    </fieldset>
+  );
+}
+
+/** One choice: a word in a rounded outline, filled with ink when chosen, like the tabs. */
+function Chip({ name, checked, onChange, children }: { name: string; checked: boolean; onChange: () => void; children: React.ReactNode }) {
+  return (
+    <label className="cursor-pointer">
+      <input type="radio" name={name} checked={checked} onChange={onChange} className="peer sr-only" />
+      <span className="inline-flex min-h-11 items-center rounded-full border border-paper/25 px-4 font-mono text-[12px] tracking-[0.04em] text-paper/85 transition-colors duration-200 hover:border-paper motion-reduce:transition-none peer-checked:border-paper peer-checked:bg-paper peer-checked:text-developer peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-paper peer-focus-visible:outline-solid sm:min-h-9">
+        {children}
+      </span>
+    </label>
+  );
+}
+
+/** A row of the bill: what, then how much. */
+function Line({ k, strong = false, children }: { k: string; strong?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4 py-2">
+      <dt className={strong ? "text-paper" : "text-silver"}>{k}</dt>
+      <dd className={`tabular-nums ${strong ? "text-paper" : "text-paper/85"}`}>{children}</dd>
     </div>
   );
 }

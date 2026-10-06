@@ -9,9 +9,18 @@ import { Predict } from "@/components/landing/predict";
 import { Realm } from "@/components/landing/realm";
 import { Split } from "@/components/landing/split";
 import { Verify } from "@/components/landing/verify";
-import { CASH_LIVE } from "@/lib/config";
+import { CASH_LIVE, WORLD_LIVE } from "@/lib/config";
+import { Gate } from "@/world/gate";
+import { Walk } from "@/world/walk";
 
 export default function Home() {
+  if (WORLD_LIVE)
+    return (
+      <>
+        <Walk />
+        <Gate />
+      </>
+    );
   return (
     <>
       <Hero />

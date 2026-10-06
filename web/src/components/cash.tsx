@@ -2,11 +2,13 @@
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { english, generateMnemonic } from "viem/accounts";
 import { formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem";
 import { useAccount, useSendTransaction, useSignMessage, useSwitchChain } from "wagmi";
 
+import { Rail, StepPart, pill, said, small, warn } from "@/components/fork";
+import { Part, action, field, label } from "@/components/journal";
 import { short } from "@/lib/format";
 import type { Buckets, Prepared, Sender, Via } from "@/lib/cash/actions";
 import type { Opened } from "@/lib/cash/engine";
@@ -19,9 +21,33 @@ const COINS: [Coin, string][] = [
 ];
 const name = (c: Coin) => COINS.find(([k]) => k === c)![1];
 const fmt = (wei: bigint | undefined) => (wei ? Number(formatUnits(wei, 18)).toLocaleString("en-US", { maximumFractionDigits: wei < 10n ** 18n ? 6 : 2 }) : "0");
-const input = "w-full border border-paper/25 bg-transparent px-3 py-2 font-mono text-sm text-paper placeholder:text-silver/60 focus:border-paper focus:outline-none";
-const button = "bg-paper px-5 py-2.5 font-mono text-sm text-developer hover:brightness-105 disabled:opacity-40";
-const quiet = "font-mono text-xs text-silver underline-offset-4 hover:text-paper hover:underline";
+const input = `${field} font-mono !text-base`;
+const button = action;
+const quiet = small;
+
+// the way through, in four steps; the last three are the open wallet's tabs
+const STEPS = [{ name: "Wallet" }, { name: "Deposit" }, { name: "Swap" }, { name: "Withdraw" }];
+const TABS = ["deposit", "swap", "withdraw"] as const;
+const TITLES = { deposit: "Deposit into it", swap: "Swap inside it", withdraw: "Withdraw to a fresh wallet" };
+const NEXT = {
+  deposit: "Next: after about an hour of checks, swap inside or withdraw.",
+  swap: "Next: once the result has waited its hour, withdraw to a fresh wallet.",
+  withdraw: "The last step. A fresh wallet keeps the two ends apart.",
+};
+
+/** Step 1 of the way through, before the wallet is open. */
+function First({ title = "Make your private wallet", children }: { title?: string; children: ReactNode }) {
+  return (
+    <>
+      <Part title="The way through">
+        <Rail steps={STEPS} at={0} done={0} next="Next: deposit coins into it." />
+      </Part>
+      <StepPart n={1} of={STEPS.length} title={title} state="now" id="cash-step-1">
+        {children}
+      </StepPart>
+    </>
+  );
+}
 
 type Stage = "loading" | "busy-tab" | "none" | "locked" | "open" | "failed";
 // whether this tab holds SilverCash's lock; module-wide, so it outlives one visit to the page
@@ -70,11 +96,36 @@ export function Cash() {
     };
   }, []);
 
-  if (stage === "loading") return <p className="font-mono text-sm text-silver">Starting the private engine in this browser…</p>;
-  if (stage === "busy-tab") return <p className="text-lg text-paper/80">SilverCash is open in another tab. Use that one, or close it and reload this page.</p>;
-  if (stage === "failed") return <p className="text-lg text-paper/80">The private engine could not start here: {error}. Try a desktop browser.</p>;
-  if (stage === "none") return <NewWallet onOpen={(o) => (setOpened(o), setStage("open"))} />;
-  if (stage === "locked" || !opened) return <Unlock onOpen={(o) => (setOpened(o), setStage("open"))} onForget={() => setStage("none")} />;
+  if (stage === "loading")
+    return (
+      <First>
+        <p role="status" className="font-mono text-sm text-silver motion-safe:animate-pulse">Starting the private engine in this browser…</p>
+      </First>
+    );
+  if (stage === "busy-tab")
+    return (
+      <First>
+        <p className="text-lg text-paper/80">SilverCash is open in another tab. Use that one, or close it and reload this page.</p>
+      </First>
+    );
+  if (stage === "failed")
+    return (
+      <First>
+        <p className="text-lg text-paper/80">The private engine could not start here: {error}. Try a desktop browser.</p>
+      </First>
+    );
+  if (stage === "none")
+    return (
+      <First>
+        <NewWallet onOpen={(o) => (setOpened(o), setStage("open"))} />
+      </First>
+    );
+  if (stage === "locked" || !opened)
+    return (
+      <First title="Open your private wallet">
+        <Unlock onOpen={(o) => (setOpened(o), setStage("open"))} onForget={() => setStage("none")} />
+      </First>
+    );
   return <Wallet o={opened} onLock={() => (setOpened(null), setStage("locked"))} onForget={() => (setOpened(null), setStage("none"))} />;
 }
 
@@ -118,32 +169,44 @@ function NewWallet({ onOpen }: { onOpen: (o: Opened) => void }) {
   if (fresh) return <Backup words={fresh.words} block={fresh.block} onDone={() => onOpen(fresh.o)} />;
 
   return (
-    <section className="max-w-xl space-y-5">
-      <div role="group" aria-label="Wallet" className="flex gap-1 font-mono text-xs">
+    <div className="max-w-xl space-y-6">
+      <div role="group" aria-label="Wallet" className="flex flex-wrap gap-2">
         {(["new", "restore"] as const).map((m) => (
-          <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className="border border-paper/20 px-3 py-1.5 aria-pressed:border-paper aria-pressed:bg-paper aria-pressed:text-developer">
+          <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className={pill}>
             {m === "new" ? "New private wallet" : "Restore from words"}
           </button>
         ))}
       </div>
-      <p className="text-paper/80">
+      <p className={mode === "new" ? warn : "leading-relaxed text-paper/80"}>
         {mode === "new"
           ? "SilverCash makes a private Railgun wallet with its own 12 words. They are the only way back to what it holds: write them down. The password only locks it in this browser."
           : "The 12 or 24 words of a Railgun wallet: one made here, in Railway or in any Railgun wallet."}
       </p>
       {mode === "restore" && (
         <>
-          <textarea aria-label="Your words" value={words} onChange={(e) => setWords(e.target.value)} rows={3} placeholder="the words, in order" className={input} autoComplete="off" spellCheck={false} />
-          <input aria-label="Block it was made at" value={block} onChange={(e) => setBlock(e.target.value.replace(/\D/g, ""))} placeholder="the block it was made at (optional, faster)" className={input} inputMode="numeric" />
+          <label className="block space-y-1">
+            <span className={label}>Your words</span>
+            <textarea aria-label="Your words" value={words} onChange={(e) => setWords(e.target.value)} rows={3} placeholder="the words, in order" className={`${input} resize-none`} autoComplete="off" spellCheck={false} />
+          </label>
+          <label className="block space-y-1">
+            <span className={label}>Block it was made at · optional, faster</span>
+            <input aria-label="Block it was made at" value={block} onChange={(e) => setBlock(e.target.value.replace(/\D/g, ""))} placeholder="the block it was made at (optional, faster)" className={input} inputMode="numeric" />
+          </label>
         </>
       )}
-      <input aria-label="Password for this browser" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="password for this browser" className={input} autoComplete="new-password" />
-      <input aria-label="The same password again" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="the same password again" className={input} autoComplete="new-password" />
+      <label className="block space-y-1">
+        <span className={label}>Password for this browser</span>
+        <input aria-label="Password for this browser" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="at least 10 characters" className={input} autoComplete="new-password" />
+      </label>
+      <label className="block space-y-1">
+        <span className={label}>The same password again</span>
+        <input aria-label="The same password again" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="the same password again" className={input} autoComplete="new-password" />
+      </label>
       <button type="button" onClick={make} disabled={busy} className={button}>
         {busy ? "Working…" : mode === "new" ? "Make my private wallet" : "Restore"}
       </button>
-      {error && <p className="font-mono text-xs text-paper">{error}</p>}
-    </section>
+      {error && <p role="alert" className={said}>{error}</p>}
+    </div>
   );
 }
 
@@ -161,33 +224,33 @@ function Backup({ words, block, onDone }: { words: string; block: number; onDone
   const right = asked.every((i, k) => typed[k].trim().toLowerCase() === list[i]);
 
   return (
-    <section className="max-w-xl space-y-5">
+    <div className="max-w-xl space-y-6">
       {shown ? (
         <>
-          <h2 className="text-2xl">Your 12 words</h2>
-          <ol className="grid grid-cols-2 gap-2 bg-paper p-5 font-mono text-sm text-developer sm:grid-cols-3">
+          <h3 className="text-[1.3rem] leading-tight">Your 12 words</h3>
+          <ol className="grid grid-cols-2 gap-x-6 gap-y-2.5 rounded-lg bg-tray/70 px-5 py-5 font-mono text-[15px] sm:grid-cols-3">
             {list.map((w, i) => (
-              <li key={i}>
-                <span className="text-developer/50">{i + 1}.</span> {w}
+              <li key={i} className="grid grid-cols-[1.6rem_minmax(0,1fr)] items-baseline border-b border-dashed border-paper/20 pb-1.5">
+                <span className="text-[11px] text-silver tabular-nums">{i + 1}.</span> {w}
               </li>
             ))}
           </ol>
           <p className="font-mono text-xs text-silver">Made at block {block.toLocaleString("en-US")}. Note it with the words: restoring is faster with it.</p>
-          <p className="text-paper/80">Write them on paper, in order. Anyone with them can take what this wallet holds; without them, a cleared browser loses it.</p>
+          <p className={warn}>Write them on paper, in order. Anyone with them can take what this wallet holds; without them, a cleared browser loses it.</p>
           <button type="button" onClick={() => setShown(false)} className={button}>
             I wrote them down
           </button>
         </>
       ) : (
         <>
-          <h2 className="text-2xl">Check three of them</h2>
+          <h3 className="text-[1.3rem] leading-tight">Check three of them</h3>
           {asked.map((i, k) => (
             <label key={i} className="block space-y-1">
-              <span className="font-mono text-xs text-silver">Word {i + 1}</span>
+              <span className={label}>Word {i + 1}</span>
               <input value={typed[k]} onChange={(e) => setTyped((t) => t.map((x, j) => (j === k ? e.target.value : x)))} className={input} autoComplete="off" spellCheck={false} />
             </label>
           ))}
-          <div className="flex gap-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <button type="button" onClick={onDone} disabled={!right} className={button}>
               Open SilverCash
             </button>
@@ -197,7 +260,7 @@ function Backup({ words, block, onDone }: { words: string; block: number; onDone
           </div>
         </>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -218,12 +281,15 @@ function Unlock({ onOpen, onForget }: { onOpen: (o: Opened) => void; onForget: (
     }
   }
   return (
-    <form onSubmit={(e) => (e.preventDefault(), go())} className="max-w-md space-y-4">
-      <p className="text-paper/80">Your private wallet is in this browser, locked.</p>
+    <form onSubmit={(e) => (e.preventDefault(), go())} className="max-w-md space-y-6">
+      <p className="leading-relaxed text-paper/80">Your private wallet is in this browser, locked.</p>
       {/* for password managers: they file a password under a username */}
       <input type="text" name="username" autoComplete="username" value="silvercash" readOnly hidden />
-      <input aria-label="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="password" className={input} autoComplete="current-password" autoFocus />
-      <div className="flex items-center gap-5">
+      <label className="block space-y-1">
+        <span className={label}>Password</span>
+        <input aria-label="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="password" className={input} autoComplete="current-password" autoFocus />
+      </label>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <button type="submit" disabled={busy || !pw} className={button}>
           {busy ? "Opening…" : "Unlock"}
         </button>
@@ -239,7 +305,7 @@ function Unlock({ onOpen, onForget }: { onOpen: (o: Opened) => void; onForget: (
           Use other words instead
         </button>
       </div>
-      {error && <p className="font-mono text-xs text-paper">{error}</p>}
+      {error && <p role="alert" className={said}>{error}</p>}
     </form>
   );
 }
@@ -293,22 +359,71 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
     return () => clearInterval(tick);
   }, [o]);
 
+  // the opened wallet starts at the top of the way through, not where the setup left the page
+  useEffect(() => {
+    document.getElementById("cash-way")?.scrollIntoView({ block: "start" });
+  }, []);
+
   return (
-    <div className="space-y-10">
-      <section className="flex flex-wrap items-start justify-between gap-6">
-        <div className="space-y-1">
-          <p className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Your private address</p>
-          <p className="max-w-xl break-all font-mono text-sm">{o.address}</p>
-          <p className="font-mono text-xs text-silver">Broadcasters: {peers.toLowerCase()}</p>
-          {failed && <p className="max-w-xl font-mono text-xs text-paper">Reading Railgun&apos;s records stopped: {failed}. Reload the page to try again.</p>}
-          {!synced && !failed && (
-            <p className="max-w-xl font-mono text-xs leading-relaxed text-silver">
+    <>
+      <Part title="The way through" id="cash-way">
+        <Rail steps={STEPS} at={TABS.indexOf(tab) + 1} done={1} pick={(i) => setTab(TABS[i - 1])} next={NEXT[tab]} />
+      </Part>
+
+      <StepPart n={TABS.indexOf(tab) + 2} of={STEPS.length} title={TITLES[tab]} state="now" id={`cash-step-${TABS.indexOf(tab) + 2}`}>
+        {tab === "deposit" && <Deposit o={o} />}
+        {tab !== "deposit" && !synced && <p className="leading-relaxed text-paper/80">Swapping and withdrawing open once the records are read.</p>}
+        {tab === "swap" && synced && <Swap o={o} spendable={b.spendable} />}
+        {tab === "withdraw" && synced && <Withdraw o={o} spendable={b.spendable} />}
+      </StepPart>
+
+      <Part title="Your private balance" more={!synced && !failed ? <span className="text-silver tabular-nums">{Math.round(scan * 100)}%</span> : null}>
+        {failed && <p role="alert" className={said}>Reading Railgun&apos;s records stopped: {failed}. Reload the page to try again.</p>}
+        {!synced && !failed && (
+          <div className="space-y-2.5">
+            <span aria-hidden className="block h-1 overflow-hidden rounded-full bg-paper/12">
+              <span className="block h-full rounded-full bg-paper/60 transition-[width] duration-700 motion-reduce:transition-none" style={{ width: `${Math.round(scan * 100)}%` }} />
+            </span>
+            <p role="status" className="max-w-xl font-mono text-xs leading-relaxed text-silver">
               Reading Railgun&apos;s records… {Math.round(scan * 100)}%{minutes > 0 && ` · ${minutes} min`}. The first time in a browser
               this takes about 10 minutes; keep the tab open. After that it takes seconds. You can deposit now.
             </p>
-          )}
+          </div>
+        )}
+        <div>
+          <div className={`${label} flex justify-between pb-2`}>
+            <span>Coin</span>
+            <span>Spendable</span>
+          </div>
+          <ul className="ruled border-y border-paper/20">
+            {COINS.map(([c, label]) => (
+              <li key={c} className="flex items-baseline justify-between gap-4 py-3.5">
+                <span className="font-mono text-sm">{c === "eth" ? <>ETH<span className="text-silver"> (as WETH)</span></> : label}</span>
+                <span className="text-right">
+                  <span className="block text-[1.75rem] leading-none tabular-nums">{fmt(b.spendable[c])}</span>
+                  <span className="mt-1.5 block font-mono text-[11px] text-silver tabular-nums">
+                    waiting {fmt(b.waiting[c])} · blocked {fmt(b.blocked[c])}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="flex flex-wrap gap-4">
+        <p className="max-w-[36em] text-[0.95rem] leading-relaxed text-paper/75">
+          <span className="font-mono text-xs uppercase tracking-[0.12em] text-silver">Waiting</span>: every deposit, and every swap&apos;s
+          result, waits about an hour while Railgun checks it against lists of stolen and sanctioned funds.{" "}
+          <span className="font-mono text-xs uppercase tracking-[0.12em] text-silver">Blocked</span>: funds those lists caught; they can
+          only go back to where they came from.
+        </p>
+      </Part>
+
+      <Part title="Your private wallet">
+        <div className="space-y-2">
+          <p className={label}>Your private address</p>
+          <p className="font-mono text-sm leading-relaxed break-all">{o.address}</p>
+          <p className="font-mono text-xs text-silver">Broadcasters: {peers.toLowerCase()}</p>
+        </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1">
           <button type="button" onClick={async () => setWords(words ? null : await (await import("@/lib/cash/engine")).wordsOf(o))} className={quiet}>
             {words ? "Hide my words" : "Show my words"}
           </button>
@@ -327,62 +442,36 @@ function Wallet({ o, onLock, onForget }: { o: Opened; onLock: () => void; onForg
             Remove from this browser
           </button>
         </div>
-        {words && <p className="w-full bg-paper p-4 font-mono text-sm text-developer">{words}</p>}
-      </section>
+        {words && <p className="rounded-lg bg-tray/70 p-4 font-mono text-sm leading-relaxed">{words}</p>}
+      </Part>
+    </>
+  );
+}
 
-      <section aria-label="Private balances">
-        <table className="w-full font-mono text-xs sm:text-sm">
-          <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-silver">
-            <tr>
-              <th className="py-2 font-normal">Coin</th>
-              <th className="py-2 text-right font-normal">Spendable</th>
-              <th className="py-2 text-right font-normal">Waiting</th>
-              <th className="py-2 text-right font-normal">Blocked</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-silver/15 border-y border-silver/20">
-            {COINS.map(([c, label]) => (
-              <tr key={c}>
-                <td className="py-3">{c === "eth" ? <>ETH<span className="hidden text-silver sm:inline"> (as WETH)</span></> : label}</td>
-                <td className="py-3 text-right text-base sm:text-xl">{fmt(b.spendable[c])}</td>
-                <td className="py-3 text-right text-silver">{fmt(b.waiting[c])}</td>
-                <td className="py-3 text-right text-silver">{fmt(b.blocked[c])}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-paper/70">
-          Waiting: every deposit, and every swap&apos;s result, waits about an hour while Railgun checks it against lists of
-          stolen and sanctioned funds. Blocked: funds those lists caught; they can only go back to where they came from.
-        </p>
-      </section>
-
-      <section className="space-y-6">
-        <div role="group" aria-label="Action" className="flex gap-1 font-mono text-xs">
-          {(["deposit", "swap", "withdraw"] as const).map((t) => (
-            <button key={t} type="button" aria-pressed={tab === t} onClick={() => setTab(t)} className="border border-paper/20 px-4 py-2 capitalize aria-pressed:border-paper aria-pressed:bg-paper aria-pressed:text-developer">
-              {t}
-            </button>
-          ))}
-        </div>
-        {tab === "deposit" && <Deposit o={o} />}
-        {tab !== "deposit" && !synced && <p className="text-paper/80">Swapping and withdrawing open once the records are read.</p>}
-        {tab === "swap" && synced && <Swap o={o} spendable={b.spendable} />}
-        {tab === "withdraw" && synced && <Withdraw o={o} spendable={b.spendable} />}
-      </section>
+function CoinPicker({ value, onChange, label: title }: { value: Coin; onChange: (c: Coin) => void; label: string }) {
+  return (
+    <div className="space-y-2">
+      <p aria-hidden className={label}>
+        {title}
+      </p>
+      <div role="group" aria-label={title} className="flex flex-wrap gap-2">
+        {COINS.map(([c, n]) => (
+          <button key={c} type="button" aria-pressed={value === c} onClick={() => onChange(c)} className={pill}>
+            {n}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-function CoinPicker({ value, onChange, label }: { value: Coin; onChange: (c: Coin) => void; label: string }) {
+/** An amount field with its label over it. */
+function Amount({ caption, ...props }: { caption: string } & InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <div role="group" aria-label={label} className="flex gap-1 font-mono text-xs">
-      {COINS.map(([c, n]) => (
-        <button key={c} type="button" aria-pressed={value === c} onClick={() => onChange(c)} className="border border-paper/20 px-3 py-1.5 aria-pressed:border-paper aria-pressed:bg-paper aria-pressed:text-developer">
-          {n}
-        </button>
-      ))}
-    </div>
+    <label className="block space-y-1">
+      <span className={label}>{caption}</span>
+      <input {...props} className={input} />
+    </label>
   );
 }
 
@@ -417,8 +506,8 @@ function Deposit({ o }: { o: Opened }) {
   }
 
   return (
-    <div className="max-w-xl space-y-4">
-      <p className="text-paper/80">
+    <div className="max-w-xl space-y-6">
+      <p className="leading-relaxed text-paper/80">
         From your public wallet into your private one. The deposit itself is public on Ethereum; what you do after it is not.
         Railgun keeps 0.25% of it.
       </p>
@@ -427,17 +516,18 @@ function Deposit({ o }: { o: Opened }) {
       ) : (
         <>
           <CoinPicker value={coin} onChange={setCoin} label="Coin" />
-          <input aria-label="Amount to deposit" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(coin)}`} inputMode="decimal" className={input} />
-          <p className="font-mono text-xs text-silver">
-            Tip: also deposit about 0.03 ETH. Broadcasters take the gas of private swaps and withdrawals from it, so you never
-            have to send them from a public wallet.
+          <Amount caption="Amount" aria-label="Amount to deposit" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(coin)}`} inputMode="decimal" />
+          <p className="text-[0.95rem] leading-relaxed text-paper/70">
+            <span className={`${label} mr-2`}>Tip</span>
+            Also deposit about 0.03 ETH. Broadcasters take the gas of private swaps and withdrawals from it, so you never have to
+            send them from a public wallet.
           </p>
           <button type="button" onClick={go} disabled={busy || wei <= 0n} className={button}>
             {busy ? "Depositing…" : `Deposit ${name(coin)}`}
           </button>
         </>
       )}
-      {note && <p className="font-mono text-xs text-paper">{note}</p>}
+      {note && <p role="status" className={said}>{note}</p>}
     </div>
   );
 }
@@ -501,27 +591,28 @@ function usePrivateSend(relayAdapt: boolean, spendable: Partial<Record<Coin, big
 
   const panel = (
     <>
-      <fieldset className="space-y-2 font-mono text-xs">
-        <legend className="mb-1 uppercase tracking-[0.14em] text-silver">Send it</legend>
-        <label className="flex gap-2">
-          <input type="radio" checked={mode === "broadcaster"} onChange={() => (setMode("broadcaster"), setReady(null))} />
+      <fieldset className="space-y-1">
+        <legend className={`${label} mb-2`}>Send it</legend>
+        <label className="grid min-h-11 cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)] items-start gap-x-2 py-1.5 leading-snug">
+          <input type="radio" className="mt-1 size-4 accent-tap" checked={mode === "broadcaster"} onChange={() => (setMode("broadcaster"), setReady(null))} />
           <span>By a Railgun broadcaster, paid from your private WETH. Private.</span>
         </label>
-        <label className="flex gap-2">
-          <input type="radio" checked={mode === "self"} onChange={() => (setMode("self"), setReady(null))} />
+        <label className="grid min-h-11 cursor-pointer grid-cols-[1.5rem_minmax(0,1fr)] items-start gap-x-2 py-1.5 leading-snug">
+          <input type="radio" className="mt-1 size-4 accent-tap" checked={mode === "self"} onChange={() => (setMode("self"), setReady(null))} />
           <span>From my connected wallet. It pays the gas, and the transaction is linked to it.</span>
         </label>
         {mode === "self" && !sender && <ConnectButton label="Connect a wallet" />}
       </fieldset>
       {ready && (
-        <div className="space-y-3 border border-paper/25 p-4 font-mono text-xs">
-          <p>
+        <div className="space-y-4 border-l-[3px] border-tap pl-4">
+          <p className={label}>Review</p>
+          <p className="leading-relaxed">
             {ready.fee === null
               ? "Your connected wallet pays the gas for this one."
               : `The broadcaster takes ${fmt(ready.fee)} WETH from your private balance for the gas.`}{" "}
             Proving takes up to a minute; keep the tab open.
           </p>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <button type="button" className={button} disabled={busy} onClick={confirm}>
               Confirm
             </button>
@@ -531,7 +622,7 @@ function usePrivateSend(relayAdapt: boolean, spendable: Partial<Record<Coin, big
           </div>
         </div>
       )}
-      {note && <p className="font-mono text-xs text-paper">{note}</p>}
+      {note && <p role="status" className={said}>{note}</p>}
     </>
   );
   return { review, panel, ready, busy };
@@ -569,22 +660,25 @@ function Swap({ o, spendable }: { o: Opened; spendable: Partial<Record<Coin, big
   }
 
   return (
-    <div className="max-w-xl space-y-4">
-      <p className="text-paper/80">
+    <div className="max-w-xl space-y-6">
+      <p className="leading-relaxed text-paper/80">
         Inside Railgun, through the same $SC and $ZC pools as the rest of Silverchat. Railgun keeps 0.25% going out of your
         balance and 0.25% coming back in. The swap&apos;s coins and amounts are public; who made it is not. If the price
         moves past your slippage, the coins come back to your balance instead.
       </p>
       <CoinPicker value={from} onChange={(c) => (setFrom(c), c === to && setTo(from))} label="From" />
-      <input aria-label="Amount to swap" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(from)}, ${fmt(spendable[from])} spendable`} inputMode="decimal" className={input} />
+      <Amount caption="Amount" aria-label="Amount to swap" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(from)}, ${fmt(spendable[from])} spendable`} inputMode="decimal" />
       <CoinPicker value={to} onChange={(c) => (setTo(c), c === from && setFrom(to))} label="To" />
-      <p className="font-mono text-sm">
-        {out === null ? <span className="text-silver">·</span> : `about ${fmt(out)} ${name(to)} back, after Railgun's fees`}
-      </p>
-      <div role="group" aria-label="Slippage" className="flex items-center gap-1 font-mono text-xs">
-        <span className="mr-2 text-silver">Slippage</span>
+      <div className="space-y-1.5 border-l border-paper/20 pl-4">
+        <p className={label}>You get back</p>
+        <p aria-live="polite" className="text-[1.6rem] leading-tight tabular-nums">
+          {out === null ? <span className="text-silver">·</span> : `about ${fmt(out)} ${name(to)} back, after Railgun's fees`}
+        </p>
+      </div>
+      <div role="group" aria-label="Slippage" className="flex flex-wrap items-center gap-2">
+        <span className={`${label} mr-1`}>Slippage</span>
         {[1, 2, 5].map((x) => (
-          <button key={x} type="button" aria-pressed={slip === x} onClick={() => setSlip(x)} className="border border-paper/20 px-2.5 py-1 aria-pressed:bg-paper aria-pressed:text-developer">
+          <button key={x} type="button" aria-pressed={slip === x} onClick={() => setSlip(x)} className={pill}>
             {x}%
           </button>
         ))}
@@ -615,12 +709,12 @@ function Withdraw({ o, spendable }: { o: Opened; spendable: Partial<Record<Coin,
   }
 
   return (
-    <div className="max-w-xl space-y-4">
-      <p className="text-paper/80">To any address, best a fresh one. Railgun keeps 0.25%. ETH comes out as ETH.</p>
+    <div className="max-w-xl space-y-6">
+      <p className="leading-relaxed text-paper/80">To any address, best a fresh one. Railgun keeps 0.25%. ETH comes out as ETH.</p>
       <CoinPicker value={coin} onChange={setCoin} label="Coin" />
-      <input aria-label="Amount to withdraw" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(coin)}, ${fmt(spendable[coin])} spendable`} inputMode="decimal" className={input} />
-      <input aria-label="Address to send to" value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder="0x… the address to send to" className={input} spellCheck={false} />
-      {own && <p className="font-mono text-xs text-paper">That is your connected wallet: withdrawing there links it to this balance.</p>}
+      <Amount caption="Amount" aria-label="Amount to withdraw" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`amount of ${name(coin)}, ${fmt(spendable[coin])} spendable`} inputMode="decimal" />
+      <Amount caption="Send to" aria-label="Address to send to" value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder="0x… the address to send to" spellCheck={false} />
+      {own && <p role="alert" className={warn}>That is your connected wallet: withdrawing there links it to this balance.</p>}
       {send.panel}
       {!send.ready && (
         <button type="button" onClick={review} disabled={send.busy || !isAddress(to) || wei <= 0n || wei > (spendable[coin] ?? 0n)} className={button}>

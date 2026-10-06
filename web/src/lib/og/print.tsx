@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { ImageResponse } from "next/og";
 
+import { EXAMPLE } from "@/lib/example";
+
 export const OG = { width: 1200, height: 630 };
 
 const INK = "#141312";
@@ -69,4 +71,14 @@ export async function printCard({ kicker, question, options, foot }: { kicker: s
       ],
     },
   );
+}
+
+/** The site's own card: the example poll as a print. */
+export function exampleCard() {
+  return printCard({
+    kicker: "Example",
+    question: EXAMPLE.question,
+    options: EXAMPLE.options.map((o) => [o.label, o.share]),
+    foot: `${EXAMPLE.answers.toLocaleString("en-US")} signed answers`,
+  });
 }

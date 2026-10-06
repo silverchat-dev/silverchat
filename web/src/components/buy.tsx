@@ -9,6 +9,8 @@ import { routerAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID, ZERO } from "@/lib/config";
 import { tokens } from "@/lib/format";
 
+import { action, quiet, second } from "./journal";
+
 // every launch pool on Stockereum is fee 0 (the hook charges), tick spacing 200, the hook
 const keyFor = (token: Address, quote: Address) =>
   BigInt(token) < BigInt(quote)
@@ -125,29 +127,29 @@ function BuyCoin({ coin, usd, price, primary }: { coin: Coin; usd: number; price
   return (
     <div className="space-y-2">
       {state === "done" ? (
-        <p className="py-3">Bought. The {name} is in your wallet, ready for the next polls.</p>
+        <p className="py-2.5 text-[1.05rem]">Bought. The {name} is in your wallet, ready for the next polls.</p>
       ) : (
         <button
           type="button"
           onClick={go}
           disabled={!q.eth || !q.enough || state !== "idle"}
-          className={`${primary ? "bg-developer text-paper" : "border border-developer/50"} px-5 py-3 disabled:cursor-not-allowed disabled:opacity-40`}
+          className={`${primary ? action : second} min-h-11`}
         >
           {state === "buying" ? "Confirm in your wallet…" : want && q.eth ? `Buy ${tokens(want, 0)} ${name} for ${ethText(q.eth)}` : `Buy $${usd} of ${name}`}
         </button>
       )}
       {(q.error || price === null) && state !== "done" ? (
-        <p className="text-xs text-developer/70">
+        <p className="font-mono text-xs text-silver">
           Can&apos;t get a price right now.{" "}
-          <a href={stockereum(coin)} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+          <a href={stockereum(coin)} target="_blank" rel="noreferrer" className={`text-paper ${quiet}`}>
             Buy {name} on Stockereum
           </a>
         </p>
       ) : q.eth && q.have !== undefined && !q.enough && state !== "done" ? (
-        <p className="text-xs text-developer/70">You need about {ethText(q.eth)} plus gas; this wallet has {ethText(q.have)}.</p>
+        <p className="font-mono text-xs text-silver">You need about {ethText(q.eth)} plus gas; this wallet has {ethText(q.have)}.</p>
       ) : null}
       {error && (
-        <p role="alert" className="text-xs text-developer">
+        <p role="alert" className="border-l-2 border-paper pl-3 text-[0.95rem] leading-relaxed text-paper">
           {error}
         </p>
       )}
@@ -158,12 +160,12 @@ function BuyCoin({ coin, usd, price, primary }: { coin: Coin; usd: number; price
 /** A wallet short of the $20 hold buys about $22 of ZC or SC right here, in one transaction each. */
 export function BuyHold({ usd, zcUsd, scUsd }: { usd: number; zcUsd: number | null | undefined; scUsd: number | null | undefined }) {
   return (
-    <div className="space-y-3 font-mono text-sm">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-3">
         <BuyCoin coin="zc" usd={usd} price={zcUsd} primary />
         {ADDR.sc !== ZERO && <BuyCoin coin="sc" usd={usd} price={scUsd} primary={false} />}
       </div>
-      <p className="text-xs leading-relaxed text-developer/70">
+      <p className="max-w-[40em] font-mono text-xs leading-relaxed text-silver">
         About ${usd} each, bought with ETH through Stockereum. The price includes its fees (SC goes through ZC, so two) and a
         3% buffer; any extra stays with you.
       </p>

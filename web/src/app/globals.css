@@ -6,6 +6,10 @@
   --color-silver: #a7a9ac;
   --color-paper: #e9e4da;
   --color-safelight: #e0582c;
+  /* Meldan's green circle: the one colour that means "act here" in the world */
+  --color-tap: #38ff86;
+  /* the text on a tap-green button: dark on the bright green, light on the journal's deep green */
+  --color-on-tap: #141312;
   --color-film: #0e0d0c;
 
   --font-serif: var(--font-caslon), Georgia, serif;
@@ -16,6 +20,18 @@ html {
   background: var(--color-developer);
   color: var(--color-paper);
   color-scheme: dark;
+}
+/* large screens: the whole interface grows with them (sizes are in rem), so the walk's words and the panel do not shrink
+   into a corner of a 27-inch display */
+@media (min-width: 1800px) {
+  html {
+    font-size: 112.5%;
+  }
+}
+@media (min-width: 2300px) {
+  html {
+    font-size: 131.25%;
+  }
 }
 
 body {
@@ -124,4 +140,48 @@ body {
   .ticker:focus-within .ticker-track {
     animation-play-state: paused;
   }
+}
+
+/* the walk at "/": the page scrolls the camera, and settles near each stop */
+html.walk {
+  scroll-snap-type: y proximity;
+}
+
+/*
+ * A stop's page in Meldan is a page of a field journal laid over the world: warm paper, ink type, the green of the
+ * circle for the one thing to do. The site's colours are variables, so every page turns to paper inside the panel
+ * with no change of its own: "developer" becomes the paper, "paper" the ink.
+ */
+.journal {
+  --color-developer: #f2ead9;
+  --color-tray: #e6dcc6;
+  --color-film: #ebe1cc;
+  --color-paper: #1d1914;
+  --color-silver: #6e6455;
+  --color-safelight: #0f7a40;
+  --color-tap: #0f7a40;
+  --color-on-tap: #f7f2e6;
+  color-scheme: light;
+  color: var(--color-paper);
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(255, 255, 255, 0.55), transparent 60%),
+    linear-gradient(180deg, #f4ecdb, #efe5d0);
+}
+.journal ::selection {
+  background: #1d1914;
+  color: #f2ead9;
+}
+.journal :focus-visible {
+  outline-color: #1d1914;
+}
+/* a text field is a line on the page: focus darkens and thickens the line instead of boxing it */
+.journal input:not([type="checkbox"], [type="radio"], [type="range"]):focus-visible,
+.journal textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 1px 0 0 var(--color-paper);
+}
+
+/* a ruled list in the journal: one line between rows, like a notebook */
+.ruled > * + * {
+  border-top: 1px dashed color-mix(in srgb, var(--color-paper) 22%, transparent);
 }

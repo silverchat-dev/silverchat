@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Cash } from "@/components/cash";
+import { Checks, ForkHead, Notes, OtherWay, Seen } from "@/components/fork";
+import { Page } from "@/components/journal";
 import { ADDR, CASH_LIVE, EXPLORER, ZINC_LIVE } from "@/lib/config";
 import { short } from "@/lib/format";
 import { RAILGUN, RELAY_ADAPT } from "@/lib/cash/routes";
@@ -23,56 +24,43 @@ const NOTES = [
   "Railgun is a separate protocol we do not run. Its contracts and fees are its own. Keep your 12 words: they work in Railway or any Railgun wallet, with or without this site.",
 ];
 
+// the same, in two short lists for a first look
+const HIDDEN = [
+  "Who holds your private balance, and what it holds.",
+  "Who made a private swap or a withdrawal.",
+  "Your 12 words, keys and balances: they stay in this browser.",
+];
+const SHOWN = [
+  "Your deposit: your wallet putting coins into Railgun.",
+  "A private swap's coins and amounts.",
+  "What comes out, and the address it goes to.",
+  "Your IP address, to Railgun's data services, the RPC and broadcasters.",
+];
+
 export default function CashPage() {
   // the page ships before it goes live; until NEXT_PUBLIC_CASH=1 it does not exist
   if (!CASH_LIVE) notFound();
   return (
-    <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
-      <header className="max-w-2xl space-y-4">
-        <h1 className="text-5xl leading-tight">SilverCash</h1>
-        <p className="font-mono text-sm uppercase tracking-[0.2em] text-silver">Deposit. Shield. Swap. Withdraw.</p>
-        <p className="text-lg leading-relaxed text-paper/80">
+    <Page>
+      <ForkHead side="cash" otherLive={ZINC_LIVE}>
+        <p>
           Private money for the Silverchat ecosystem. Deposit $SC, $ZC or ETH into a private balance, swap between them inside
           it, and withdraw to a fresh wallet. It runs on Railgun, in your browser. SilverCash takes no fee.
         </p>
-      </header>
+      </ForkHead>
 
       <Cash />
 
-      {ZINC_LIVE && (
-        <p className="max-w-3xl leading-relaxed text-paper/80">
-          Holding ZEC? <Link href="/zinc" className="underline underline-offset-4">Zinc</Link> turns shielded ZEC into a private
-          zkAPI balance for AI models, and back.
-        </p>
-      )}
-
-      <section aria-labelledby="cash-notes" className="max-w-3xl space-y-4">
-        <h2 id="cash-notes" className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-          What it hides, and what it does not
-        </h2>
-        <ul className="space-y-3 leading-relaxed text-paper/80">
-          {NOTES.map((t) => (
-            <li key={t} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3">
-              <span aria-hidden className="text-silver">·</span>
-              <span>{t}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="font-mono text-xs text-silver">
-          Railgun:{" "}
-          <a href={`${EXPLORER}/address/${RAILGUN}`} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            {short(RAILGUN)}
-          </a>{" "}
-          · RelayAdapt:{" "}
-          <a href={`${EXPLORER}/address/${RELAY_ADAPT}`} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            {short(RELAY_ADAPT)}
-          </a>{" "}
-          · swaps through Stockereum&apos;s router{" "}
-          <a href={`${EXPLORER}/address/${ADDR.stockereumRouter}`} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            {short(ADDR.stockereumRouter)}
-          </a>
-        </p>
-      </section>
-    </section>
+      <Seen hidden={HIDDEN} shown={SHOWN} />
+      <Notes title="What it hides, and what it does not, in full" notes={NOTES} />
+      <Checks
+        rows={[
+          { name: "Railgun", href: `${EXPLORER}/address/${RAILGUN}`, text: short(RAILGUN) },
+          { name: "RelayAdapt", href: `${EXPLORER}/address/${RELAY_ADAPT}`, text: short(RELAY_ADAPT) },
+          { name: "Swaps, through Stockereum's router", href: `${EXPLORER}/address/${ADDR.stockereumRouter}`, text: short(ADDR.stockereumRouter) },
+        ]}
+      />
+      <OtherWay side="cash" live={ZINC_LIVE} />
+    </Page>
   );
 }

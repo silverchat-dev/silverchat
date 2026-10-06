@@ -6,6 +6,7 @@ import { isAddress } from "viem";
 
 import { rewards } from "@/lib/algorithm";
 import { askAbi } from "@/lib/abi";
+import { Figures, Page, PageHead, Part, label } from "@/components/journal";
 import { ADDR, EXPLORER } from "@/lib/config";
 import { topicOf, type Content } from "@/lib/content";
 import { lead, short, tokens } from "@/lib/format";
@@ -58,80 +59,87 @@ export default async function ProfilePage({ params }: PageProps<"/u/[address]">)
   const { address, agent } = p;
   const [{ asked, claimed, at }, score] = await Promise.all([load(address), scoreOf(address)]);
 
-  return (
-    <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
-      <header className="space-y-4">
-        <h1 className="text-5xl leading-tight">{agent ? agent.name : "Public profile"}</h1>
-        <a href={`${EXPLORER}/address/${address}`} target="_blank" rel="noreferrer" className="block break-all font-mono text-[11px] text-paper/80 underline-offset-4 hover:underline sm:text-base">
-          {address}
-        </a>
-        <p className="max-w-2xl text-lg leading-relaxed text-paper/80">
-          {agent ? (
-            <>
-              This wallet says it is an agent
-              {agent.url && (
-                <>
-                  {" "}
-                  run from{" "}
-                  <a href={agent.url} target="_blank" rel="noreferrer nofollow" className="underline underline-offset-4">
-                    {new URL(agent.url).host}
-                  </a>
-                </>
-              )}
-              , which makes its profile public.
-            </>
-          ) : (
-            "This wallet chose to show its profile."
-          )}{" "}
-          It lists only what Ethereum already shows: the questions it asked, the
-          ZC it claimed for answering and its Predict record. What it answered in polls stays private.
-        </p>
-      </header>
+  const figures = [
+    { label: "Polls asked", value: asked.length.toLocaleString("en-US") },
+    { label: "ZC claimed", value: tokens(claimed, 0), note: "for answering polls" },
+    // Predict sides are public on-chain once revealed, so the record adds nothing Ethereum does not show
+    ...(score && score.resolved > 0
+      ? [{ label: "Called right", value: `${score.correct} / ${score.resolved}`, note: `Predict markets · rank #${score.rank}` }]
+      : []),
+  ];
 
-      <dl className="grid gap-3 sm:grid-cols-2">
-        {[
-          ["Polls asked", asked.length.toLocaleString("en-US")],
-          ["ZC claimed for answers", tokens(claimed, 0)],
-          // Predict sides are public on-chain once revealed, so the record adds nothing Ethereum does not show
-          ...(score && score.resolved > 0
-            ? [["Predict markets called right", `${score.correct} / ${score.resolved} · #${score.rank}`]]
-            : []),
-        ].map(([k, v]) => (
-          <div key={k} className="space-y-3 bg-tray p-6">
-            <dt className="font-mono text-[11px] uppercase tracking-[0.14em] text-silver">{k}</dt>
-            <dd className="text-[clamp(2rem,4vw,3rem)] leading-none tabular-nums">{v}</dd>
-          </div>
-        ))}
-      </dl>
+  return (
+    <Page>
+      <PageHead
+        stop="pulse"
+        title={agent ? agent.name : "Public profile"}
+        aside={
+          <a
+            href={`${EXPLORER}/address/${address}`}
+            target="_blank"
+            rel="noreferrer"
+            className="break-all font-mono text-[12px] leading-relaxed text-paper/85 underline decoration-paper/30 underline-offset-4 transition-colors hover:decoration-paper"
+          >
+            {address} ↗
+          </a>
+        }
+      >
+        {agent ? (
+          <>
+            This wallet says it is an agent
+            {agent.url && (
+              <>
+                {" "}
+                run from{" "}
+                <a href={agent.url} target="_blank" rel="noreferrer nofollow" className="underline decoration-paper/30 underline-offset-4 hover:decoration-paper">
+                  {new URL(agent.url).host}
+                </a>
+              </>
+            )}
+            , which makes its profile public.
+          </>
+        ) : (
+          "This wallet chose to show its profile."
+        )}{" "}
+        It lists only what Ethereum already shows: the questions it asked, the ZC it claimed for answering and its Predict
+        record. What it answered in polls stays private.
+      </PageHead>
+
+      <Part title="On Ethereum">
+        <Figures items={figures} />
+      </Part>
 
       {asked.length > 0 && (
-        <section className="space-y-4">
-          <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Asked</h2>
-          <ol className="divide-y divide-silver/20 border-y border-silver/20">
+        <Part title="Asked" more={<span className="text-silver tabular-nums">{asked.length}</span>}>
+          <ol className="ruled -mx-2">
             {asked.map((p) => {
               const content = p.content ? (JSON.parse(p.content) as Content) : null;
               const topic = topicOf(content);
               const top = p.status === "final" ? lead(content, p.tally) : null;
+              const open = p.status === "open" && p.closes_at > at / 1000;
               return (
                 <li key={p.id}>
-                  <Link href={`/poll/${p.id}`} className="grid gap-x-6 gap-y-1 py-4 hover:bg-paper/5 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-baseline">
-                    <span className="min-w-0 space-y-1">
-                      <span className="block font-mono text-xs uppercase tracking-[0.14em] text-silver">
+                  <Link href={`/poll/${p.id}`} className="group grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 rounded-md px-2 py-4 transition-colors hover:bg-paper/[0.04]">
+                    <span className="min-w-0 space-y-2">
+                      <span className={`block ${label} tracking-[0.12em]`}>
                         No. {p.id}
                         {topic && ` · ${topic}`}
                       </span>
-                      <span className="line-clamp-2 text-xl">{content?.questions[0].q ?? "Question not published"}</span>
+                      <span className="line-clamp-2 block text-[1.2rem] leading-snug text-balance">{content?.questions[0].q ?? "Question not published"}</span>
+                      <span className={`block font-mono text-[11px] ${open ? "text-paper" : "text-silver"}`}>
+                        {p.status === "final" ? (top ? `Fixed · ${top.share}% ${top.option}` : "Fixed · no answers") : p.status === "refunded" ? "Refunded" : open ? "Open" : "Closed · developing"}
+                      </span>
                     </span>
-                    <span className="font-mono text-sm text-paper/80 sm:text-right">
-                      {p.status === "final" ? (top ? `Fixed · ${top.share}% ${top.option}` : "Fixed · no answers") : p.status === "refunded" ? "Refunded" : p.closes_at > at / 1000 ? "Open" : "Closed · developing"}
+                    <span aria-hidden className="pt-6 font-mono text-sm text-silver transition-transform group-hover:translate-x-0.5 group-hover:text-paper">
+                      →
                     </span>
                   </Link>
                 </li>
               );
             })}
           </ol>
-        </section>
+        </Part>
       )}
-    </section>
+    </Page>
   );
 }
