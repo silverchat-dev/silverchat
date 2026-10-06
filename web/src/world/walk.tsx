@@ -19,9 +19,9 @@ function Card({ stop, first }: { stop: Stop; first: boolean }) {
   return (
     <section id={stop.id} className="relative flex h-[100svh] snap-start items-end px-5 pb-[12svh] sm:px-10">
       {/* a soft shade under the words, so they read over a bright sky or grass */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_55%_at_0%_100%,rgba(10,12,8,0.62),rgba(10,12,8,0.25)_55%,transparent_80%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[rgba(10,12,8,0.78)] via-[rgba(10,12,8,0.3)] via-45% to-transparent to-70% sm:bg-[radial-gradient(ellipse_75%_55%_at_0%_100%,rgba(10,12,8,0.62),rgba(10,12,8,0.25)_55%,transparent_80%)]" />
       <div className="relative max-w-xl space-y-4">
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-paper/75">{first ? "silverchat · Snowmoon, ch. 27" : stop.name}</p>
+        <p className="font-mono text-xs uppercase tracking-[0.18em] text-paper/90 drop-shadow-[0_1px_8px_rgba(0,0,0,0.6)]">{first ? "silverchat · Snowmoon, ch. 27" : stop.name}</p>
         <Title className="text-[clamp(2.4rem,6vw,4.6rem)] leading-[1.02] text-paper drop-shadow-[0_2px_18px_rgba(0,0,0,0.45)]">
           {first ? "Ask the network." : stop.label}
         </Title>
