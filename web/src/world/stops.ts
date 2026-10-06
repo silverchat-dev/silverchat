@@ -79,10 +79,15 @@ export const STOPS: Stop[] = [
     set: "tunnel",
     pose: "fork",
     label: "Go private",
-    name: "Cash",
-    line: "Left: a private balance for $SC, $ZC and ETH. Right: pay for any AI with shielded ZEC.",
-    routes: ["/cash"],
-    also: { label: "Pay for AI privately", name: "Zinc", route: "/zinc" },
+    // each way of the fork shows only while its product is live
+    name: CASH_LIVE ? "Cash" : "Zinc",
+    line: CASH_LIVE
+      ? ZINC_LIVE
+        ? "Left: a private balance for $SC, $ZC and ETH. Right: pay for any AI with shielded ZEC."
+        : "A private balance for $SC, $ZC and ETH."
+      : "Pay for any AI model from shielded ZEC, with no account and no trail.",
+    routes: CASH_LIVE ? ["/cash"] : ["/zinc"],
+    also: CASH_LIVE && ZINC_LIVE ? { label: "Pay for AI privately", name: "Zinc", route: "/zinc" } : undefined,
     live: CASH_LIVE || ZINC_LIVE,
   },
   {
