@@ -21,6 +21,7 @@ export function useLive(): Live {
   const polls = useQuery({ queryKey: ["world", "final"], queryFn: () => get("/api/polls?status=final&limit=1"), ...opts });
   const realm = useQuery({ queryKey: ["world", "realm"], queryFn: () => get("/api/realm?sort=trending"), ...opts });
   const markets = useQuery({ queryKey: ["world", "markets"], queryFn: () => get("/api/markets"), ...opts });
+  const riddle = useQuery({ queryKey: ["world", "riddle"], queryFn: () => get("/api/riddle"), ...opts });
   const roof = useRef(0);
   const burst = useRef(0);
 
@@ -56,8 +57,10 @@ export function useLive(): Live {
         return { question: (m.title ?? "").slice(0, 60), yes: y + n > 0 ? y / (y + n) : 0.5 };
       });
     if (open.length) live.markets = open;
+    const r = riddle.data as { state: "open" | "solved" | "closed"; solved: string[] } | null | undefined;
+    if (r?.state) live.riddle = { state: r.state, solved: r.solved.map((t) => t.slice(0, 24)) };
     return { ...live, roof, burst };
-  }, [polls.data, realm.data, markets.data]);
+  }, [polls.data, realm.data, markets.data, riddle.data]);
 }
 
 /** Called by the Ask form once a question's burn is confirmed: the bowl behind the panel flares. */
