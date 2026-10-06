@@ -38,7 +38,15 @@ class Guard extends Component<{ children: ReactNode }, { failed: boolean }> {
 function Still({ stop }: { stop: Stop }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={`/world/stills/${stop.id}.jpg`} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
+    <img
+      src={`/world/stills/${stop.id}.webp`}
+      alt=""
+      aria-hidden
+      className="absolute inset-0 h-full w-full object-cover"
+      // a missing still leaves the dark ground, not a broken picture
+      onError={(e) => void (e.currentTarget.style.visibility = "hidden")}
+      onLoad={(e) => void (e.currentTarget.style.visibility = "visible")}
+    />
   );
 }
 

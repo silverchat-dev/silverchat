@@ -29,7 +29,7 @@ page.on("pageerror", (e) => errors.push(String(e)));
 // the local chain may be off: its refused connections are not the world's errors
 page.on("console", (m) => m.type() === "error" && !/8545|ERR_CONNECTION_REFUSED/.test(m.text()) && errors.push(m.text()));
 await page.goto(`${o.base}/world-lab?${q}`);
-await page.waitForFunction(() => !!window.lab, null, { timeout: 120000 });
+await page.waitForFunction(() => !!window.lab?.get().controls, null, { timeout: 180000 });
 await page.waitForTimeout(Number(o.wait) * 1000);
 const data = await page.evaluate(
   ({ at, look }) => {
