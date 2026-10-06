@@ -6,11 +6,26 @@ import { useState } from "react";
 import { BaseError, ContractFunctionRevertedError, isHex, toHex, UserRejectedRequestError, zeroHash, type Hex } from "viem";
 import { useAccount, useBlockNumber, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
 
+import { Part, action, field, label, quiet, second } from "@/components/journal";
 import { riddleAbi } from "@/lib/abi";
 import { ADDR, CHAIN_ID } from "@/lib/config";
 import { answerHash, commitmentOf, loadGuess, normalize, REVEAL_DELAY, saveGuess } from "@/lib/riddle";
 
-const button = "bg-developer px-5 py-3 font-mono text-sm text-paper disabled:opacity-50";
+// buttons a thumb can hit on a phone
+const tall = "min-h-11";
+
+/** The wallet's connect button drawn as the view's one green action; it opens the same wallet window. */
+function Connect({ children }: { children: string }) {
+  return (
+    <ConnectButton.Custom>
+      {({ openConnectModal, mounted }) => (
+        <button type="button" onClick={openConnectModal} disabled={!mounted} className={`${action} ${tall}`}>
+          {children}
+        </button>
+      )}
+    </ConnectButton.Custom>
+  );
+}
 
 function explain(e: unknown) {
   if (e instanceof BaseError) {
@@ -99,80 +114,87 @@ export function SolvePanel({ answerHashOnChain }: { answerHashOnChain: Hex }) {
   if (over) return null;
 
   return (
-    <section aria-labelledby="solve" className="space-y-6 bg-paper px-5 py-7 text-developer sm:px-9 sm:py-9">
-      <h2 id="solve" className="font-mono text-xs uppercase tracking-[0.14em]">
-        Your answer
-      </h2>
-
-      <label className="block space-y-2">
-        <span className="block text-sm text-developer/70">Try a guess here first. It is checked in your browser against the hash on Ethereum, and costs nothing.</span>
+    <Part title="Your answer" id="solve">
+      <label className="block space-y-3">
+        <span className="block max-w-[32em] leading-relaxed text-paper/75">Try a guess here first. It is checked in your browser against the hash on Ethereum, and costs nothing.</span>
         <input
           value={guess}
           onChange={(e) => setGuess(e.target.value)}
           placeholder="your answer"
           autoComplete="off"
           spellCheck={false}
-          className="w-full border-b border-developer/40 bg-transparent pb-2 text-2xl outline-none placeholder:text-developer/35 focus:border-developer"
+          className={`${field} text-[1.6rem] sm:text-[1.9rem]`}
         />
         {guess.trim() && (
-          <span className="block font-mono text-xs">
-            {right ? "That is the answer. Seal it before anyone else does." : "Not it."} <span className="text-developer/60">({normalize(guess) || "empty"})</span>
+          <span aria-live="polite" className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
+            <span aria-hidden className={`size-2 shrink-0 self-center rounded-full ${right ? "bg-tap" : "border border-paper/50"}`} />
+            <span>{right ? "That is the answer. Seal it before anyone else does." : "Not it."}</span>
+            <span className="text-silver">({normalize(guess) || "empty"})</span>
           </span>
         )}
       </label>
 
       {!address ? (
-        <ConnectButton label="Connect a wallet to claim it" />
+        <Connect>Connect a wallet to claim it</Connect>
       ) : chainId !== CHAIN_ID ? (
-        <button type="button" onClick={() => switchChain({ chainId: CHAIN_ID })} className={button}>
+        <button type="button" onClick={() => switchChain({ chainId: CHAIN_ID })} className={`${second} ${tall}`}>
           Switch to Ethereum
         </button>
       ) : hasSeal && kept ? (
-        <div className="space-y-3">
-          <p>
+        <div className="space-y-4">
+          <p className="text-[1.15rem] leading-snug">
             Your guess is sealed on-chain. {countdown}
           </p>
-          <p className="break-all font-mono text-xs text-developer/70">Salt, kept in this browser: {kept.salt}. Copy it somewhere safe.</p>
-          <p className="text-sm text-developer/70">
+          <p className="space-y-1">
+            <span className={`block ${label}`}>Salt, kept in this browser. Copy it somewhere safe.</span>
+            <span className="block break-all font-mono text-xs text-paper/85">{kept.salt}</span>
+          </p>
+          <p className="max-w-[34em] text-sm leading-relaxed text-paper/75">
             Before you reveal, add a private RPC to your wallet (for example rpc.flashbots.net), so the answer is not seen
             in the public mempool before it lands.
           </p>
-          <button type="button" disabled={busy || left === null || left > 0n} className={button} onClick={() => reveal(kept.answer, kept.salt)}>
+          <button type="button" disabled={busy || left === null || left > 0n} className={`${action} ${tall}`} onClick={() => reveal(kept.answer, kept.salt)}>
             {busy ? note : "Reveal and claim"}
           </button>
         </div>
       ) : hasSeal ? (
-        <div className="space-y-4 text-sm">
-          <p>
+        <div className="space-y-5">
+          <p className="max-w-[34em] leading-relaxed">
             This wallet has a sealed guess, but this browser does not hold it. Paste the answer and salt you sealed to reveal
             it. {countdown}
           </p>
-          <input value={pasted.answer} onChange={(e) => setPasted({ ...pasted, answer: e.target.value })} placeholder="the answer you sealed" className="w-full border-b border-developer/40 bg-transparent py-1 outline-none" />
-          <input value={pasted.salt} onChange={(e) => setPasted({ ...pasted, salt: e.target.value.trim() })} placeholder="its salt, 0x…" className="w-full border-b border-developer/40 bg-transparent py-1 font-mono text-xs outline-none" />
-          {pasted.answer && pasted.salt && !pastedOpens && <p>That is not the answer and salt you sealed.</p>}
-          <button type="button" disabled={busy || !pastedOpens || left === null || left > 0n} className={button} onClick={() => reveal(pasted.answer, pasted.salt as Hex)}>
+          <label className="block space-y-1">
+            <span className={`block ${label}`}>The answer you sealed</span>
+            <input value={pasted.answer} onChange={(e) => setPasted({ ...pasted, answer: e.target.value })} placeholder="the answer you sealed" className={field} />
+          </label>
+          <label className="block space-y-1">
+            <span className={`block ${label}`}>Its salt</span>
+            <input value={pasted.salt} onChange={(e) => setPasted({ ...pasted, salt: e.target.value.trim() })} placeholder="its salt, 0x…" className={`${field} font-mono text-sm`} />
+          </label>
+          {pasted.answer && pasted.salt && !pastedOpens && <p className="text-sm">That is not the answer and salt you sealed.</p>}
+          <button type="button" disabled={busy || !pastedOpens || left === null || left > 0n} className={`${action} ${tall}`} onClick={() => reveal(pasted.answer, pasted.salt as Hex)}>
             {busy ? note : "Reveal it"}
           </button>
-          <details>
-            <summary className="cursor-pointer">I lost the salt</summary>
-            <p className="mt-2">
+          <details className="group text-sm">
+            <summary className={`cursor-pointer py-2 font-mono text-xs text-silver ${quiet}`}>I lost the salt</summary>
+            <p className="mt-2 max-w-[34em] leading-relaxed text-paper/80">
               Sealing again replaces your seal and restarts the ten blocks. If you already sent a reveal, that reveal fails.
             </p>
-            <button type="button" disabled={busy || !right || !mine.isSuccess} className={`${button} mt-3`} onClick={seal}>
+            <button type="button" disabled={busy || !right || !mine.isSuccess} className={`${second} ${tall} mt-4`} onClick={seal}>
               Seal my answer again
             </button>
           </details>
         </div>
       ) : (
-        <button type="button" disabled={busy || !right || !mine.isSuccess} className={button} onClick={seal}>
+        <button type="button" disabled={busy || !right || !mine.isSuccess} className={`${action} ${tall}`} onClick={seal}>
           {busy ? note : "Seal my answer"}
         </button>
       )}
       {error && (
-        <p role="alert" className="text-sm">
+        <p role="alert" className="border-l-2 border-paper pl-3 text-sm leading-relaxed">
           {error}
         </p>
       )}
-    </section>
+    </Part>
   );
 }
