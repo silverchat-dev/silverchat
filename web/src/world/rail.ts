@@ -11,7 +11,7 @@ import { STOPS } from "./stops";
 
 const world = (origin: Vec3, p: Vec3) => new THREE.Vector3(origin[0] + p[0], origin[1] + p[1], origin[2] + p[2]);
 
-type Point = { set: string; pos: THREE.Vector3; look: THREE.Vector3; arrive: { pos: THREE.Vector3; look: THREE.Vector3 }; hour: number };
+type Point = { set: string; origin: Vec3; ground?: (x: number, z: number) => number; pos: THREE.Vector3; look: THREE.Vector3; arrive: { pos: THREE.Vector3; look: THREE.Vector3 }; hour: number };
 
 const POINTS: Point[] = STOPS.map((s) => {
   const set = setById(s.set);
@@ -19,6 +19,8 @@ const POINTS: Point[] = STOPS.map((s) => {
   const arrive: Pose = set.poses.arrive ?? pose;
   return {
     set: set.id,
+    origin: set.origin,
+    ground: set.ground,
     pos: world(set.origin, pose.position),
     look: world(set.origin, pose.target),
     arrive: { pos: world(set.origin, arrive.position), look: world(set.origin, arrive.target) },
@@ -46,6 +48,11 @@ export function viewAt(t: number, out: View): View {
     out.pos.copy(a.pos).lerp(b.pos, e);
     // a flight rises a little over the ground between the two views, the way a crane shot does
     out.pos.y += Math.sin(Math.PI * e) * Math.min(14, a.pos.distanceTo(b.pos) * 0.12);
+    // and stays clear of the ground on the way: a few metres at the ends, well above the grass in between
+    if (a.ground) {
+      const floor = a.ground(out.pos.x - a.origin[0], out.pos.z - a.origin[2]) + a.origin[1] + 2 + 14 * Math.sqrt(Math.sin(Math.PI * f));
+      out.pos.y = Math.max(out.pos.y, floor);
+    }
     out.look.copy(a.look).lerp(b.look, e);
     out.veil = 0;
     out.sets = [a.set];
@@ -56,9 +63,10 @@ export function viewAt(t: number, out: View): View {
   if (f < 0.5) {
     const g = f * 2;
     const dir = a.look.clone().sub(a.pos).normalize();
-    out.pos.copy(a.pos).addScaledVector(dir, ease(g) * 18);
-    out.look.copy(a.look).addScaledVector(dir, ease(g) * 18);
-    out.veil = THREE.MathUtils.smoothstep(g, 0.25, 1);
+    // a few steps only: rooms and streets have walls close ahead, and the haze closes in before them
+    out.pos.copy(a.pos).addScaledVector(dir, ease(g) * 5);
+    out.look.copy(a.look).addScaledVector(dir, ease(g) * 5);
+    out.veil = THREE.MathUtils.smoothstep(g, 0, 0.6);
     out.shown = a.set;
   } else {
     const g = (f - 0.5) * 2;

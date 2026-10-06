@@ -734,5 +734,6 @@ export const hillSet: SetModule = {
     // the panel takes the right half: the bowl and its green circle sit in the left part of the view
     ask: { position: [7.2, 29.6, 5.8], target: [2.6, 26.3, -2.2] },
   },
+  ground: LAND.height,
   Scene: EvelorHill,
 };

@@ -36,6 +36,8 @@ export type SetModule = {
   hour: number;
   /** camera poses by stop id, in the set's own space */
   poses: Record<string, Pose>;
+  /** the ground's height at (x, z) in the set's own space, so a flight between two stops never dips into it */
+  ground?: (x: number, z: number) => number;
   Scene: React.ComponentType<SetProps>;
 };
 

@@ -5,7 +5,8 @@
  * of noise. It is art-directed rather than physical, so each hour of the walk can have exactly the colours we want,
  * and its values stay inside what the screen can show.
  */
-import { useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
 import * as THREE from "three";
 
 export type SkyColours = { zenith: string; horizon: string; ground: string; sun: string; cloud: string };
@@ -79,6 +80,8 @@ export function PaintedSky({ sun, colours, time, veil }: { sun: THREE.Vector3; c
       }),
     [time, veil],
   );
+  const dome = useRef<THREE.Mesh>(null);
+  useFrame(({ camera }) => dome.current?.position.copy(camera.position));
   const u = material.uniforms;
   u.uZenith.value.set(colours.zenith);
   u.uHorizon.value.set(colours.horizon);
@@ -87,7 +90,8 @@ export function PaintedSky({ sun, colours, time, veil }: { sun: THREE.Vector3; c
   u.uCloud.value.set(colours.cloud);
   u.uSun.value.copy(sun);
   return (
-    <mesh material={material} renderOrder={-1} frustumCulled={false} scale={1000}>
+    // the dome travels with the camera, so every place along the walk sits inside it
+    <mesh ref={dome} material={material} renderOrder={-1} frustumCulled={false} scale={1000}>
       <sphereGeometry args={[1, 48, 24]} />
     </mesh>
   );
