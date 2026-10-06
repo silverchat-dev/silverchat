@@ -15,7 +15,7 @@ import { STOPS } from "./stops";
 const SEEN = "meldan:entered";
 
 export function Gate() {
-  const [open, setOpen] = useState(false);
+  const open = useWorld((s) => s.gate);
   const [steps, setSteps] = useState({ code: false, music: false });
   const ready = useWorld((s) => s.ready);
   const tier = useWorld((s) => s.tier);
@@ -27,7 +27,7 @@ export function Gate() {
       seen = sessionStorage.getItem(SEEN) === "1";
     } catch {}
     if (seen) return world.set({ entered: true });
-    setOpen(true);
+    world.set({ gate: true });
     void import("./world").then(() => setSteps((s) => ({ ...s, code: true })));
     prepareMusic()
       .then(() => setSteps((s) => ({ ...s, music: true })))
@@ -47,9 +47,8 @@ export function Gate() {
     try {
       sessionStorage.setItem(SEEN, "1");
     } catch {}
-    world.set({ entered: true, sound });
+    world.set({ entered: true, gate: false, sound });
     if (sound) void playMusic().catch(() => world.set({ sound: false }));
-    setOpen(false);
   };
 
   return (
@@ -67,10 +66,10 @@ export function Gate() {
           <div className="h-px bg-paper transition-[width] duration-700" style={{ width: `${(done / 3) * 100}%` }} />
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={() => enter(true)} disabled={done < 3} className="bg-tap px-6 py-3 font-mono text-sm text-black hover:brightness-110 disabled:opacity-40">
+          <button type="button" onClick={() => enter(true)} disabled={done < 3} className="rounded-full bg-tap px-6 py-3 font-mono text-sm text-black transition-[filter] hover:brightness-110 disabled:opacity-40">
             {done < 3 ? "Loading the city…" : "Enter Meldan"}
           </button>
-          <button type="button" onClick={() => enter(false)} disabled={done < 3} className="border border-paper/40 px-5 py-3 font-mono text-sm text-paper/90 hover:border-paper disabled:opacity-40">
+          <button type="button" onClick={() => enter(false)} disabled={done < 3} className="rounded-full border border-paper/40 px-5 py-3 font-mono text-sm text-paper/90 transition-colors hover:border-paper disabled:opacity-40">
             Enter without sound
           </button>
           <button type="button" onClick={() => enter(false)} className="px-2 py-3 font-mono text-sm text-paper/70 underline-offset-4 hover:underline">

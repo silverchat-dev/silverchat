@@ -20,6 +20,8 @@ type State = {
   tier: Tier;
   /** the walk's music is wanted (the visitor's choice) */
   sound: boolean;
+  /** the gate (the first screen of a visit, with Enter) is up */
+  gate: boolean;
   /** the gate has been passed this visit */
   entered: boolean;
   /** the world failed to start: stills only from here on */
@@ -28,7 +30,7 @@ type State = {
   ready: boolean;
 };
 
-let state: State = { target: 0, jump: false, parked: false, covered: false, tier: 2, sound: false, entered: false, failed: false, ready: false };
+let state: State = { target: 0, jump: false, parked: false, covered: false, tier: 2, sound: false, gate: false, entered: false, failed: false, ready: false };
 const listeners = new Set<() => void>();
 
 export const world = {

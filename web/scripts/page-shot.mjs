@@ -15,13 +15,15 @@ const { values: o } = parseArgs({
     base: { type: "string", default: "http://localhost:3200" },
     world: { type: "boolean", default: false },
     wait: { type: "string", default: "4" },
+    // a first visit: the gate with its Enter button shows
+    fresh: { type: "boolean", default: false },
   },
 });
 const [width, height] = o.size.split("x").map(Number);
 // headless, with the GPU for the world: no window opens
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const context = await browser.newContext({ viewport: { width, height }, reducedMotion: o.world ? "no-preference" : "reduce", isMobile: width < 768, hasTouch: width < 768 });
-await context.addInitScript(() => sessionStorage.setItem("meldan:entered", "1"));
+if (!o.fresh) await context.addInitScript(() => sessionStorage.setItem("meldan:entered", "1"));
 const page = await context.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));

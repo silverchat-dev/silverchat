@@ -11,7 +11,7 @@ import { useEffect } from "react";
 import { Footer } from "@/components/footer";
 
 import { tOfStop } from "./rail";
-import { world } from "./state";
+import { world, useWorld } from "./state";
 import { STOPS, type Stop } from "./stops";
 
 function Card({ stop, first }: { stop: Stop; first: boolean }) {
@@ -77,8 +77,10 @@ export function Walk() {
       root.classList.remove("walk");
     };
   }, []);
+  // the words of the walk wait behind the gate, so the two never show at once
+  const gate = useWorld((s) => s.gate);
   return (
-    <div id="walk">
+    <div id="walk" className={`transition-opacity duration-700 ${gate ? "opacity-0" : ""}`}>
       {STOPS.map((s, i) => (
         <Card key={s.id} stop={s} first={i === 0} />
       ))}
