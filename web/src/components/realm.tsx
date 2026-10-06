@@ -1,6 +1,5 @@
 "use client";
 
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
@@ -24,10 +23,41 @@ import { tokens } from "@/lib/format";
 import { refused } from "@/lib/moderation";
 import { baseOf, BASES, FEES, feeLabel, imageSrc, OPENING_FDV_USD, realmKey, SUPPLY } from "@/lib/realm";
 
-import { Choice, Pill } from "./ask-form";
+import { action, field, label, second } from "./journal";
+import { Connect } from "./realm-you";
 
-const button = "bg-developer px-5 py-3 font-mono text-sm text-paper disabled:opacity-50";
-const field = "w-full border border-developer/50 bg-transparent px-3 py-2 font-mono text-sm";
+const button = `${action} min-h-11`;
+const big = `${action} min-h-12 w-full text-[14px]`;
+const alert = "border-l-2 border-paper pl-3 text-[0.95rem] leading-snug text-paper";
+// a small choice: the tap area is a full 44 px on a phone, the ink fill only as tall as the word
+const choice = "group inline-flex min-h-11 items-center font-mono text-[12px] tracking-[0.04em] tabular-nums aria-pressed:text-developer sm:min-h-9";
+const ink =
+  "rounded-full border border-paper/25 px-3 py-1 transition-colors group-hover:border-paper group-aria-pressed:border-paper group-aria-pressed:bg-paper";
+
+/** A set of choices under a small label, with a short hint. */
+function Choice({ legend, hint, children }: { legend: string; hint: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="space-y-3">
+      <legend className="space-y-1">
+        <span className={`${label} block`}>{legend}</span>
+        <span className="block text-[0.95rem] leading-snug text-paper/70">{hint}</span>
+      </legend>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </fieldset>
+  );
+}
+
+/** One choice of a set: a radio drawn as a pill. */
+function Pill({ name, checked, onChange, children }: { name: string; checked: boolean; onChange: () => void; children: React.ReactNode }) {
+  return (
+    <label className="cursor-pointer">
+      <input type="radio" name={name} checked={checked} onChange={onChange} className="peer sr-only" />
+      <span className="inline-flex min-h-11 items-center rounded-full border border-paper/25 px-4 font-mono text-[13px] tabular-nums transition-colors peer-checked:border-paper peer-checked:bg-paper peer-checked:text-developer peer-focus-visible:outline peer-focus-visible:outline-1 peer-focus-visible:outline-offset-2 hover:border-paper sm:min-h-9">
+        {children}
+      </span>
+    </label>
+  );
+}
 
 function explain(e: unknown) {
   if (e instanceof BaseError) {
@@ -182,83 +212,104 @@ export function LaunchForm() {
     }
   }
 
+  const lab = `${label} block`;
+  // the form in three steps, each under a small numbered heading, like a page of instructions
+  const step = (n: string, title: string) => (
+    <h3 className="flex items-baseline gap-3 border-b border-dashed border-paper/25 pb-2 text-xl">
+      <span className="font-mono text-[11px] text-silver">{n}</span>
+      {title}
+    </h3>
+  );
   return (
-    <form className="space-y-9 bg-paper px-5 py-7 text-developer sm:px-9 sm:py-9" onSubmit={(e) => e.preventDefault()}>
+    <form className="space-y-10" onSubmit={(e) => e.preventDefault()}>
       <fieldset disabled={busy} className="space-y-9">
-        <div className="grid gap-7 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="block font-mono text-xs uppercase tracking-[0.14em]">Name</span>
-            <input value={name} maxLength={32} onChange={(e) => setName(e.target.value)} placeholder="Snowmoon" className={field} />
+        <legend className="sr-only">The token</legend>
+        {step("01", "The sign")}
+        <div className="grid gap-7 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <label className="block space-y-1">
+            <span className={lab}>Name</span>
+            <input value={name} maxLength={32} onChange={(e) => setName(e.target.value)} placeholder="Snowmoon" className={`${field} text-2xl`} />
           </label>
-          <label className="space-y-2">
-            <span className="block font-mono text-xs uppercase tracking-[0.14em]">Symbol</span>
-            <input value={symbol} maxLength={10} onChange={(e) => setSymbol(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="MOON" className={field} />
+          <label className="block space-y-1">
+            <span className={lab}>Symbol</span>
+            <input value={symbol} maxLength={10} onChange={(e) => setSymbol(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="MOON" className={`${field} font-mono text-2xl tracking-[0.06em]`} />
           </label>
         </div>
-        <div className="space-y-2">
-          <span className="block font-mono text-xs uppercase tracking-[0.14em]">Image · optional</span>
-          <div className="flex items-center gap-4">
-            {imageSrc(uri) && (
+        <div className="space-y-3">
+          <span className={lab}>Image · optional</span>
+          <div className="flex items-center gap-5">
+            {imageSrc(uri) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageSrc(uri)!} alt="" width={64} height={64} className="h-16 w-16 shrink-0 object-cover" />
+              <img src={imageSrc(uri)!} alt="" width={72} height={72} className="h-[4.5rem] w-[4.5rem] shrink-0 rounded-md object-cover ring-1 ring-paper/15" />
+            ) : (
+              <span aria-hidden className="grid h-[4.5rem] w-[4.5rem] shrink-0 place-items-center rounded-md border border-dashed border-paper/35 font-mono text-[11px] text-silver">
+                {symbol.slice(0, 4) || "?"}
+              </span>
             )}
-            <label className="cursor-pointer border border-developer/50 px-4 py-2 font-mono text-sm">
-              {uploading ? "Uploading…" : uri ? "Change image" : "Upload an image"}
-              <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" onChange={(e) => upload(e.target.files?.[0])} />
-            </label>
+            <span className="space-y-2">
+              <label className={`${second} min-h-11 cursor-pointer has-[:focus-visible]:outline has-[:focus-visible]:outline-1 has-[:focus-visible]:outline-offset-2`}>
+                {uploading ? "Uploading…" : uri ? "Change image" : "Upload an image"}
+                <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" onChange={(e) => upload(e.target.files?.[0])} />
+              </label>
+              <span className="block font-mono text-[11px] text-silver">PNG, JPEG, GIF or WebP, up to 512 KB</span>
+            </span>
           </div>
-          <span className="block text-sm text-developer/70">PNG, JPEG, GIF or WebP, up to 512 KB. Or paste a link:</span>
-          <input value={uri} maxLength={300} onChange={(e) => {
-              setUri(e.target.value.trim());
-              setFile(null);
-            }} placeholder="https://… link to an image" className={field} />
+          <label className="block space-y-1 pt-1">
+            <span className="block text-[0.95rem] text-paper/70">Or paste a link to an image</span>
+            <input value={uri} maxLength={300} onChange={(e) => {
+                setUri(e.target.value.trim());
+                setFile(null);
+              }} placeholder="https://…" className={`${field} font-mono text-sm`} />
+          </label>
         </div>
-        <label className="block space-y-2">
-          <span className="block font-mono text-xs uppercase tracking-[0.14em]">Description · optional</span>
-          <textarea value={description} maxLength={280} rows={3} onChange={(e) => setDescription(e.target.value)} placeholder="What it is, in a sentence or two." className={`${field} resize-none`} />
+        <label className="block space-y-1">
+          <span className={lab}>Description · optional</span>
+          <textarea value={description} maxLength={280} rows={3} onChange={(e) => setDescription(e.target.value)} placeholder="What it is, in a sentence or two." className={`${field} resize-none leading-snug`} />
         </label>
         <div className="grid gap-7 sm:grid-cols-2">
-          <label className="space-y-2">
-            <span className="block font-mono text-xs uppercase tracking-[0.14em]">Website · optional</span>
-            <input value={website} maxLength={200} onChange={(e) => setWebsite(e.target.value.trim())} placeholder="https://…" className={field} />
+          <label className="block space-y-1">
+            <span className={lab}>Website · optional</span>
+            <input value={website} maxLength={200} onChange={(e) => setWebsite(e.target.value.trim())} placeholder="https://…" className={`${field} font-mono text-sm`} />
           </label>
-          <label className="space-y-2">
-            <span className="block font-mono text-xs uppercase tracking-[0.14em]">X account · optional</span>
-            <input value={xHandle} maxLength={40} onChange={(e) => setXHandle(e.target.value.trim())} placeholder="@handle" className={field} />
+          <label className="block space-y-1">
+            <span className={lab}>X account · optional</span>
+            <input value={xHandle} maxLength={40} onChange={(e) => setXHandle(e.target.value.trim())} placeholder="@handle" className={`${field} font-mono text-sm`} />
           </label>
         </div>
-        <Choice legend="Trades against" hint="The coin people pay in, and the one its fees are taken in">
+        {step("02", "The market")}
+        <Choice legend="Trades against" hint="The coin people pay in, and the one its fees are taken in.">
           {BASES.map((b) => (
             <Pill key={b.id} name="base" checked={base === b.id} onChange={() => setBase(b.id)}>
               {b.name}
             </Pill>
           ))}
         </Choice>
-        <Choice legend="Trading fee" hint="All of it is burned: 80% as $SC, 20% as $ZC">
+        <Choice legend="Trading fee" hint="All of it is burned: 80% as $SC, 20% as $ZC.">
           {FEES.map((f) => (
             <Pill key={f} name="fee" checked={fee === f} onChange={() => setFee(f)}>
               {feeLabel(f)}
             </Pill>
           ))}
         </Choice>
-        <label className="block space-y-2">
-          <span className="block font-mono text-xs uppercase tracking-[0.14em]">Your first buy, in ETH · optional</span>
-          <input inputMode="decimal" value={devBuy} onChange={(e) => setDevBuy(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0" className={field} />
-          <span className="block text-sm text-developer/70">
+        <label className="block space-y-1">
+          <span className={lab}>Your first buy, in ETH · optional</span>
+          <input inputMode="decimal" value={devBuy} onChange={(e) => setDevBuy(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0" className={`${field} text-2xl tabular-nums`} />
+          <span className="block pt-1 text-[0.95rem] leading-snug text-paper/70">
             Bought in the launch transaction at the trading fee. Anyone else in the first 20 seconds pays up to 99%.
           </span>
         </label>
       </fieldset>
 
-      <div className="space-y-3 border-t border-developer/20 pt-7 text-sm">
-        <p>
+      <div className="space-y-5">
+        {step("03", "Light it")}
+        <p className="max-w-[34em] leading-relaxed text-paper/85">
           Launching buys $5 of $SC and burns it
           {burnEth.data !== undefined && ` (about ${Number(formatEther(burnEth.data)).toFixed(5)} ETH)`}. The whole
           supply, one billion, goes into the pool at a ${OPENING_FDV_USD.toLocaleString("en-US")} valuation and stays
           there: nobody can take the liquidity out.
         </p>
         {!address ? (
-          <ConnectButton label="Connect a wallet to launch" />
+          <Connect label="Connect a wallet to launch" />
         ) : chainId !== CHAIN_ID ? (
           <button type="button" onClick={() => switchChain({ chainId: CHAIN_ID })} className={button}>
             Switch to Ethereum
@@ -268,7 +319,11 @@ export function LaunchForm() {
             {busy ? note : "Burn $5 of SC and launch"}
           </button>
         )}
-        {error && <p role="alert">{error}</p>}
+        {error && (
+          <p role="alert" className={alert}>
+            {error}
+          </p>
+        )}
       </div>
     </form>
   );
@@ -319,7 +374,7 @@ function usePresets(key: string, defaults: string[]) {
 function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (v: string) => void; onSave: (v: string[]) => void; unit: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(values);
-  const chip = "border border-developer/40 px-2.5 py-1.5 font-mono text-xs hover:bg-developer hover:text-paper";
+  const chip = choice;
   if (editing) {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
@@ -330,7 +385,7 @@ function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (
             inputMode="decimal"
             aria-label={`Quick amount ${i + 1}`}
             onChange={(e) => setDraft(draft.map((x, j) => (j === i ? e.target.value.replace(/[^0-9.]/g, "") : x)))}
-            className="w-16 border border-developer/50 bg-transparent px-2 py-1.5 font-mono text-xs"
+            className="min-h-11 w-16 border-0 border-b border-paper/30 bg-transparent px-1 py-1.5 font-mono text-xs tabular-nums focus:border-paper focus:ring-0 focus:outline-none sm:min-h-8"
           />
         ))}
         <button
@@ -342,7 +397,7 @@ function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (
           }}
           className={chip}
         >
-          Save
+          <span className={ink}>Save</span>
         </button>
       </div>
     );
@@ -351,7 +406,7 @@ function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (
     <div className="flex flex-wrap items-center gap-1.5">
       {values.map((v, i) => (
         <button key={i} type="button" onClick={() => onPick(v)} className={chip}>
-          {unit === "%" ? (v === "100" ? "Max" : `${v}%`) : `${v} ${unit}`}
+          <span className={ink}>{unit === "%" ? (v === "100" ? "Max" : `${v}%`) : `${v} ${unit}`}</span>
         </button>
       ))}
       <button
@@ -362,7 +417,7 @@ function Presets({ values, onPick, onSave, unit }: { values: string[]; onPick: (
         }}
         aria-label="Edit the quick amounts"
         title="Edit the quick amounts"
-        className="px-2 py-1.5 font-mono text-xs text-developer/70 hover:text-developer"
+        className="min-h-11 px-2 font-mono text-[11px] uppercase tracking-[0.12em] text-silver underline decoration-paper/25 underline-offset-4 hover:text-paper sm:min-h-8"
       >
         edit
       </button>
@@ -475,75 +530,98 @@ export function TradeBox({ token, base, symbol, poolId }: { token: Address; base
     }
   }
 
-  const tab = "border border-developer/40 px-3 py-1.5 font-mono text-xs aria-pressed:bg-developer aria-pressed:text-paper";
+  const tab = choice;
   return (
-    <div className="space-y-5 bg-paper px-5 py-6 text-developer sm:px-7">
-      <div className="flex gap-1">
+    <div className="space-y-6">
+      <div role="group" aria-label="Buy or sell" className="grid grid-cols-2 rounded-full border border-paper/25 p-1">
         {(["buy", "sell"] as const).map((s) => (
-          <button key={s} type="button" aria-pressed={side === s} onClick={() => setSide(s)} className={`${tab} px-5 py-2 text-sm`}>
+          <button
+            key={s}
+            type="button"
+            aria-pressed={side === s}
+            onClick={() => setSide(s)}
+            className="min-h-11 rounded-full font-mono text-[13px] tracking-[0.06em] text-silver transition-colors hover:text-paper aria-pressed:bg-paper aria-pressed:text-developer"
+          >
             {s === "buy" ? "Buy" : "Sell"}
           </button>
         ))}
       </div>
       {ethRoute && (
-        <div className="flex items-center gap-2 font-mono text-xs">
-          <span className="text-developer/70">{side === "buy" ? "Pay with" : "Receive"}</span>
+        <div role="group" aria-label={side === "buy" ? "Pay with" : "Receive"} className="flex flex-wrap items-center gap-2">
+          <span className={`${label} mr-1`}>{side === "buy" ? "Pay with" : "Receive"}</span>
           <button type="button" aria-pressed={withEth} onClick={() => setWithEth(true)} className={tab}>
-            ETH
+            <span className={ink}>ETH</span>
           </button>
           <button type="button" aria-pressed={!withEth} onClick={() => setWithEth(false)} className={tab}>
-            {b.name}
+            <span className={ink}>{b.name}</span>
           </button>
         </div>
       )}
-      <label className="block space-y-2">
-        <span className="flex justify-between font-mono text-xs uppercase tracking-[0.14em]">
-          <span>Amount, in {payName}</span>
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <label htmlFor="trade-amount" className={label}>
+            Amount, in {payName}
+          </label>
           {balance !== undefined && (
             <button
               type="button"
               // paying in ETH keeps 0.01 back for gas
               onClick={() => setAmount(formatEther(payCoin ? balance : balance > ETH_FOR_GAS ? balance - ETH_FOR_GAS : 0n))}
-              className="normal-case tracking-normal text-developer/70 underline-offset-2 hover:underline"
+              className="-my-3 py-3 font-mono text-[11px] text-silver tabular-nums underline decoration-paper/25 underline-offset-4 hover:text-paper"
             >
               balance {tokens(balance, 4)}
             </button>
           )}
-        </span>
-        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.0" className={field} />
-      </label>
-      {side === "buy" && eth ? (
-        <Presets key="eth" values={buyPresets} onPick={setAmount} onSave={saveBuyPresets} unit="ETH" />
-      ) : (
-        <Presets key={side} values={side === "sell" ? sellPct : buyPct} onPick={pickPct} onSave={side === "sell" ? saveSellPct : saveBuyPct} unit="%" />
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
-        <span className="flex items-center gap-1">
-          <span className="mr-1 text-developer/70">Slippage</span>
-          {[1, 2, 5].map((s) => (
-            <button key={s} type="button" aria-pressed={slippage === s} onClick={() => setSlippage(s)} className={tab}>
-              {s}%
-            </button>
-          ))}
-        </span>
-        <span className="text-developer/70">Fee {fee.data !== undefined ? `${Number(fee.data) / 10_000}%` : "·"}, all burned</span>
+        </div>
+        <input
+          id="trade-amount"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+          placeholder="0.0"
+          className={`${field} text-[2rem] leading-tight tabular-nums`}
+        />
+        {side === "buy" && eth ? (
+          <Presets key="eth" values={buyPresets} onPick={setAmount} onSave={saveBuyPresets} unit="ETH" />
+        ) : (
+          <Presets key={side} values={side === "sell" ? sellPct : buyPct} onPick={pickPct} onSave={side === "sell" ? saveSellPct : saveBuyPct} unit="%" />
+        )}
       </div>
-      <p className="font-mono text-sm">
-        You get about {quote.data !== undefined ? tokens(quote.data, 4) : "…"} {getName}
-      </p>
+      <dl className="space-y-3 border-y border-dashed border-paper/25 py-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <dt className={label}>You get about</dt>
+          <dd className="text-right text-xl tabular-nums">
+            {quote.data !== undefined ? tokens(quote.data, 4) : "…"} <span className="font-mono text-xs text-silver">{getName}</span>
+          </dd>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <dt className={label}>Slippage</dt>
+          <dd className="flex gap-1.5">
+            {[1, 2, 5].map((s) => (
+              <button key={s} type="button" aria-pressed={slippage === s} onClick={() => setSlippage(s)} className={tab}>
+                <span className={ink}>{s}%</span>
+              </button>
+            ))}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-4">
+          <dt className={label}>Fee</dt>
+          <dd className="font-mono text-xs tabular-nums">{fee.data !== undefined ? `${Number(fee.data) / 10_000}%` : "·"}, all burned</dd>
+        </div>
+      </dl>
       {!address ? (
-        <ConnectButton label="Connect a wallet to trade" />
+        <Connect label="Connect a wallet to trade" className="w-full" />
       ) : chainId !== CHAIN_ID ? (
-        <button type="button" onClick={() => switchChain({ chainId: CHAIN_ID })} className={button}>
+        <button type="button" onClick={() => switchChain({ chainId: CHAIN_ID })} className={big}>
           Switch to Ethereum
         </button>
       ) : (
-        <button type="button" onClick={trade} disabled={busy || wei === 0n || quote.data === undefined} className={`${button} w-full`}>
+        <button type="button" onClick={trade} disabled={busy || wei === 0n || quote.data === undefined} className={big}>
           {busy ? note : side === "buy" ? `Buy ${symbol}` : `Sell ${symbol}`}
         </button>
       )}
       {error && (
-        <p role="alert" className="text-sm">
+        <p role="alert" className={alert}>
           {error}
         </p>
       )}

@@ -1,11 +1,12 @@
 "use client";
 
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 
+import { Empty, Figures, Part, action, field, label, second } from "@/components/journal";
+import { Connect } from "@/components/realm-you";
 import { short, tokens } from "@/lib/format";
 import { BASES, baseOf, feeLabel, GRADUATION, imageSrc, PAGE } from "@/lib/realm";
 import type { Board, FeedItem, Sort, TokenView } from "@/lib/server/realm";
@@ -27,7 +28,7 @@ const grad = (t: TokenView) => Math.min(100, ((t.sold ?? 0) / GRADUATION) * 100)
 
 function Change({ v }: { v: number | null }) {
   if (v === null) return null;
-  // the darkroom palette: up is paper, down is silver, the sign says which
+  // ink for up, soft ink for down, and the sign says which: the green is kept for the one thing to do
   return <span className={v >= 0 ? "text-paper" : "text-silver"}>{`${v >= 0 ? "+" : ""}${(v * 100).toFixed(v * 100 >= 1000 ? 0 : 1)}%`}</span>;
 }
 
@@ -35,27 +36,24 @@ function Thumb({ t, size }: { t: Pick<TokenView, "image" | "symbol">; size: stri
   const src = imageSrc(t.image);
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className={`${size} shrink-0 bg-film object-cover`} />
+    <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className={`${size} shrink-0 rounded-md bg-film object-cover ring-1 ring-paper/10`} />
   ) : (
-    <span aria-hidden className={`${size} grid shrink-0 place-items-center bg-film font-mono text-xs text-silver`}>
+    <span aria-hidden className={`${size} grid shrink-0 place-items-center rounded-md border border-dashed border-paper/30 font-mono text-[11px] tracking-[0.08em] text-silver`}>
       {(t.symbol ?? "?").slice(0, 4)}
     </span>
   );
 }
 
-function Bar({ t }: { t: TokenView }) {
+/** How far a token is on its way to graduating: a thin ink rule filling up. */
+function Bar({ t, thick }: { t: TokenView; thick?: boolean }) {
   return (
-    <span className="block space-y-1">
-      <span className="block h-1 w-full bg-paper/10">
-        <span className="block h-full bg-paper" style={{ width: `${grad(t)}%` }} />
-      </span>
-      <span className="flex justify-between gap-2 font-mono text-[11px] whitespace-nowrap text-silver">
-        {t.graduated ? <span className="bg-paper px-1.5 text-developer">Graduated</span> : <span>Graduation {Math.floor(grad(t))}%</span>}
-        <span>{baseOf(t.base)?.name ?? "?"} · {feeLabel(t.feePpm)} fee</span>
-      </span>
+    <span className={`block w-full overflow-hidden rounded-full bg-paper/12 ${thick ? "h-1.5" : "h-1"}`} aria-hidden>
+      <span className="block h-full rounded-full bg-paper" style={{ width: `${grad(t)}%` }} />
     </span>
   );
 }
+
+const Graduated = () => <span className="rounded-full bg-paper px-2 py-0.5 text-developer">Graduated</span>;
 
 /** One launch on the board: its picture, its name, what it is worth and how close it is to graduating. */
 function Card({ t, now }: { t: TokenView; now: number }) {
@@ -63,105 +61,105 @@ function Card({ t, now }: { t: TokenView; now: number }) {
     <li>
       <Link
         href={`/realm/token/${t.token}`}
-        className="flex h-full gap-4 border border-paper/12 p-3 transition-colors hover:border-paper/40 hover:bg-paper/[0.03] focus-visible:border-paper"
+        className="group grid grid-cols-[3.5rem_minmax(0,1fr)_5.25rem] items-start gap-x-4 rounded-md px-2 py-4 transition-colors hover:bg-paper/[0.04] sm:grid-cols-[4.5rem_minmax(0,1fr)_6.5rem]"
       >
-        <Thumb t={t} size="h-20 w-20 sm:h-28 sm:w-28" />
-        <span className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-          <span className="min-w-0 space-y-0.5">
-            <span className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-lg leading-snug">{t.name ?? "Name not shown"}</span>
-              <span className="shrink-0 font-mono text-[11px] text-silver">{age(now - t.at)}</span>
+        <Thumb t={t} size="h-14 w-14 sm:h-[4.5rem] sm:w-[4.5rem]" />
+        <span className="min-w-0 space-y-2">
+          <span className="block min-w-0">
+            <span className="block truncate text-[1.2rem] leading-snug">{t.name ?? "Name not shown"}</span>
+            <span className="block font-mono text-[11px] leading-relaxed text-silver">
+              ${t.symbol ?? "?"} · by {short(t.realm)} · {age(now - t.at)}
             </span>
-            <span className="block truncate font-mono text-xs text-silver">
-              ${t.symbol ?? "?"} · by {short(t.realm)}
-            </span>
-            {t.description && <span className="line-clamp-2 text-sm leading-snug text-paper/70">{t.description}</span>}
           </span>
-          <span className="flex flex-wrap items-baseline gap-x-3 font-mono text-xs">
-            <span>
-              <span className="text-silver">cap</span> {money(t.marketCapUsd)}
+          {t.description && <span className="line-clamp-2 block text-[0.95rem] leading-snug text-paper/75">{t.description}</span>}
+          <span className="block space-y-1.5 pt-0.5">
+            <Bar t={t} />
+            <span className="flex flex-wrap justify-between gap-x-3 gap-y-1 font-mono text-[11px] text-silver">
+              {t.graduated ? <Graduated /> : <span>Graduation {Math.floor(grad(t))}%</span>}
+              <span>
+                {baseOf(t.base)?.name ?? "?"} · {feeLabel(t.feePpm)} fee
+              </span>
             </span>
+          </span>
+        </span>
+        <span className="flex flex-col items-end gap-1 text-right">
+          <span className="text-[1.2rem] leading-snug tabular-nums">{money(t.marketCapUsd)}</span>
+          <span className="font-mono text-[11px] tabular-nums">
             <Change v={t.change24h} />
-            <span className="text-silver">vol {money(t.volume24hUsd)}</span>
-            {t.lastTradeAt !== null && <span className="text-silver">last trade {age(now - t.lastTradeAt)} ago</span>}
           </span>
-          <Bar t={t} />
+          <span className="font-mono text-[11px] text-silver tabular-nums">vol {money(t.volume24hUsd)}</span>
+          {t.lastTradeAt !== null && <span className="font-mono text-[11px] leading-snug text-silver">traded {age(now - t.lastTradeAt)} ago</span>}
+          <span aria-hidden className="pt-1 font-mono text-sm text-silver transition-transform group-hover:translate-x-0.5 group-hover:text-paper">
+            →
+          </span>
         </span>
       </Link>
     </li>
   );
 }
 
-/** The launch most worth a look right now, printed big under the safelight. */
+/** The launch most worth a look right now: the brightest sign on the street. */
 function Featured({ t, now }: { t: TokenView; now: number }) {
   return (
-    <section aria-labelledby="featured" className="space-y-3">
-      <h2 id="featured" className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-        On the light box
-      </h2>
-      <Link href={`/realm/token/${t.token}`} className="grid gap-5 bg-paper p-4 text-developer hover:brightness-[1.03] sm:grid-cols-[auto_minmax(0,1fr)] sm:p-5">
-        <Thumb t={t} size="h-40 w-40 sm:h-44 sm:w-44" />
-        <span className="flex min-w-0 flex-col justify-between gap-4">
-          <span className="space-y-1">
-            <span className="block text-3xl leading-tight wrap-anywhere">{t.name ?? "Name not shown"}</span>
-            <span className="block font-mono text-xs text-developer/70">
+    <Part title="Brightest on the street" id="featured">
+      <Link href={`/realm/token/${t.token}`} className="group -mx-2 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-5 rounded-lg px-2 py-2 transition-colors hover:bg-paper/[0.04] sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-7">
+        <Thumb t={t} size="h-[5.5rem] w-[5.5rem] sm:h-[8.5rem] sm:w-[8.5rem]" />
+        <span className="flex min-w-0 flex-col gap-4">
+          <span className="space-y-1.5">
+            <span className="block text-[clamp(1.6rem,4vw,2.2rem)] leading-[1.08] wrap-anywhere">{t.name ?? "Name not shown"}</span>
+            <span className="block font-mono text-[11px] text-silver">
               ${t.symbol ?? "?"} · by {short(t.realm)} · {age(now - t.at)} old
             </span>
-            {t.description && <span className="line-clamp-3 block max-w-2xl leading-snug text-developer/80">{t.description}</span>}
+            {t.description && <span className="line-clamp-3 block max-w-[32em] leading-snug text-paper/80">{t.description}</span>}
           </span>
-          <span className="space-y-3">
-            <span className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-sm">
-              <span>
-                <span className="text-developer/60">cap</span> {money(t.marketCapUsd)}
-              </span>
-              {t.change24h !== null && (
-                <span>
-                  <span className="text-developer/60">24h</span> {`${t.change24h >= 0 ? "+" : ""}${(t.change24h * 100).toFixed(1)}%`}
-                </span>
-              )}
-              <span>
-                <span className="text-developer/60">vol 24h</span> {money(t.volume24hUsd)}
-              </span>
-              <span>
-                <span className="text-developer/60">trades</span> {t.trades}
-              </span>
-            </span>
-            <span className="block h-1.5 w-full bg-developer/10">
-              <span className="block h-full bg-developer" style={{ width: `${grad(t)}%` }} />
-            </span>
-            <span className="flex justify-between font-mono text-xs text-developer/70">
+          <dl className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4">
+            {[
+              ["Cap", money(t.marketCapUsd)],
+              ["24h", t.change24h === null ? "·" : `${t.change24h >= 0 ? "+" : ""}${(t.change24h * 100).toFixed(1)}%`],
+              ["Vol 24h", money(t.volume24hUsd)],
+              ["Trades", t.trades.toLocaleString("en-US")],
+            ].map(([k, v]) => (
+              <div key={k} className="space-y-0.5">
+                <dt className={label}>{k}</dt>
+                <dd className="text-xl leading-tight tabular-nums">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <span className="block space-y-2">
+            <Bar t={t} thick />
+            <span className="flex flex-wrap justify-between gap-x-4 gap-y-1 font-mono text-[11px] text-silver">
               <span>{t.graduated ? "Graduated" : `Graduation ${Math.floor(grad(t))}% · at 80% of the supply bought`}</span>
-              <span>Trade →</span>
+              <span className="text-paper transition-transform group-hover:translate-x-0.5">Trade →</span>
             </span>
           </span>
         </span>
       </Link>
-    </section>
+    </Part>
   );
 }
 
-/** The latest buys, sells and launches, running along the top like a ticker tape. */
+/** The latest buys, sells and launches, running along the street like a sign's moving letters. */
 function Ticker({ items }: { items: FeedItem[] }) {
   if (!items.length) return null;
   const row = (dup: boolean) => (
-    <ul aria-hidden={dup} className={`flex shrink-0 gap-8 pr-8 ${dup ? "motion-reduce:hidden" : ""}`}>
+    <ul aria-hidden={dup} className={`flex shrink-0 gap-7 pr-7 ${dup ? "motion-reduce:hidden" : ""}`}>
       {items.map((x, i) => (
         <li key={`${x.token}${x.at}${i}`}>
-          <Link href={`/realm/token/${x.token}`} tabIndex={dup ? -1 : undefined} className="flex items-center gap-2 whitespace-nowrap hover:text-paper">
+          <Link href={`/realm/token/${x.token}`} tabIndex={dup ? -1 : undefined} className="flex items-center gap-2 py-1 whitespace-nowrap transition-colors hover:text-paper">
             <Thumb t={x} size="h-5 w-5" />
             <span className={x.kind === "launch" ? "text-paper underline decoration-paper/40 underline-offset-2" : x.buy ? "text-paper" : "text-silver"}>
               {x.kind === "launch" ? "launched" : x.buy ? "bought" : "sold"}
             </span>
             <span className="text-paper">${x.symbol ?? "?"}</span>
-            {x.usd !== null && <span>{money(x.usd)}</span>}
-            {x.who && <span className="text-silver/70">{short(x.who)}</span>}
+            {x.usd !== null && <span className="tabular-nums">{money(x.usd)}</span>}
+            {x.who && <span className="text-silver/80">{short(x.who)}</span>}
           </Link>
         </li>
       ))}
     </ul>
   );
   return (
-    <div className="ticker overflow-hidden border-y border-paper/12 py-2.5 font-mono text-xs text-silver motion-reduce:overflow-x-auto">
+    <div aria-label="Latest trades and launches" role="region" className="ticker -mx-5 overflow-hidden border-y border-dashed border-paper/25 px-5 py-2 font-mono text-[11px] text-silver motion-reduce:overflow-x-auto sm:-mx-9 sm:px-9">
       <div className="ticker-track flex w-max">
         {row(false)}
         {row(true)}
@@ -170,17 +168,22 @@ function Ticker({ items }: { items: FeedItem[] }) {
   );
 }
 
-function Launch() {
+/** The page's one green action: launch from your own Realm, or connect a wallet first. */
+export function Launch() {
   const { address } = useAccount();
-  if (!address) return <ConnectButton label="Connect to launch a token" />;
+  if (!address) return <Connect label="Connect to launch a token" />;
   return (
-    <Link href={`/realm/${address.toLowerCase()}`} className="inline-block bg-safelight px-5 py-2.5 font-mono text-sm text-developer hover:brightness-110">
+    <Link href={`/realm/${address.toLowerCase()}`} className={`${action} min-h-11`}>
       Launch a token
     </Link>
   );
 }
 
-/** SilverRealm's board: every launch, sorted and searched like any launchpad's, refreshed while you watch. */
+// a filter word: the tap area is a full 44 px on a phone, the ink fill only as tall as the word
+const pill = "group inline-flex min-h-11 shrink-0 items-center font-mono text-[12px] tracking-[0.04em] text-silver transition-colors hover:text-paper aria-pressed:text-developer sm:min-h-9";
+const pillInk = "rounded-full px-3 py-1.5 transition-colors group-aria-pressed:bg-paper";
+
+/** SilverRealm's board: every launch, sorted and searched like any launchpad's, refreshed while you watch. The page's head sits above it. */
 export function RealmBoard({ first, view: start }: { first: Board; view: View }) {
   const [view, setView] = useState(start);
   const [typed, setTyped] = useState(start.q);
@@ -217,61 +220,52 @@ export function RealmBoard({ first, view: start }: { first: Board; view: View })
 
   const head = q.data?.pages[0] ?? first;
   const list = q.data?.pages.flatMap((p) => p.tokens) ?? [];
-  const stat = (k: string, v: string) => (
-    <div>
-      <dt className="text-[11px] uppercase tracking-[0.14em] text-silver">{k}</dt>
-      <dd className="text-2xl">{v}</dd>
-    </div>
-  );
-  const chip = "border border-paper/20 px-3 py-1.5 aria-pressed:border-paper aria-pressed:bg-paper aria-pressed:text-developer";
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-6">
-        <div className="max-w-2xl space-y-3">
-          <h1 className="text-5xl leading-tight">SilverRealm</h1>
-          <p className="text-lg leading-relaxed text-paper/80">
-            Launch what you believe in. Each launch burns $5 of $SC, and every trading fee goes 100% back to the ecosystem:
-            80% buys and burns $SC, 20% buys and burns $ZC.
-          </p>
-        </div>
-        <Launch />
-      </header>
-
-      <dl className="grid grid-cols-2 gap-4 font-mono sm:grid-cols-4">
-        {stat("Launches", head.burned.launches.toLocaleString("en-US"))}
-        {stat("Volume", money(head.volumeUsd))}
-        {stat("$SC burned", tokens(head.burned.sc, 0))}
-        {stat("$ZC burned", tokens(head.burned.zc, 0))}
-      </dl>
-
-      <Ticker items={head.feed} />
+    <>
+      <Part title="The street · since launch">
+        <Figures
+          columns={2}
+          items={[
+            { label: "Launches", value: head.burned.launches.toLocaleString("en-US") },
+            { label: "Volume", value: money(head.volumeUsd) },
+            { label: "$SC burned", value: tokens(head.burned.sc, 0) },
+            { label: "$ZC burned", value: tokens(head.burned.zc, 0) },
+          ]}
+        />
+        <Ticker items={head.feed} />
+      </Part>
 
       {head.featured && !view.q && <Featured t={head.featured} now={head.now} />}
 
-      <section aria-label="Launches" className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div role="group" aria-label="Sort" className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 font-mono text-xs">
-            {TABS.map(([id, label]) => (
-              <button key={id} type="button" aria-pressed={view.sort === id} onClick={() => setView((v) => ({ ...v, sort: id }))} className={`${chip} shrink-0`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="flex w-full flex-wrap items-center gap-2 font-mono text-xs sm:w-auto">
+      <Part title="Every sign on the street" id="launches" more={<span className="text-silver tabular-nums">{head.total || ""}</span>}>
+        <div className="space-y-3">
+          <label className="block">
+            <span className="sr-only">Search launches</span>
             <input
               type="search"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              placeholder="Search name, $symbol or address"
-              aria-label="Search launches"
+              placeholder="Search a name, $symbol or address"
               maxLength={64}
-              className="min-w-0 basis-full border border-paper/20 bg-transparent px-3 py-1.5 text-paper placeholder:text-silver/70 focus:border-paper focus:outline-none sm:w-72 sm:basis-auto"
+              className={`${field} text-base`}
             />
-            <div role="group" aria-label="Paired with" className="flex gap-1">
-              {[["", "All"] as const, ...BASES.map((b) => [b.id, b.name.replace("$", "")] as const)].map(([id, label]) => (
-                <button key={id || "all"} type="button" aria-pressed={view.base === id} onClick={() => setView((v) => ({ ...v, base: id }))} className={chip}>
-                  {label}
+          </label>
+          <div className="flex flex-wrap items-center justify-between gap-x-6">
+            <div role="group" aria-label="Sort" className="-mx-1 flex flex-wrap">
+              {TABS.map(([id, name]) => (
+                <button key={id} type="button" aria-pressed={view.sort === id} onClick={() => setView((v) => ({ ...v, sort: id }))} className={pill}>
+                  <span className={pillInk}>{name}</span>
+                </button>
+              ))}
+            </div>
+            <div role="group" aria-label="Paired with" className="-mx-1 flex flex-wrap items-center">
+              <span className={`${label} px-1`} aria-hidden>
+                Paired with
+              </span>
+              {[["", "All"] as const, ...BASES.map((b) => [b.id, b.name.replace("$", "")] as const)].map(([id, name]) => (
+                <button key={id || "all"} type="button" aria-pressed={view.base === id} onClick={() => setView((v) => ({ ...v, base: id }))} className={pill}>
+                  <span className={pillInk}>{name}</span>
                 </button>
               ))}
             </div>
@@ -279,24 +273,28 @@ export function RealmBoard({ first, view: start }: { first: Board; view: View })
         </div>
 
         {q.isError && !list.length ? (
-          <p className="text-paper/80">{q.error.message}. Trying again shortly.</p>
+          <Empty>{q.error.message}. Trying again shortly.</Empty>
         ) : !list.length ? (
-          <p className="py-10 text-xl text-paper/80">
-            {view.q ? `Nothing matches "${view.q}".` : view.sort === "graduated" ? "No token has graduated yet." : "No launches yet. The first one is yours."}
-          </p>
+          <Empty>
+            {view.q
+              ? `Nothing on the street matches "${view.q}".`
+              : view.sort === "graduated"
+                ? "No token has graduated yet."
+                : "The street is dark. No token has been launched yet, so the first sign is yours."}
+          </Empty>
         ) : (
-          <ol className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-3 ${q.isPlaceholderData ? "opacity-60" : ""}`}>
+          <ol className={`ruled -mx-2 transition-opacity ${q.isPlaceholderData ? "opacity-60" : ""}`}>
             {list.map((t) => (
               <Card key={t.token} t={t} now={head.now} />
             ))}
           </ol>
         )}
         {q.hasNextPage && (
-          <button type="button" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage} className="border border-paper/25 px-5 py-2 font-mono text-sm hover:border-paper disabled:opacity-50">
+          <button type="button" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage} className={`${second} min-h-11`}>
             {q.isFetchingNextPage ? "Loading…" : "Load more"}
           </button>
         )}
-      </section>
-    </div>
+      </Part>
+    </>
   );
 }

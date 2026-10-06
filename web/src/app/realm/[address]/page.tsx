@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isAddress } from "viem";
 
+import { Page, PageHead, Part, quiet } from "@/components/journal";
 import { LaunchForm } from "@/components/realm";
 import { TokenGrid } from "@/components/realm-list";
 import { OwnerOnly } from "@/components/realm-you";
@@ -26,29 +27,32 @@ export default async function RealmOf({ params }: PageProps<"/realm/[address]">)
   const realm = address.toLowerCase();
   const list = await serializeTokens(await db.realmTokens({ realm }, 60));
   return (
-    <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
-      <header className="space-y-3">
-        <h1 className="text-5xl leading-tight">Realm</h1>
-        <p className="font-mono text-sm break-all text-paper/80">
-          <a href={`${EXPLORER}/address/${realm}`} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            {realm}
-          </a>
-          {" · "}
-          <Link href={`/u/${realm}`} className="underline underline-offset-4">
-            profile
-          </Link>
-        </p>
-      </header>
+    <Page>
+      <PageHead
+        stop="realm"
+        title={`Realm ${short(realm)}`}
+        aside={
+          <>
+            <a href={`${EXPLORER}/address/${realm}`} target="_blank" rel="noreferrer" className={`${quiet} font-mono text-xs break-all text-silver`}>
+              {realm}
+            </a>
+            <Link href={`/u/${realm}`} className={`${quiet} font-mono text-xs`}>
+              profile
+            </Link>
+          </>
+        }
+      >
+        One wallet&apos;s shop front on Hun Min street: every token it launched hangs here as a sign. Only the wallet itself can
+        launch from it.
+      </PageHead>
       <OwnerOnly realm={realm}>
-        <section className="space-y-4">
-          <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Launch a token</h2>
+        <Part title="Launch a token" id="launch">
           <LaunchForm />
-        </section>
+        </Part>
       </OwnerOnly>
-      <section className="space-y-4">
-        <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-silver">Launched from this Realm</h2>
+      <Part title="Launched from this Realm" id="launched" more={<span className="text-silver tabular-nums">{list.length || ""}</span>}>
         <TokenGrid list={list} />
-      </section>
-    </section>
+      </Part>
+    </Page>
   );
 }
