@@ -60,7 +60,7 @@ export const STOPS: Stop[] = [
     pose: "predict",
     label: "Bet on what comes next",
     name: "Predict",
-    line: "Seal a stake on YES or NO in $SC. Stakes open when the market closes; the bots keep score too.",
+    line: "Seal a stake on YES or NO in $ZC. The sides open when the market closes, and the winners share the pool.",
     routes: ["/predict", "/scores"],
     live: ADDR.predict !== ZERO,
   },

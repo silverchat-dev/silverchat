@@ -34,8 +34,21 @@ export const daylight = (hour: number) => 1 - THREE.MathUtils.smoothstep(hour, 1
  * `veil` (0 to 1) thickens the air until the place is gone: the walk crosses from one place to the next inside it.
  * `quality` "low" drops ambient occlusion and the soft shadows' size, for phones and slower machines.
  */
-export function Stage({ hour, quality = "high", veil }: { hour: number; quality?: "high" | "low"; veil?: { value: number } }) {
+export function Stage({
+  hour,
+  quality = "high",
+  veil,
+  centre = [0, 0, 0],
+}: {
+  hour: number;
+  quality?: "high" | "low";
+  veil?: { value: number };
+  /** the origin of the place in view: the sun's shadows cover the area around it */
+  centre?: [number, number, number];
+}) {
   const sun = useMemo(() => sunAt(hour), [hour]);
+  const [cx, cy, cz] = centre;
+  const aim = useMemo(() => new THREE.Object3D(), []);
   const warm = THREE.MathUtils.smoothstep(sun.y, 0.05, 0.45);
   const day = daylight(hour);
   const sunColour = useMemo(
@@ -63,8 +76,10 @@ export function Stage({ hour, quality = "high", veil }: { hour: number; quality?
     <>
       {!labOff("sky") && <PaintedSky sun={sun} colours={sky} time={weather.time} veil={veil} />}
       <hemisphereLight args={[day > 0.5 ? "#bcd8f0" : "#3a4878", day > 0.5 ? "#4f6b33" : "#151a22", 0.12 + 0.16 * day]} />
+      <primitive object={aim} position={[cx, cy, cz]} />
       <directionalLight
-        position={sun.clone().multiplyScalar(160)}
+        target={aim}
+        position={sun.clone().multiplyScalar(160).add(new THREE.Vector3(cx, cy, cz))}
         color={sunColour}
         intensity={0.5 + 4.1 * day}
         castShadow={!labOff("shadow")}

@@ -70,7 +70,7 @@ function Scene({ live }: { live: Live }) {
 
   return (
     <>
-      <Stage hour={frame.hour} veil={veil} quality={tier >= 3 ? "high" : "low"} />
+      <Stage hour={frame.hour} veil={veil} quality={tier >= 3 ? "high" : "low"} centre={setById(frame.shown).origin} />
       {frame.sets.map((id) => {
         const set = setById(id);
         return (
