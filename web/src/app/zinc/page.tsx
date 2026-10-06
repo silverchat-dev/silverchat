@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { Checks, ForkHead, Notes, OtherWay, Seen } from "@/components/fork";
+import { Page } from "@/components/journal";
 import { Zinc } from "@/components/zinc";
-import { EXPLORER, ZINC_LIVE } from "@/lib/config";
+import { CASH_LIVE, EXPLORER, ZINC_LIVE } from "@/lib/config";
 import { short } from "@/lib/format";
 
 const VAULT = "0x4386FDbdA35D995beB3BF8625118Ec5982ec81fe";
@@ -25,49 +27,45 @@ const NOTES = [
   "Everything runs in this browser. Our server passes zkAPI's calls through without reading them; like any web server, our host records the path and IP address of each request. Use Tor or a VPN if your IP address matters.",
 ];
 
+// the same, in two short lists for a first look
+const HIDDEN = [
+  "Who paid: the ZEC comes from a shielded wallet.",
+  "Which deposit pays for each answer: a zero-knowledge proof pays, not an account.",
+  "Who wrote a prompt: OpenRouter sees a short-lived key, never who paid.",
+  "Your name, number and country, when a ZKPassport proof is asked for.",
+];
+const SHOWN = [
+  "The amounts: ZEC into NEAR, ETH into zkAPI's vault and out again.",
+  "What you write, to OpenRouter. Do not sign it.",
+  "Your IP address, to NEAR and to our host.",
+  "The burner's address, to ZKPassport's connection.",
+];
+
 export default function ZincPage() {
   if (!ZINC_LIVE) notFound();
   return (
-    <section className="mx-auto max-w-6xl space-y-12 px-5 py-10 sm:px-8 md:py-14">
-      <header className="max-w-2xl space-y-4">
-        <h1 className="text-5xl leading-tight">Zinc</h1>
-        <p className="font-mono text-sm uppercase tracking-[0.2em] text-silver">Shielded ZEC in. Anonymous AI out. Shielded ZEC back.</p>
-        <p className="text-lg leading-relaxed text-paper/80">
+    <Page>
+      <ForkHead side="zinc" otherLive={CASH_LIVE}>
+        <p>
           Pay for any AI model with no account and no trail. Your ZEC becomes ETH through NEAR Intents, the ETH becomes a private
           zkAPI balance, and each answer is paid with a zero-knowledge proof. When you are done, what is left goes back to
-          shielded ZEC. Zinc is not from the book: it is a tool for the people who hold ZEC and use AI.
+          shielded ZEC.
         </p>
-      </header>
+        <p className="text-[0.95rem] text-paper/65 italic">Zinc is not from the book: it is a tool for the people who hold ZEC and use AI.</p>
+      </ForkHead>
 
       <Zinc />
 
-      <section aria-labelledby="zinc-notes" className="max-w-3xl space-y-4">
-        <h2 id="zinc-notes" className="font-mono text-xs uppercase tracking-[0.14em] text-silver">
-          Who sees what
-        </h2>
-        <ul className="space-y-3 leading-relaxed text-paper/80">
-          {NOTES.map((t) => (
-            <li key={t} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3">
-              <span aria-hidden className="text-silver">·</span>
-              <span>{t}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="font-mono text-xs text-silver">
-          zkAPI vault:{" "}
-          <a href={`${EXPLORER}/address/${VAULT}`} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            {short(VAULT)}
-          </a>{" "}
-          · swaps by{" "}
-          <a href="https://docs.near-intents.org" target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            NEAR Intents
-          </a>{" "}
-          · models by{" "}
-          <a href="https://openrouter.ai" target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            OpenRouter
-          </a>
-        </p>
-      </section>
-    </section>
+      <Seen hidden={HIDDEN} shown={SHOWN} />
+      <Notes title="Who sees what, in full" notes={NOTES} />
+      <Checks
+        rows={[
+          { name: "zkAPI vault", href: `${EXPLORER}/address/${VAULT}`, text: short(VAULT) },
+          { name: "Swaps by NEAR Intents", href: "https://docs.near-intents.org", text: "docs.near-intents.org" },
+          { name: "Models by OpenRouter", href: "https://openrouter.ai", text: "openrouter.ai" },
+        ]}
+      />
+      <OtherWay side="zinc" live={CASH_LIVE} />
+    </Page>
   );
 }
