@@ -18,8 +18,8 @@ export type Live = {
   burst?: React.RefObject<number>;
   /** Realm tokens to show as shop signs, already filtered: symbol and 24-hour volume in ETH */
   tokens?: { symbol: string; volume: number }[];
-  /** Predict markets to show: question (short) and YES share 0 to 1 */
-  markets?: { question: string; yes: number }[];
+  /** Predict markets to show: question (short) and YES share 0 to 1, or null while the sides are sealed */
+  markets?: { question: string; yes: number | null }[];
   /** the riddle: open, solved or closed, and the solved ones for the plaques */
   riddle?: { state: "open" | "solved" | "closed"; solved: string[] };
   /** 0 open sky, 1 the round room's roof closed (privacy) */

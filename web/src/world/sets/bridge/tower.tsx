@@ -23,7 +23,8 @@ export const YES = "#f2c14e";
 export const NO = "#4f68b0";
 const LETTER = "#3d1f57";
 
-export type Market = { question: string; yes: number };
+/** `yes` is null while the sides are sealed (the market still takes stakes, or no side is revealed yet) */
+export type Market = { question: string; yes: number | null };
 
 /** Several static parts as one geometry (one draw call): each part placed by position, rotation (Euler) and scale. */
 function merged(parts: [THREE.BufferGeometry, [number, number, number], [number, number, number]?, number?][]) {
@@ -37,8 +38,11 @@ function merged(parts: [THREE.BufferGeometry, [number, number, number], [number,
   )!;
 }
 
-/** A market as a banner: blue (NO) all over, gold (YES) rising from the bottom to its share, the two numbers on it. */
-function bannerTexture(yes: number) {
+/**
+ * A market as a banner: blue (NO) all over, gold (YES) rising from the bottom to its share, the two numbers on it.
+ * While the sides are sealed it shows no split, only a wax seal: nobody can know them yet.
+ */
+function bannerTexture(yes: number | null) {
   const W = 256;
   const H = 768;
   const c = document.createElement("canvas");
@@ -49,6 +53,7 @@ function bannerTexture(yes: number) {
   const bottom = H - 46;
   g.fillStyle = "#2c2a3a";
   g.fillRect(0, 0, W, H);
+  if (yes === null) return sealedBanner(c, g, top, bottom);
   g.fillStyle = NO;
   g.fillRect(14, top, W - 28, bottom - top);
   const split = bottom - (bottom - top) * THREE.MathUtils.clamp(yes, 0, 1);
@@ -78,6 +83,34 @@ function bannerTexture(yes: number) {
   return t;
 }
 
+/** The sealed banner: the Order's purple, a gold wax seal, and the word SEALED. */
+function sealedBanner(c: HTMLCanvasElement, g: CanvasRenderingContext2D, top: number, bottom: number) {
+  const W = c.width;
+  g.fillStyle = "#4b3a78";
+  g.fillRect(14, top, W - 28, bottom - top);
+  g.fillStyle = "#d9a93c";
+  for (let x = 18; x < W - 14; x += 20) g.fillRect(x, bottom + 6, 10, 34);
+  const cy = (top + bottom) / 2 - 40;
+  g.fillStyle = "#c9932e";
+  g.beginPath();
+  g.arc(W / 2, cy, 62, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = "#8a5f17";
+  g.lineWidth = 6;
+  g.beginPath();
+  g.arc(W / 2, cy, 44, 0, Math.PI * 2);
+  g.stroke();
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillStyle = "#f3e7c9";
+  g.font = "700 44px sans-serif";
+  g.fillText("SEALED", W / 2, cy + 130);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
 /** Cloth that hangs from its top edge and stirs in the breeze: the further down, the more it moves. */
 function clothMaterial(map: THREE.Texture, phase: number) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 0.85, side: THREE.DoubleSide, emissive: "#ffffff", emissiveMap: map, emissiveIntensity: 0.12 });
@@ -99,7 +132,7 @@ function clothMaterial(map: THREE.Texture, phase: number) {
 }
 
 /** One banner `w` by `h`, hanging down from (0, 0, 0). */
-function Banner({ yes, w, h, phase }: { yes: number; w: number; h: number; phase: number }) {
+function Banner({ yes, w, h, phase }: { yes: number | null; w: number; h: number; phase: number }) {
   const geometry = useMemo(() => new THREE.PlaneGeometry(w, h, 4, 16).translate(0, -h / 2, 0), [w, h]);
   const material = useMemo(() => clothMaterial(bannerTexture(yes), phase), [yes, phase]);
   return <mesh geometry={geometry} material={material} />;

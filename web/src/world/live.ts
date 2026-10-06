@@ -47,14 +47,15 @@ export function useLive(): Live {
       .slice(0, 24)
       .map((t) => ({ symbol: sign(t.symbol), volume: Number(t.volume24hUsd) || 0 }));
     if (signs.length) live.tokens = signs;
-    // stakes are sealed until a market closes: an open market shows how many stakes it has, not which side they took
+    // stakes are sealed until a market closes: an open market's banner shows a seal, not which side they took
     const open = ((markets.data?.markets ?? []) as { title: string | null; status: string; stakes: number; yes: string | null; no: string | null }[])
       .filter((m) => m.title)
       .slice(0, 6)
       .map((m) => {
+        // revealed stakes, rounded so a banner is not redrawn for dust; none revealed yet means sealed
         const y = Number(m.yes ?? 0);
         const n = Number(m.no ?? 0);
-        return { question: (m.title ?? "").slice(0, 60), yes: y + n > 0 ? y / (y + n) : 0.5 };
+        return { question: (m.title ?? "").slice(0, 60), yes: y + n > 0 ? Math.round((y / (y + n)) * 100) / 100 : null };
       });
     if (open.length) live.markets = open;
     const r = riddle.data as { state: "open" | "solved" | "closed"; solved: string[] } | null | undefined;
