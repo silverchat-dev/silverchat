@@ -89,7 +89,7 @@ function Panel({ stop, children }: { stop: Stop; children: ReactNode }) {
     else document.getElementById("panel")?.scrollTo({ top: 0 });
   }, [pathname]);
   return (
-    <div className="journal fixed inset-x-0 bottom-0 z-10 flex h-[80dvh] flex-col rounded-t-2xl shadow-[0_-20px_60px_rgba(0,0,0,0.35)] md:top-[4.5rem] md:right-5 md:bottom-5 md:left-auto md:h-auto md:w-[min(720px,50vw)] md:rounded-2xl md:shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+    <div className="journal fixed inset-x-0 bottom-0 z-10 flex h-[80dvh] flex-col rounded-t-2xl shadow-[0_-20px_60px_rgba(0,0,0,0.35)] md:top-[4.5rem] md:right-5 md:bottom-5 md:left-auto md:h-auto md:w-[min(45rem,50vw)] md:rounded-2xl md:shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
       <nav aria-label="The walk" className="flex items-center justify-between gap-4 border-b border-silver/25 px-5 pt-4 pb-3 font-mono text-xs tracking-[0.06em] text-silver sm:px-8">
         <Link href={`/#${stop.id}`} scroll={false} className="shrink-0 whitespace-nowrap py-1 hover:text-paper">
           ← The walk

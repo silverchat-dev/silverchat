@@ -19,6 +19,18 @@ html {
   color: var(--color-paper);
   color-scheme: dark;
 }
+/* large screens: the whole interface grows with them (sizes are in rem), so the walk's words and the panel do not shrink
+   into a corner of a 27-inch display */
+@media (min-width: 1800px) {
+  html {
+    font-size: 112.5%;
+  }
+}
+@media (min-width: 2300px) {
+  html {
+    font-size: 131.25%;
+  }
+}
 
 body {
   font-family: var(--font-serif);
