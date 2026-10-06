@@ -17,8 +17,10 @@ import { STOPS, type Stop } from "./stops";
 function Card({ stop, first }: { stop: Stop; first: boolean }) {
   const Title = first ? "h1" : "h2";
   return (
-    <section id={stop.id} className="flex h-[100svh] snap-start items-end px-5 pb-[12svh] sm:px-10">
-      <div className="max-w-xl space-y-4">
+    <section id={stop.id} className="relative flex h-[100svh] snap-start items-end px-5 pb-[12svh] sm:px-10">
+      {/* a soft shade under the words, so they read over a bright sky or grass */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_55%_at_0%_100%,rgba(10,12,8,0.62),rgba(10,12,8,0.25)_55%,transparent_80%)]" />
+      <div className="relative max-w-xl space-y-4">
         <p className="font-mono text-xs uppercase tracking-[0.18em] text-paper/75">{first ? "silverchat · Snowmoon, ch. 27" : stop.name}</p>
         <Title className="text-[clamp(2.4rem,6vw,4.6rem)] leading-[1.02] text-paper drop-shadow-[0_2px_18px_rgba(0,0,0,0.45)]">
           {first ? "Ask the network." : stop.label}
@@ -26,11 +28,11 @@ function Card({ stop, first }: { stop: Stop; first: boolean }) {
         <p className="max-w-lg text-lg leading-snug text-paper/90 drop-shadow-[0_1px_10px_rgba(0,0,0,0.5)]">{stop.line}</p>
         {stop.live ? (
           <div className="flex flex-wrap gap-3 pt-2">
-            <Link href={stop.routes[0]} scroll={false} className="bg-tap px-5 py-3 font-mono text-sm text-black hover:brightness-110">
+            <Link href={stop.routes[0]} scroll={false} className="rounded-full bg-tap px-5 py-3 font-mono text-sm text-black transition-[filter] hover:brightness-110">
               {first ? "Try it without a wallet" : `Open ${stop.name}`}
             </Link>
             {stop.also && (
-              <Link href={stop.also.route} scroll={false} className="border border-tap/80 px-5 py-3 font-mono text-sm text-paper hover:bg-tap/15">
+              <Link href={stop.also.route} scroll={false} className="rounded-full border border-tap/80 px-5 py-3 font-mono text-sm text-paper transition-colors hover:bg-tap/15">
                 {stop.also.label}
               </Link>
             )}

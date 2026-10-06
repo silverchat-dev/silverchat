@@ -479,37 +479,71 @@ function TapCircle({ position, radius = 1.2 }: { position: [number, number, numb
 }
 
 /**
- * The gate where the walk starts (ch. 1: a gate with a glowing green circle): two stone posts, a beam with a small
- * roof of clay tiles, and the circle on the path beneath, where you tap to come in.
+ * The gate where the walk starts (ch. 1: a gate with a glowing green circle): two stone posts with caps, a timber beam
+ * across them with a board hanging from it and a lantern on each post, and the circle on the path before it, where you
+ * tap to come in.
  */
 function Gate({ land }: { land: Land }) {
   const stone = useMemo(() => stoneMaterial({ a: "#c9bb9d", b: "#968873", brick: [0.55, 0.32], moss: 0.6 }), []);
+  const wood = useMemo(() => new THREE.MeshStandardMaterial({ color: "#5a3d26", roughness: 0.85 }), []);
+  const board = useRef<THREE.Group>(null);
   const at = land.path.getPointAt(GATE_T);
   const tan = land.path.getTangentAt(GATE_T);
   const y = land.height(at.x, at.z);
   const turn = Math.atan2(tan.x, tan.z);
+  // the board swings a little in the wind
+  useFrame(() => {
+    if (board.current) board.current.rotation.x = Math.sin(weather.time.value * 1.3) * 0.05;
+  });
   return (
     <group position={[at.x, y, at.z]} rotation={[0, turn, 0]}>
-      {[-2.6, 2.6].map((x) => (
-        <mesh key={x} material={stone} position={[x, 2.1, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.9, 4.2, 0.9]} />
+      {[-2.5, 2.5].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          <mesh material={stone} position={[0, 1.9, 0]} castShadow receiveShadow>
+            <boxGeometry args={[0.95, 3.8, 0.95]} />
+          </mesh>
+          <mesh material={stone} position={[0, 3.92, 0]} castShadow>
+            <boxGeometry args={[1.15, 0.24, 1.15]} />
+          </mesh>
+          <mesh position={[0, 4.28, 0]} castShadow>
+            <coneGeometry args={[0.62, 0.5, 4]} />
+            <meshStandardMaterial color="#8f3f2a" roughness={0.75} />
+          </mesh>
+          {/* a lantern on the inner face of the post */}
+          <mesh position={[-Math.sign(x) * 0.6, 3.1, -0.1]}>
+            <boxGeometry args={[0.24, 0.34, 0.24]} />
+            <meshStandardMaterial color="#ffe2a8" emissive="#ffb35c" emissiveIntensity={2.2} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
+      {/* the beam, resting on the caps and running past them */}
+      <mesh material={wood} position={[0, 4.1, 0]} castShadow>
+        <boxGeometry args={[7.2, 0.34, 0.42]} />
+      </mesh>
+      {[-3.45, 3.45].map((x) => (
+        <mesh key={x} material={wood} position={[x, 4.1, 0]} rotation={[0, 0, Math.sign(x) * 0.5]}>
+          <boxGeometry args={[0.36, 0.3, 0.44]} />
         </mesh>
       ))}
-      <mesh position={[0, 4.45, 0]} castShadow>
-        <boxGeometry args={[6.8, 0.38, 0.7]} />
-        <meshStandardMaterial color="#5e4128" roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 4.95, 0]} rotation={[0, Math.PI / 4, 0]} scale={[1, 0.55, 1]} castShadow>
-        <coneGeometry args={[5.1, 1.4, 4]} />
-        <meshStandardMaterial color="#a8492f" roughness={0.75} />
-      </mesh>
-      {[-1.6, 1.6].map((x) => (
-        <mesh key={x} position={[x, 3.95, 0.4]}>
-          <boxGeometry args={[0.22, 0.32, 0.22]} />
-          <meshStandardMaterial color="#ffe2a8" emissive="#ffb35c" emissiveIntensity={2.2} toneMapped={false} />
+      <group ref={board} position={[0, 3.93, 0]}>
+        {[-0.75, 0.75].map((x) => (
+          <mesh key={x} position={[x, -0.25, 0]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.5, 4]} />
+            <meshStandardMaterial color="#2c2620" metalness={0.6} roughness={0.5} />
+          </mesh>
+        ))}
+        <mesh material={wood} position={[0, -0.78, 0]} castShadow>
+          <boxGeometry args={[2.1, 0.62, 0.1]} />
         </mesh>
-      ))}
-      <TapCircle position={[0, 0.06, 1.6]} radius={1.5} />
+        {/* the board shows the circle you are about to step into */}
+        {[1, -1].map((side) => (
+          <mesh key={side} position={[0, -0.78, side * 0.056]} rotation={[0, side > 0 ? 0 : Math.PI, 0]}>
+            <ringGeometry args={[0.15, 0.21, 32]} />
+            <meshStandardMaterial color="#0f2a18" emissive={TAP_GREEN} emissiveIntensity={1.4} toneMapped={false} />
+          </mesh>
+        ))}
+      </group>
+      <TapCircle position={[0, 0.14, 1.1]} radius={1.3} />
     </group>
   );
 }

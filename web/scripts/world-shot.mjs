@@ -29,23 +29,34 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 // the local chain may be off: its refused connections are not the world's errors
 page.on("console", (m) => m.type() === "error" && !/8545|ERR_CONNECTION_REFUSED/.test(m.text()) && errors.push(m.text()));
-await page.goto(`${o.base}/world-lab?${q}`);
-await page.waitForFunction(() => !!window.lab?.get().controls, null, { timeout: 180000 });
-await page.waitForTimeout(Number(o.wait) * 1000);
-const data = await page.evaluate(
-  ({ at, look }) => {
-    const s = window.lab.get();
-    if (at) s.camera.position.set(...at.split(",").map(Number));
-    if (look) s.controls.target.set(...look.split(",").map(Number));
-    s.controls.update();
-    for (let i = 0; i < 3; i++) s.advance(performance.now() + i * 16);
-    s.gl.render(s.scene, s.camera);
-    const tris = s.gl.info.render.triangles;
-    s.advance(performance.now());
-    return { url: s.gl.domElement.toDataURL("image/jpeg", 0.88), tris };
-  },
-  { at: o.at, look: o.look },
-);
+// a file saved by someone else while this runs reloads the page under it: then load again, up to three times
+const shoot = async () => {
+  await page.goto(`${o.base}/world-lab?${q}`);
+  await page.waitForFunction(() => !!window.lab?.get().controls, null, { timeout: 180000 });
+  await page.waitForTimeout(Number(o.wait) * 1000);
+  return page.evaluate(
+    ({ at, look }) => {
+      const s = window.lab.get();
+      if (at) s.camera.position.set(...at.split(",").map(Number));
+      if (look) s.controls.target.set(...look.split(",").map(Number));
+      s.controls.update();
+      for (let i = 0; i < 3; i++) s.advance(performance.now() + i * 16);
+      s.gl.render(s.scene, s.camera);
+      const tris = s.gl.info.render.triangles;
+      s.advance(performance.now());
+      return { url: s.gl.domElement.toDataURL("image/jpeg", 0.88), tris };
+    },
+    { at: o.at, look: o.look },
+  );
+};
+let data;
+for (let i = 0; !data; i++) {
+  try {
+    data = await shoot();
+  } catch (e) {
+    if (i === 2) throw e;
+  }
+}
 writeFileSync(o.out, Buffer.from(data.url.split(",")[1], "base64"));
 // GPU time of one full frame, measured by the GPU itself
 const gpuMs = await page.evaluate(async () => {
