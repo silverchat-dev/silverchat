@@ -120,3 +120,6 @@ export function stopOf(pathname: string): Stop | null {
 }
 
 export const stopIndex = (id: string) => Math.max(0, STOPS.findIndex((s) => s.id === id));
+
+/** Where a stop sits on the walk, 0 at the gate to 1 at the riddle (the rail's own scale). */
+export const tOfStop = (i: number) => i / (STOPS.length - 1);

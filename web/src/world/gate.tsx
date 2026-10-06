@@ -6,7 +6,7 @@
  * Enter starts the music from the click, as browsers require; Enter without sound and Skip are always there.
  */
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { playMusic, prepareMusic } from "./audio";
 import { world, useWorld } from "./state";
@@ -34,10 +34,18 @@ export function Gate() {
       .catch(() => setSteps((s) => ({ ...s, music: true })));
   }, []);
 
-  // the world beneath must not take focus or clicks while the gate is up
+  // focus goes to the gate once, when it opens, so a keyboard starts inside it
+  const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const main = document.getElementById("walk");
-    if (main) main.inert = open;
+    if (open) dialog.current?.focus();
+  }, [open]);
+
+  // the walk and the header beneath must not take focus or clicks while the gate is up
+  useEffect(() => {
+    for (const id of ["walk", "hud"]) {
+      const el = document.getElementById(id);
+      if (el) el.inert = open;
+    }
   }, [open]);
 
   if (!open) return null;
@@ -52,7 +60,7 @@ export function Gate() {
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="gate-title" className="fixed inset-0 z-40 flex items-end bg-developer/80 px-5 pb-[10svh] sm:px-10">
+    <div role="dialog" aria-modal="true" aria-labelledby="gate-title" tabIndex={-1} ref={dialog} className="fixed inset-0 z-40 outline-none flex items-end bg-developer/80 px-5 pb-[10svh] sm:px-10">
       <div className="max-w-2xl space-y-6">
         <p className="font-mono text-xs uppercase tracking-[0.18em] text-silver">silverchat · from Snowmoon, ch. 27</p>
         <h1 id="gate-title" className="text-[clamp(2.6rem,7vw,5rem)] leading-[1.02]">

@@ -15,9 +15,8 @@ import { Footer } from "@/components/footer";
 
 import { Hud } from "./hud";
 import { useLive } from "./live";
-import { tOfStop } from "./rail";
 import { world, useWorld } from "./state";
-import { STOPS, stopIndex, stopOf, type Stop } from "./stops";
+import { STOPS, stopIndex, stopOf, tOfStop, type Stop } from "./stops";
 
 const World = dynamic(() => import("./world"), { ssr: false });
 
@@ -50,8 +49,12 @@ function Still({ stop }: { stop: Stop }) {
   );
 }
 
+/** The world with the site's data in it; mounted only when it is drawn, so stills-only visitors poll nothing. */
+function LiveWorld() {
+  return <World live={useLive()} />;
+}
+
 function Backdrop({ stop }: { stop: Stop }) {
-  const live = useLive();
   const tier = useWorld((s) => s.tier);
   const failed = useWorld((s) => s.failed);
   const [ready, setReady] = useState(false);
@@ -68,7 +71,7 @@ function Backdrop({ stop }: { stop: Stop }) {
       {ready && tier > 0 && !failed && (
         <Guard>
           <div className="absolute inset-0">
-            <World live={live} />
+            <LiveWorld />
           </div>
         </Guard>
       )}
@@ -109,7 +112,7 @@ function Panel({ stop, children }: { stop: Stop; children: ReactNode }) {
 }
 
 /** The music, on or off: the first thing after the skip link, remembered for the visit. */
-function Sound() {
+function Sound({ sheet }: { sheet: boolean }) {
   const sound = useWorld((s) => s.sound);
   const entered = useWorld((s) => s.entered);
   if (!entered) return null;
@@ -121,7 +124,7 @@ function Sound() {
     else audio.setVolume(false);
   };
   return (
-    <button type="button" onClick={toggle} aria-pressed={sound} className="fixed right-4 bottom-4 z-30 border border-paper/30 bg-black/40 px-3 py-2 font-mono text-xs text-paper/85 hover:border-paper">
+    <button type="button" onClick={toggle} aria-pressed={sound} className={`${sheet ? "max-md:hidden " : ""}fixed right-4 bottom-4 z-30 rounded-full border border-paper/30 bg-black/40 px-3 py-2 font-mono text-xs text-paper/85 hover:border-paper`}>
       {sound ? "Sound on" : "Sound off"}
     </button>
   );
@@ -153,9 +156,10 @@ export function WorldShell({ children }: { children: ReactNode }) {
       <a href="#panel" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-paper focus:px-3 focus:py-2 focus:text-developer">
         Skip to content
       </a>
-      <Sound />
+      {/* on a phone a stop's sheet covers the lower screen: the music is switched from the walk there */}
+      <Sound sheet={!!stop} />
       <Backdrop stop={stop ?? STOPS[0]} />
-      <div className="fixed inset-x-0 top-0 z-20 bg-gradient-to-b from-black/50 to-transparent">
+      <div id="hud" className="fixed inset-x-0 top-0 z-20 bg-gradient-to-b from-black/50 to-transparent">
         <Hud />
       </div>
       {stop ? <Panel stop={stop}>{children}</Panel> : <div className="relative z-10">{children}</div>}

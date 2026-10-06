@@ -8,7 +8,7 @@
  * edges (open), or standing ajar with warm light pouring out (solved).
  */
 import { useFrame } from "@react-three/fiber";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
@@ -384,16 +384,17 @@ export function Plaques({ solved, slots }: { solved: string[]; slots: { x: numbe
   // the newest solved riddles, when there are more than slots
   const shown = solved.slice(-slots.length);
   const first = solved.length - shown.length;
+  // the names are the key: a new list redraws the faces, and the old ones are freed
+  const names = shown.join("\n");
   const faces = useMemo(
     () =>
-      shown.map((name, i) => {
+      names.split("\n").filter(Boolean).map((name, i) => {
         const t = plaqueTexture(first + i + 1, name);
         return new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: "#ffffff", emissiveIntensity: 1.35, roughness: 0.6 });
       }),
-    // the names are the key: a new list redraws the faces
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shown.join("\n"), first],
+    [names, first],
   );
+  useEffect(() => () => faces.forEach((m) => (m.map?.dispose(), m.dispose())), [faces]);
   const stones = useRef<THREE.InstancedMesh>(null);
   const blanks = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {

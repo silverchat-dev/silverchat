@@ -10,9 +10,8 @@ import { useEffect } from "react";
 
 import { Footer } from "@/components/footer";
 
-import { tOfStop } from "./rail";
 import { world, useWorld } from "./state";
-import { STOPS, type Stop } from "./stops";
+import { STOPS, tOfStop, type Stop } from "./stops";
 
 function Card({ stop, first }: { stop: Stop; first: boolean }) {
   const Title = first ? "h1" : "h2";
@@ -75,6 +74,7 @@ export function Walk() {
     return () => {
       removeEventListener("scroll", onScroll);
       root.classList.remove("walk");
+      history.scrollRestoration = "auto";
     };
   }, []);
   // the words of the walk wait behind the gate, so the two never show at once

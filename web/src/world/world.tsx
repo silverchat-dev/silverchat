@@ -71,15 +71,41 @@ function Scene({ live }: { live: Live }) {
   return (
     <>
       <Stage hour={frame.hour} veil={veil} quality={tier >= 3 ? "high" : "low"} centre={setById(frame.shown).origin} />
-      {frame.sets.map((id) => {
-        const set = setById(id);
-        return (
-          <group key={id} position={set.origin} visible={id === frame.shown}>
-            <set.Scene live={live} />
-          </group>
-        );
-      })}
+      {frame.sets.map((id) => (
+        <Place key={id} id={id} shown={id === frame.shown} live={live} />
+      ))}
     </>
+  );
+}
+
+/**
+ * One place, mounted while the camera is near it. When it unmounts, three frees its meshes' geometry and materials but
+ * not the textures in them (signs, banners, paintings drawn on canvases): those are freed here, or each walk up and
+ * down the city would leave them on the GPU.
+ */
+function Place({ id, shown, live }: { id: string; shown: boolean; live: Live }) {
+  const set = setById(id);
+  const group = useRef<THREE.Group>(null);
+  useEffect(() => {
+    const root = group.current;
+    return () => {
+      const textures = new Set<THREE.Texture>();
+      const collect = (v: unknown) => v instanceof THREE.Texture && textures.add(v);
+      root?.traverse((o) => {
+        const material = (o as THREE.Mesh).material;
+        for (const m of Array.isArray(material) ? material : material ? [material] : []) {
+          Object.values(m).forEach(collect);
+          const uniforms = (m as THREE.ShaderMaterial).uniforms;
+          if (uniforms) Object.values(uniforms).forEach((u) => collect(u?.value));
+        }
+      });
+      textures.forEach((t) => t.dispose());
+    };
+  }, []);
+  return (
+    <group ref={group} position={set.origin} visible={shown}>
+      <set.Scene live={live} />
+    </group>
   );
 }
 

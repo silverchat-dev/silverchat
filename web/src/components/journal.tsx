@@ -11,7 +11,7 @@ import { STOPS, stopIndex } from "@/world/stops";
 
 /** The one thing to do on a view: filled with the circle's green. One per view, never two. */
 export const action =
-  "inline-flex items-center justify-center gap-2 rounded-full bg-tap px-5 py-2.5 font-mono text-[13px] tracking-[0.04em] text-[#f7f2e6] transition-[filter,transform] duration-200 hover:brightness-110 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45";
+  "inline-flex items-center justify-center gap-2 rounded-full bg-tap px-5 py-2.5 font-mono text-[13px] tracking-[0.04em] text-on-tap transition-[filter,transform] duration-200 hover:brightness-110 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45";
 /** A second way on: ink outline. */
 export const second =
   "inline-flex items-center justify-center gap-2 rounded-full border border-paper/35 px-5 py-2.5 font-mono text-[13px] tracking-[0.04em] text-paper transition-colors duration-200 hover:border-paper disabled:cursor-not-allowed disabled:opacity-45";

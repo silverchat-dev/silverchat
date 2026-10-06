@@ -96,7 +96,8 @@ export function Sides({ yes, no, sealed, small, children }: { yes: string; no: s
   const y = BigInt(yes);
   const n = BigInt(no);
   const shown = y + n;
-  const share = pct(Number(y / 10n ** 15n), Number(shown / 10n ** 15n));
+  // in whole ZC with decimals, so a pool of dust still splits right
+  const share = pct(Number(formatUnits(y, 18)), Number(formatUnits(shown, 18)));
   const bar = (
     <span aria-hidden className={`relative block overflow-hidden rounded-full ${small ? "h-1 w-16" : "h-2.5 w-full"} ${sealed || !shown ? "bg-paper/10" : "bg-paper/20"}`}>
       {sealed ? (

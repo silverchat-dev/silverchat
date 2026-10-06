@@ -8,6 +8,8 @@
   --color-safelight: #e0582c;
   /* Meldan's green circle: the one colour that means "act here" in the world */
   --color-tap: #38ff86;
+  /* the text on a tap-green button: dark on the bright green, light on the journal's deep green */
+  --color-on-tap: #141312;
   --color-film: #0e0d0c;
 
   --font-serif: var(--font-caslon), Georgia, serif;
@@ -156,8 +158,9 @@ html.walk {
   --color-film: #ebe1cc;
   --color-paper: #1d1914;
   --color-silver: #6e6455;
-  --color-safelight: #13894a;
-  --color-tap: #13894a;
+  --color-safelight: #0f7a40;
+  --color-tap: #0f7a40;
+  --color-on-tap: #f7f2e6;
   color-scheme: light;
   color: var(--color-paper);
   background:

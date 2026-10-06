@@ -222,7 +222,7 @@ function Pyramid() {
     }
     lamps.current!.count = k;
     lamps.current!.instanceMatrix.needsUpdate = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [count, y0]);
   // a soft violet halo round the capstone
   const halo = useMemo(() => {
@@ -266,7 +266,7 @@ function Pyramid() {
     const mid = (y0 + P.terrace) / 2;
     g.translate(0, mid, faceZ(mid));
     return g;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [along, tilt, y0]);
   return (
     <group position={[0, 0, P.z]}>

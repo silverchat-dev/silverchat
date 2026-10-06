@@ -7,7 +7,7 @@
  * part the YES share and its blue part the NO share; a bronze plaque ranks the forecaster bots (ch. 27).
  */
 import { useFrame } from "@react-three/fiber";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -135,6 +135,8 @@ function clothMaterial(map: THREE.Texture, phase: number) {
 function Banner({ yes, w, h, phase }: { yes: number | null; w: number; h: number; phase: number }) {
   const geometry = useMemo(() => new THREE.PlaneGeometry(w, h, 4, 16).translate(0, -h / 2, 0), [w, h]);
   const material = useMemo(() => clothMaterial(bannerTexture(yes), phase), [yes, phase]);
+  // a new share draws a new banner: the old one is freed, texture and all
+  useEffect(() => () => (material.map?.dispose(), material.dispose()), [material]);
   return <mesh geometry={geometry} material={material} />;
 }
 

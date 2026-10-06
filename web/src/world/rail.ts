@@ -29,7 +29,6 @@ const POINTS: Point[] = STOPS.map((s) => {
 });
 
 export const SEGMENTS = POINTS.length - 1;
-export const tOfStop = (i: number) => i / SEGMENTS;
 
 export type View = { pos: THREE.Vector3; look: THREE.Vector3; hour: number; veil: number; sets: string[]; shown: string };
 

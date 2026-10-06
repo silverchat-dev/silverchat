@@ -126,7 +126,11 @@ const ROMAN: [number, string][] = [
 ];
 export function roman(n: number) {
   let out = "";
-  for (const [v, s] of ROMAN) while (n >= v) (out += s), (n -= v);
+  for (const [v, s] of ROMAN)
+    while (n >= v) {
+      out += s;
+      n -= v;
+    }
   return out;
 }
 
