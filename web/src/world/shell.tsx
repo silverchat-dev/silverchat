@@ -81,6 +81,13 @@ function Backdrop({ stop }: { stop: Stop }) {
 /** A stop's page, in a panel beside the world: the right half on a desk, a sheet over the lower screen on a phone. */
 function Panel({ stop, children }: { stop: Stop; children: ReactNode }) {
   const next = STOPS.slice(stopIndex(stop.id) + 1).find((s) => s.live);
+  // the panel stays open from page to page: each new page starts at its top, or at the part a link names (/docs#api)
+  const pathname = usePathname();
+  useEffect(() => {
+    const part = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (part) part.scrollIntoView();
+    else document.getElementById("panel")?.scrollTo({ top: 0 });
+  }, [pathname]);
   return (
     <div className="journal fixed inset-x-0 bottom-0 z-10 flex h-[80dvh] flex-col rounded-t-2xl shadow-[0_-20px_60px_rgba(0,0,0,0.35)] md:top-[4.5rem] md:right-5 md:bottom-5 md:left-auto md:h-auto md:w-[min(720px,50vw)] md:rounded-2xl md:shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
       <nav aria-label="The walk" className="flex items-center justify-between gap-4 border-b border-silver/25 px-5 pt-4 pb-3 font-mono text-xs tracking-[0.06em] text-silver sm:px-8">

@@ -159,8 +159,14 @@ html.walk {
 .journal :focus-visible {
   outline-color: #1d1914;
 }
+/* a text field is a line on the page: focus darkens and thickens the line instead of boxing it */
+.journal input:not([type="checkbox"], [type="radio"], [type="range"]):focus-visible,
+.journal textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 1px 0 0 var(--color-paper);
+}
 
 /* a ruled list in the journal: one line between rows, like a notebook */
-.ruled > li + li {
+.ruled > * + * {
   border-top: 1px dashed color-mix(in srgb, var(--color-paper) 22%, transparent);
 }
